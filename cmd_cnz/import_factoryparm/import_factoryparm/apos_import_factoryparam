@@ -1,0 +1,370 @@
+#!/bin/bash -x
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2015 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       apos_import_factoryparam
+# Description:
+#       A script to validate all input parameters and 
+#       set input parameters to storage path 
+##
+# Usage:
+#       Used during import APG factory parameters
+##
+# Changelog:
+# - Thu Jun 14 2018 - Pranshu Sinha (xpransi)
+#       First version.
+##
+
+# Variables
+
+#------------------------------------------------------------------------
+function abort(){
+  local ERROR_STRING=""
+
+  if [ "$1" ]; then
+    ERROR_STRING="ERROR: $1"
+    $CMD_ECHO "$ERROR_STRING"
+  fi
+  echo "Aborting"
+  exit 1
+}
+
+#------------------------------------------------------------------------
+function get_hooks_path(){
+  local FOLDER="${HOOKS_DIR}"
+  if [ "${FOLDER}" == "" ]; then
+    FOLDER="/tmp/hooks_execute_dir"
+    if [ -d ${FOLDER} ]; then
+      $CMD_ECHO "${FOLDER}"
+    else
+      abort "ERROR: The hook path is not configured by LOTC/LDE!"
+    fi
+  else
+    if [ -d ${FOLDER} ]; then
+      $CMD_ECHO "${FOLDER}"
+    else
+      abort "ERROR: The hook path is wrongly provided by LOTC/LDE!"
+    fi
+  fi
+}
+
+#------------------------------------------------------------------------
+function get_repo_path(){
+  local FOLDER=$( cluster install --repo-path )
+  if [ $? -ne 0 ]; then
+    FOLDER="/tmp/installation_repo"
+    if [ -d ${FOLDER} ]; then
+      $CMD_ECHO "${FOLDER}"
+    else
+      abort "ERROR: The hook path is not configured by LOTC/LDE!"
+    fi
+  else
+    if [ -d ${FOLDER} ]; then
+      $CMD_ECHO "${FOLDER}"
+    else
+      abort "ERROR: The hook path is wrongly provided by LOTC/LDE!"
+    fi
+  fi
+}
+
+#------------------------------------------------------------------------
+# When deployment_environemnt=SIMULATED then the installation is done
+# on virtual HW and the following new parameters
+# simulated_installation_hw=GEP<x>  (first release)
+# simulated_<factory parameter entry>.... (next releases)
+function isSIMULATED() {
+	local count=$(find $MI_PATH -mindepth 1 -maxdepth 1 -name "$SIMULATED_APG_CONF" | wc -l)
+	[[ -n "$count" && $count -gt 0 ]] && return $TRUE
+	return $FALSE
+}
+
+#------------------------------------------------------------------------
+function cleanup() {
+  $CMD_ECHO "--- cleanup() begin"
+  for FILE in "$MI_PATH/$DEFAULT_APG_CONF" "$MI_PATH/$SIMULATED_APG_CONF" ; do 
+    if [ -f $FILE ]; then 
+      rm -f $FILE
+    fi
+  done
+  $CMD_ECHO "--- cleanup() end"
+}
+
+#------------------------------------------------------------------------
+function install_parmtool(){
+  $CMD_ECHO "--- install_parmtool() begin"
+
+  pushd $current_dir >/dev/null 2>&1
+  [ ! -r ./non_exec-parmtool.tgz ] && abort "Unable to read non_exec-parmtool.tgz file"
+  tar -xzf non_exec-parmtool.tgz
+  popd >/dev/null 2>&1
+
+  $CMD_ECHO "--- install_parmtool() end"
+}
+
+#------------------------------------------------------------------------
+function validate_apg_conf(){
+  $CMD_ECHO "--- validate_apg_conf() begin"
+
+  install_parmtool	
+
+  pushd $current_dir/parmtool >/dev/null 2>&1
+  [ ! -x ./parmtool ] && abort "Unable to execute the parmtool"
+  ./parmtool validate --file $MI_PATH/$DEFAULT_APG_CONF
+  [ $? -ne 0 ] && abort "parmtool validation failed"
+
+  if isSIMULATED; then
+    # Intitally we are supporting "simulated_installation_hw"
+    # parameter to simulate the environment 
+    if [ -z "$simulated_installation_hw" ]; then
+      abort "simulated installation found NULL!"
+    fi 
+    if [[ ! "$simulated_installation_hw" =~ 'GEP1'|'GEP2'|'GEP5' ]]; then
+      abort "simulated hardware not supported:$simulated_installation_hw"
+    fi
+    if [ -n "$simulated_shelf_architecture" ]; then
+      if [[ ! "$simulated_shelf_architecture" =~ 'SCX'|'SCB-RP'|'DMX' ]]; then
+        abort "simulated shelf architecture not supported:$simulated_shelf_architecture"
+      fi
+      if [ "$simulated_shelf_architecture" == 'DMX' ]; then
+        if [[ "$simulated_installation_hw" != GEP5_64_1200 ]]; then
+          abort "simulated shelf architecture not supported for this hardware"
+        fi
+      fi
+    fi
+  fi
+
+  # uncomment below piece of code, if we have more simulated paramters to validate
+  #  local TMP_PLASIL_CONF=tempapgplasil.conf	
+  #  sed 's/^simulated_//g' $APOS_PSO/$PLASIL_CONF_FILE > $MI_PATH/$TMP_PLASIL_CONF
+  #  ./parmtool validate --file $MI_PATH/$TMP_PLASIL_CONF
+  #  [ $? -ne 0 ] && abort "Configuration not supported for simulated environment"
+  #fi
+  # remove the temporary file
+  #[ -f $MI_PATH/$TMP_PLASIL_CONF ] && rm -f $MI_PATH/$TMP_PLASIL_CONF
+
+  popd >/dev/null 2>&1
+	
+  $CMD_ECHO "--- validate_apg_conf() end"
+}
+
+#------------------------------------------------------------------------
+function create_prompt_config(){
+  echo "--- create_prompt_config()  begin"
+
+  # Setting Persistent Storage Area for apos config
+  local STORAGE_API='/usr/share/pso/storage-paths/config'
+  local PSO_PATH=$(<$STORAGE_API)
+  local APOS_PSO="$PSO_PATH/apos"
+  local NODE_A_NAME_FILE="nodeA_MEId"
+  local NODE_B_NAME_FILE="nodeB_MEId"
+
+  install -m 444 -D $APOS_PSO/me_name $APOS_PSO/$NODE_A_NAME_FILE
+  [ $? -ne 0 ] && abort "Failure when installaing $NODE_A_NAME_FILE"
+
+  install -m 444 -D $APOS_PSO/me_name $APOS_PSO/$NODE_B_NAME_FILE
+  [ $? -ne 0 ] && abort "Failure when installaing $NODE_B_NAME_FILE"
+
+  echo "--- create_prompt_config() end"
+}
+
+#------------------------------------------------------------------------
+function cached_creds_duration(){
+  echo "--- cached_creds_duration() begin"
+
+  local STORAGE_API='/usr/share/pso/storage-paths/config'
+  local PSO_PATH=$(<$STORAGE_API)
+  local APOS_PSO="$PSO_PATH/apos"
+
+  # this function is used to store cached_creds_duration in APOS PSO
+  local AP_TYPE=$(<$APOS_PSO/aptype.conf)
+
+  # Setting Persistent Storage Area for apos config
+  local CFG_FILE='cached_creds_duration'
+  [ -f $APOS_PSO/$CFG_FILE ] && return 0 # parameter comming from APGPreconfiguration.conf
+
+  if [[ "$AP_TYPE" == "AP1" ]];then
+    echo -n "0" > $APOS_PSO/$CFG_FILE
+    chmod 666 $APOS_PSO/$CFG_FILE
+  fi
+
+  echo "--- cached_creds_duration() end"
+}
+
+#------------------------------------------------------------------------
+function network_bw(){
+  echo "--- network_bw() begin"
+
+  # this function is used to generate file (drbd_network_capacity)
+  # EGEM2, GEP5, EVO and BSP configuration: network bandwidth is 10GE
+  # Rest of all configurations: network bandwidth is 1GE
+  local STORAGE_API='/usr/share/pso/storage-paths/config'
+  local PSO_PATH=$(<$STORAGE_API)
+  local APOS_PSO="$PSO_PATH/apos"
+
+  local CFG_FILE='drbd_network_capacity'
+  local TMP_CFG_FILE='/tmp/drbd_network_capacity'
+
+  [ -f $APOS_PSO/$CFG_FILE ] && return 0 # parameter comming from APGPreconfiguration.conf
+
+  if [[ "$(<$APOS_PSO/installation_hw)" == "VM" && "$(<$APOS_PSO/shelf_architecture)" == "VIRTUALIZED" ]]; then
+    echo '10G' > $TMP_CFG_FILE
+  else
+    echo '1G' > $TMP_CFG_FILE
+  fi
+
+  install -m 444 -D $TMP_CFG_FILE $APOS_PSO/$CFG_FILE
+  rm -f $TMP_CFG_FILE
+
+  echo "--- network_bw() end"
+}
+
+#------------------------------------------------------------------------
+function fetch_apg_conf(){
+  $CMD_ECHO "--- fetch_apg_conf() begin"
+ 
+	[ ! -d $MI_PATH ] && mkdir -p $MI_PATH
+
+        FACTORYPARAM_FILE='/cluster/storage/system/config/lde/csm/templates/config/initial/ldews.os/factoryparam.conf'
+        if [ -f $FACTORYPARAM_FILE ]; then
+          /usr/bin/cat $FACTORYPARAM_FILE > $MI_PATH/$APG_CONF
+        else
+          abort "Unable to find factoryparam.conf file"
+        fi
+#	DEPLOYMENT_FILE=$( find $REPO_PATH/ait -mindepth 1 -maxdepth 1 -name 'DEPLOYMENT.ready')
+#	if [ -f $DEPLOYMENT_FILE ]; then
+#		/usr/bin/sed "/\[CD-BEGIN:.*:APG.conf\]/,/\[CD-END:.*:APG.conf\]/!d;//d" $DEPLOYMENT_FILE > $MI_PATH/$APG_CONF
+#		[ ! -s $MI_PATH/$APG_CONF ] && abort "$APG_CONF file found NULL!!"
+#	else
+#	  abort "Unable to find DEPLOYMENT.ready file"
+#	fi
+
+	# inject simulated parameters to apg.conf
+	SIMULATED_PARAMS=$(find /tmp/installation -mindepth 1 -maxdepth 1 -name "simulated_*")
+        for PARAM in $SIMULATED_PARAMS; do
+		PARAM_VALUE=$(cat $PARAM)
+		echo "$(basename $PARAM)=$PARAM_VALUE" >> $MI_PATH/$APG_CONF
+	done
+
+
+  $CMD_ECHO "--- fetch_apg_conf() end"
+}
+
+#------------------------------------------------------------------------
+function populate_apg_configuration_parms(){
+	$CMD_ECHO "--- populate_apg_internal_parms() begin"
+  local LVALUE=''
+  local RVALUE=''
+  local TMP="/tmp"
+  local STORAGE_API='/usr/share/pso/storage-paths/config'
+
+  [ -f $STORAGE_API ] && PSO_PATH=$(<$STORAGE_API)
+  [ -z $PSO_PATH ] && abort "PSO_PATH at $STORAGE_API not available"
+
+  local APOS_PSO="$PSO_PATH/apos"
+  [ ! -d $APOS_PSO ] && mkdir -p $APOS_PSO
+  [ ! -d $APOS_PSO ] && abort "Unable to find the $APOS_PSO folder"
+
+  $CMD_ECHO "--- update_parms() -- copying all $APG_CONF paramters into $APOS_PSO"
+
+  while read LINE ; do
+    if ! $CMD_ECHO "$LINE" | $CMD_GREP -q "^#"; then
+      LVALUE=$($CMD_ECHO $LINE | $CMD_AWK -F "=" '{print $1}')
+      RVALUE=$($CMD_ECHO $LINE | $CMD_AWK -F "=" '{print $2}')
+      local TMP_FILE="$TMP/$LVALUE"
+      $CMD_ECHO $RVALUE > $TMP_FILE
+      $CMD_INSTALL -m 444 -D $TMP_FILE $APOS_PSO
+      $CMD_RM -f $TMP_FILE 2>/dev/null
+    fi
+  done < $MI_PATH/$APG_CONF
+
+  # handle backward compatibility for ap_type parameter.
+  [ -f $APOS_PSO/ap_type ] && $CMD_MV $APOS_PSO/ap_type  $APOS_PSO/aptype.conf
+
+	#configure bash prompt with node name
+	create_prompt_config
+
+	#create under PSO cached_creds_duration in APOS PSO
+	cached_creds_duration
+
+	# Generate network bandwidth file
+	network_bw
+
+	$CMD_ECHO "--- populate_apg_internal_parms() end"
+}
+
+#------------------------------------------------------------------------
+function parse_apg_conf(){
+  $CMD_ECHO "--- extract_apg_conf() begin"
+  DEFAULT_APG_CONF='apg_defaultparams.conf'
+  SIMULATED_APG_CONF='apg_simulatedparams.conf'
+  while read LINE ; do
+    if ! $CMD_ECHO "$LINE" | $CMD_GREP -q "^#"; then
+      local LVALUE=$($CMD_ECHO $LINE | $CMD_AWK -F "=" '{print $1}')
+      if [[ "$LVALUE" =~ "simulated" ]]; then
+        eval $LINE; $CMD_ECHO "$LINE" >> $MI_PATH/$SIMULATED_APG_CONF
+        continue
+      fi
+      $CMD_ECHO "$LINE" >> $MI_PATH/$DEFAULT_APG_CONF
+   fi
+  done < $MI_PATH/$APG_CONF
+  $CMD_ECHO "--- extract_apg_conf() end"
+}
+
+#------------------------------------------------------------------------
+function init_system(){
+  $CMD_ECHO "--- init_system() begin"
+  # Common functions sourcing  
+  current_dir="$(dirname "$(readlink -f $0)")"
+  . $current_dir/non_exec-common_functions
+
+  # To get input parameters 
+  create_installation_repo $SRC_PATH $DEST_PATH
+
+  $CMD_ECHO "--- init_system() end"
+}
+ 
+#------------------------------------------------------------------------
+main(){
+  $CMD_ECHO "--- main() begin"
+
+  # Initialize the system
+    init_system
+
+  # Sanity checks
+  [ ! -d /cluster ] && abort "The cluster partition is not mounted"
+
+  # Fetch the input file and store it in /cluster/storage/system/config/lde/csm/templates/config/initial/ldews.os path
+  fetch_apg_conf 
+
+  # parse the input file 
+  parse_apg_conf
+
+  # Extracting paramters of APGPreConfiguration to PSO_PATH
+  populate_apg_configuration_parms
+
+  # Validation of parameters using ParmTool
+  validate_apg_conf
+
+  # Copying log files
+  copy_log_files
+
+  # cleanup the temporary files
+  cleanup
+
+  $CMD_ECHO "--- main() end"
+}
+
+#### M A I N ####
+
+CMD_ECHO="/usr/bin/echo"
+CMD_GREP="/usr/bin/grep"
+$CMD_ECHO "vAPG: import of factory parameters"
+
+main "@"
+
+exit $TRUE
+
+# End of file

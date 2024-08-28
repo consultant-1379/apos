@@ -1,0 +1,245 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       listtsuser
+# Description:
+#       A script to list troubleshooting user on APG43L node
+#
+##
+# Usage:
+#       localuserlist [-d <username>]
+##
+# Output:
+#       Command print-out is printed on console.
+#
+##
+# Changelog:
+# - Tuesday June 30 2015 - Stefano Volpe
+#      First draft
+##
+
+
+# Commands used by this script
+##############################
+ECHO=/bin/echo
+GREP=/usr/bin/grep
+CAT=/bin/cat
+AWK=/usr/bin/awk
+PAM_TALLY=/sbin/pam_tally
+
+# Exit codes
+################################
+exit_success=0
+exit_usage=2
+exit_user_not_found=3
+exit_local_group_not_found=4
+exit_not_local_user=5
+
+# Setting  global variables
+##############################
+local_group="apg-local"
+status=0
+script_name="localuserlist"
+passwordfile="/cluster/etc/passwd"
+groupfile="/cluster/etc/group"
+commonauthfile="/etc/pam.d/common-auth"
+com_ldap_group="com-ldap"
+list_details_set=0
+username=""
+
+# Message functions
+####################
+function show_usage() {
+        ${ECHO} "Usage: $script_name [-d <username>]"
+        ${ECHO} ""
+}
+
+#-------------------------
+function usage_error() {
+    ${ECHO} $1
+    show_usage
+    exit $2
+}
+
+#-------------------------------------------------------------------------
+function error() {
+    ${ECHO} "$1"
+    ${ECHO} ""
+    exit $2
+}
+
+#-------------------------
+function parse_args() {
+    arg_num=`${ECHO} $#`
+    if [ $arg_num -gt 3 ];then
+        usage_error "Incorrect usage" $exit_usage
+    fi
+
+    if [ $# -eq 1 ];then
+        case "$1" in
+            -h)
+                show_usage
+                exit $exit_usage
+                ;;
+            *)
+                usage_error "Incorrect usage" $exit_usage
+                ;;
+        esac
+    else
+        validate_args "$@"
+    fi
+}
+
+#-------------------------
+function validate_args() {
+ local parameters=($@)
+ local num_parameters=${#parameters[@]}
+
+    TEMP=$(getopt -q "d" $@)
+
+    #exit from code if invalid arguments
+    if [ $? != 0 ]; then
+        usage_error "Incorrect usage" $exit_usage
+    fi
+
+
+    # The following section is redirect the functionality as per options
+#   eval set -- "$TEMP"
+
+#   echo "$LINENO: param 1 $1, parm2 $2, param3 $3, DollarSTAR -$*-"
+
+    ##  while true; do
+    while [ $# -gt 0 ]; do
+    case $1 in
+       -d)
+           list_details_set=1
+           username=$2
+	   check_user 
+	;;
+    esac
+         shift
+    done
+
+    case $num_parameters in
+	0)
+	;;
+        2)
+            if [ $list_details_set -ne 1 ]; then
+                usage_error "Incorrect usage" $exit_usage
+            fi
+        ;;
+        *)
+            usage_error "Incorrect usage" $exit_usage
+        ;;
+    esac
+
+}
+
+#-------------------------------------------------------------------------
+function check_user() {
+    ${GREP} "^$username:" $passwordfile 1>/dev/null
+    if [ $? -ne 0 ];then
+        error "ERROR: User [$username] does not exist" $exit_user_not_found
+    fi
+    localgp_id=`${GREP} "^$local_group:" /cluster/etc/group | ${AWK} -F: '{print $3}'`
+    if [ -z $localgp_id ]; then
+      error "ERROR: apg-local group not found" $exit_local_group_not_found
+    fi
+
+    user_gp_id=$(  cat "$passwordfile" | grep -w $username |awk -F ":" '{ print $4}') 
+
+    if [ "$user_gp_id" != "$localgp_id" ];then
+        error "ERROR: User [$username] is not a apg-local user" $exit_not_local_user
+    fi
+	
+
+}
+
+#-------------------------------------
+function  list_localusers() {
+localgroup_id=`${GREP} "^$local_group:" /cluster/etc/group | ${AWK} -F: '{print $3}'` #group id of local group
+
+if [ -z $localgroup_id ]; then
+     ${ECHO} "No local users found"
+     ${ECHO} ""
+     exit $exit_success
+fi
+
+for usr in `${AWK} -F: '{if($4 == '$localgroup_id') print $1}' $passwordfile`
+do
+       # cpuserstatus=$(  cat "$passwordfile" | grep -w $usr |awk -F ":" '{ print $5}' | awk -F "," '{print $5}')
+        #${ECHO} -e "$usr  $cpuserstatus"
+        #if [ "$cpuserstatus" == "nomml" ];then
+         # cpuserstatus="no-mml"
+    #fi
+    printf "%-32s  %s\n" "$usr"
+        status=1
+done
+
+# Check if no local user is found
+if [ $status == 0 ];then
+        ${ECHO} "No local users found"
+fi
+
+${ECHO} ""
+exit $exit_success
+}
+
+function list_details() {
+
+ group_list=""
+
+ for group in $(${CAT} $groupfile | ${GREP} -E "(*[:|,]$username$)|(*[:|,]$username,)" | ${AWK} -F: '{print $1}'); do
+	if [ "$group" != "$com_ldap_group" ]; then
+		group_list="$group_list$group "
+	fi
+ done
+ 
+ expiration_date=$(chage -l "$username" |  ${GREP} -E "^Password expires[[:space:]]+:" | ${AWK} -F: '{print $2}'| xargs )
+
+ max_login_failure=$(${AWK} '/per_user/' $commonauthfile | ${GREP} -v ^# | ${GREP} -o "deny=[0-9]*" | ${AWK} -F"deny=" '{print $2}')
+ failed_login=$(${PAM_TALLY} --user $username | ${AWK} -F"has " '{print $2}')
+
+ if [ -z $max_login_failure ] || [ -z $failed_login ]; then
+    error "ERROR: Failed login count not available" $exit_user_not_found
+ fi
+
+ if [ $failed_login -ge $max_login_failure ]; then
+    locked="TRUE"
+ else
+    locked="FALSE"
+ fi
+
+ ${ECHO} "Roles:                  $group_list"
+ ${ECHO} "Password expiration:    $expiration_date"
+ ${ECHO} "Is Locked:              $locked"
+ ${ECHO} ""
+
+}
+
+#-------------------------------------
+# _____________________ _____________________
+#|    _ _   _  .  _    |    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |   | ) ) (_| | | )   |
+#|_____________________|_____________________|
+# Here begins the "main" function...
+
+# Set the interpreter to exit if a non-initialized variable is used.
+set -u
+
+#Parse command line arguments
+parse_args $@
+
+#List troubleshooting users existing on node
+if [ $list_details_set -eq 0 ]; then
+	list_localusers
+else
+	list_details
+fi
+
+exit $exit_success
+

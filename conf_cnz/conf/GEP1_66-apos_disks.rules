@@ -1,0 +1,30 @@
+# This file contains the rules for the physical-to-logical disk mapping for APG.
+
+# DO NOT WRAP THIS LINE
+#
+# old udev does not understand some of it,
+# and would end up skipping only some lines, not the full rule.
+# which can cause all sort of trouble with strange-named device nodes
+# for completely unrelated devices,
+# resulting in unusable network lookback, etc.
+#
+# in case this is "accidentally" installed on a system with old udev,
+# having it as one single line avoids those problems.
+#
+# DO NOT WRAP THIS LINE
+
+# -- GEP1
+# - LEFT GED-SASF
+KERNEL=="sd?", ENV{DEVTYPE}=="disk", ENV{ID_BUS}=="scsi", ENV{ID_PATH_COMPAT1}=="*-phy0-*", SYMLINK+="eri_diskA eri_phy0-diskA"
+ENV{DEVTYPE}=="partition", ENV{ID_BUS}=="scsi", ENV{ID_PATH_COMPAT1}=="*-phy0-*", ENV{ID_PART_ENTRY_NUMBER}=="1", SYMLINK+="eri_diskA_data"
+ENV{DEVTYPE}=="partition", ENV{ID_BUS}=="scsi", ENV{ID_PATH_COMPAT1}=="*-phy0-*", ENV{ID_PART_ENTRY_NUMBER}=="2", SYMLINK+="eri_diskA_meta"
+ACTION=="remove", KERNEL=="sd?", ENV{DEVTYPE}=="disk", ENV{ID_BUS}=="scsi", ENV{ID_PATH_COMPAT1}=="*-phy0-*", RUN="/bin/rm -f /dev/eri_*diskA*"
+
+# - RIGHT GED-SASF
+KERNEL=="sd?", ENV{DEVTYPE}=="disk", ENV{ID_BUS}=="scsi", ENV{ID_PATH_COMPAT1}=="*-phy4-*", SYMLINK+="eri_diskB eri_phy4-diskB"
+ENV{DEVTYPE}=="partition", ENV{ID_BUS}=="scsi", ENV{ID_PATH_COMPAT1}=="*-phy4-*", ENV{ID_PART_ENTRY_NUMBER}=="1", SYMLINK+="eri_diskB_data"
+ENV{DEVTYPE}=="partition", ENV{ID_BUS}=="scsi", ENV{ID_PATH_COMPAT1}=="*-phy4-*", ENV{ID_PART_ENTRY_NUMBER}=="2", SYMLINK+="eri_diskB_meta"
+ACTION=="remove", KERNEL=="sd?", ENV{DEVTYPE}=="disk", ENV{ID_BUS}=="scsi", ENV{ID_PATH_COMPAT1}=="*-phy4-*", RUN="/bin/rm -f /dev/eri_*diskB*"
+
+# - Enable autoclose for CDROM device
+KERNEL=="sr?", ENV{DEVTYPE}=="disk", ENV{ID_BUS}=="ata", ENV{SCSI_TYPE}=="cd/dvd", RUN+="/sbin/sysctl -w dev.cdrom.autoclose=1"

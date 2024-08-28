@@ -1,0 +1,225 @@
+#!/bin/bash
+# Author: Pranshu Sinha(XPRANSI)
+
+# Changelog
+# Updated by XPRANSI
+# Date: 27-10-2011
+
+# Funtions
+
+# User-Input validations
+
+#validation for target
+ validate_target() {
+                        target=${!1}
+                        if [ -z $target ] ; then
+                                return 1
+                        else
+                        num=$( echo $target | grep -Eq "^[0-9]+$")
+                        chk_num=$?
+                                if [ $chk_num != 0 ] && [ $target != "control" ]&& [ $target != "payload" ] && [ $target != "all" ] ; then
+                                return 1
+                                fi
+                        fi
+                        echo $target
+        }
+# Validation for size
+ validate_size() {
+                        size=${!1}
+                        if [ -z $size ] ; then
+                                return 1
+                        else
+			num=$( echo $size | grep -Eq "^[0-9]")
+                        chk_num=$?
+                                if [ $chk_num != 0 -a "$size" != "unlimited" ] ; then
+                                return 1
+                                fi
+                        fi
+                        echo $size
+
+        }
+# validation for rulenumber
+ validate_integer() {
+                        rule=${!1}
+                        if [ -z $rule ] ; then
+                                return 1
+                        else
+                        num=$( echo $rule | grep -Eq "^[0-9]+$")
+                        chk_num=$?
+                                if [ $chk_num -eq 1 ] ; then
+                                return 1
+                                fi
+                        fi
+                        echo $rule
+        }
+
+
+# To delete an existing coredump rule
+ delete() {
+        word=${!1}
+        rule=${!2}
+        rule_num=`validate_integer rule`
+        if [ $? -ne 0 ]
+        then
+                help
+                echo "Enter rule number as argument. Empty values not accepted "
+                exit 1
+        fi
+
+        # Calling cluster_parse file to delete rule
+        $clu_file $word --delete $rule_num
+
+        }
+
+# To add/modify an existing coredump rule
+  add_mod() {
+        word=${!1}
+        arg=${!2}
+        target=${!3}
+        size=${!4}
+        status=${!5}
+
+        #echo status: $status
+        w1=$(echo $arg | cut -d : -f 2)
+        if [ "$w1" != "$word" ]
+         then
+                help
+                echo "Enter correct format of arguments. "
+                exit 1
+        fi
+
+        if [ $status == "modify" ]
+        then
+                rule=$(echo $arg | cut -d: -f 1)
+                rule_num=`validate_integer rule`
+                if [ $? -ne 0 ]
+                then
+                        help
+                        echo "Enter correct format of arguments. "
+                        exit 1
+                fi
+        fi
+        target_ip=`validate_target target`
+        if [ $? -ne 0 ]
+        then
+                help
+                echo "Target value should be either node number or node type control/payload or all. Empty values not accepted "
+                exit 1
+        fi
+        size_ip=`validate_size size`
+        if [ $? -ne 0 ]
+        then
+                help
+                echo "Integer value expected for size. Empty values not accepted."
+                exit 1
+        fi
+        # Calling cluster_parse file to add/modify coredump rule
+        rule="$word $target_ip $size_ip"
+        chk_rule="$word $target_ip"
+        if [ $status == "modify" ]
+        then
+                $clu_file $word --modify $rule_num $rule $chk_rule
+        else
+                $clu_file $word --add $rule $chk_rule
+        fi
+        }
+# To display existing coredump rules
+ display() {
+        $clu_file $word --display
+        }
+# To display help
+help()
+{
+echo ' 
+Usage: clu_$word <option> <rule>
+
+Options:
+-a|--add        <New-rule>                      To add a new $word rule
+-d|--delete     <Existing-rule>                 To delete an existing $word rule
+-m|--modify     <rule-number>:<new-rule>        To modify an existing $word rule
+-D|--display                                    To display all the existing rules
+-h|--help                                       To display help
+
+Rule: coredump <target> <size>
+<target>           <Node-number|control|payload|all>
+<size>             The maximum size of the coredump in Kilobytes or unlimited
+'
+}
+
+#Main
+
+
+pwd=`pwd`
+fname="clu_parse"
+clu_file="/opt/ap/apos/bin/clusterconf/$fname"
+word="coredump"
+
+if [ -f /cluster/etc/cluster.conf ];then
+        clu_Conf_path="/cluster/etc/"
+        clu_Conf_file="cluster.conf"
+else
+        echo -e "\n/cluster/etc/cluster.conf file does not exists"
+        exit 1
+fi
+
+        if [ -f $clu_file ];then
+                if [ -x $clu_file ];then
+                 ch=$1
+                 arg2=$2
+                 arg3=$3
+                 arg4=$4
+
+                  case $ch in
+                        --add|-a)
+                                st="add"
+				if [ $# -gt 4 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+                                	add_mod word arg2 arg3 arg4 st
+                                fi
+				;;
+                        --delete|-d)
+				if [ $# -gt 2 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+                               		delete word arg2
+				fi
+                                ;;
+                        --modify|-m)
+                                st="modify"
+				if [ $# -gt 4 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+                                	add_mod word arg2 arg3 arg4 st
+                                fi
+				;;
+                        --display|-D) 
+				if [ $# -gt 1 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					display
+                                fi
+				;;
+                        --help|-h) 
+				if [ $# -gt 1 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					help
+                                fi 
+				;;
+                        *)      echo -e "\nWrong input format, please follow the below format...\n"
+                                help
+                                ;;
+                  esac
+        else
+                        echo -e "\n$clu_file is not executable"
+                fi
+        else
+                echo -e "\n$clu_file file does not exists"
+        fi
+

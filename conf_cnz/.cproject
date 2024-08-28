@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<?fileVersion 4.0.0?><cproject storage_type_id="org.eclipse.cdt.core.XmlProjectDescriptionStorage">
+	<storageModule moduleId="org.eclipse.cdt.core.settings">
+		<cconfiguration id="0.1814003270">
+			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="0.1814003270" moduleId="org.eclipse.cdt.core.settings" name="Default">
+				<externalSettings/>
+				<extensions>
+					<extension id="org.eclipse.cdt.core.VCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.CWDLocator" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GCCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GASErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GLDErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+				</extensions>
+			</storageModule>
+			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
+				<configuration artifactName="${ProjName}" buildProperties="" description="" id="0.1814003270" name="Default" parent="org.eclipse.cdt.build.core.prefbase.cfg">
+					<folderInfo id="0.1814003270." name="/" resourcePath="">
+						<toolChain id="org.eclipse.cdt.build.core.prefbase.toolchain.1683235602" name="No ToolChain" resourceTypeBasedDiscovery="false" superClass="org.eclipse.cdt.build.core.prefbase.toolchain">
+							<targetPlatform id="org.eclipse.cdt.build.core.prefbase.toolchain.1683235602.1149124289" name=""/>
+							<builder buildPath="${workspace_loc:/conf_cnz}/conf_cxc" id="org.eclipse.cdt.build.core.settings.default.builder.254896729" keepEnvironmentInBuildfile="false" managedBuildOn="false" name="Gnu Make Builder" superClass="org.eclipse.cdt.build.core.settings.default.builder">
+								<outputEntries>
+									<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="outputPath" name="conf_cxc"/>
+								</outputEntries>
+							</builder>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.libs.1240139211" name="holder for library settings" superClass="org.eclipse.cdt.build.core.settings.holder.libs">
+								<option id="org.eclipse.cdt.build.core.settings.holder.libfiles.25181869" name="Library Files" superClass="org.eclipse.cdt.build.core.settings.holder.libfiles" valueType="libFiles">
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/vobs/IO_Developments/3PP_SDK/curl/lib64/"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/vobs/IO_Developments/3PP_SDK/libXerces/lib64/"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/vobs/IO_Developments/3PP_SDK/libssh2/lib64/"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/vobs/IO_Developments/AP_SDK/Lib/"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/app/toside/4.0.0/LMWP3/thirdparty/gcc/lib64/"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/app/toside/4.0.0/LMWP3/thirdparty/gcc/libexec/gcc/x86_64-unknown-linux-gnu/5.1.0/"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/CMW/4_5/lib64/"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/AP/3_5_0/Lib/"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/3pp/BOOST/LATEST/lib64/"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/3pp/expect/LATEST/lib64/"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/3pp/libXerces/LATEST/lib64/"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/3pp/libssh2/LATEST/lib64/"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/3pp/log4cplus/LATEST/log4cplus/lib"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/LDE/4_3/lib64/"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/LDE/4_3/usr/lib64/"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/SEC/2_2_2/acs/lib64/"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/SEC/2_2_2/crypto/lib/"/>
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/SEC/2_2_2/credu/lib64/"/>
+								</option>
+							</tool>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.703846011" name="Assembly" superClass="org.eclipse.cdt.build.core.settings.holder">
+								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.1527840494" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath">
+									<listOptionValue builtIn="false" value="/vobs/IO_Developments/3PP_SDK/libXerces/include/xercesc/"/>
+									<listOptionValue builtIn="false" value="/vobs/IO_Developments/3PP_SDK/libXerces/include/"/>
+									<listOptionValue builtIn="false" value="/vobs/IO_Developments/3PP_SDK/libssh2/"/>
+									<listOptionValue builtIn="false" value="/vobs/IO_Developments/3PP_SDK/log4cplus/"/>
+									<listOptionValue builtIn="false" value="/vobs/IO_Developments/AP_SDK/Include/"/>
+									<listOptionValue builtIn="false" value="/vobs/IO_Developments/BOOST_SDK/boost_1_44_0/include/"/>
+									<listOptionValue builtIn="false" value="/vobs/IO_Developments/COM_SDK/"/>
+									<listOptionValue builtIn="false" value="/app/toside/4.0.0/LMWP3/thirdparty/gcc/include/c++/5.1.0/x86_64-unknown-linux-gnu/"/>
+									<listOptionValue builtIn="false" value="/app/toside/4.0.0/LMWP3/thirdparty/gcc/include/c++/5.1.0/"/>
+								</option>
+								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.619337897" languageId="org.eclipse.cdt.core.assembly" languageName="Assembly" sourceContentType="org.eclipse.cdt.core.asmSource" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+							</tool>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.576468562" name="GNU C++" superClass="org.eclipse.cdt.build.core.settings.holder">
+								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.57115833" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath">
+									<listOptionValue builtIn="false" value="/app/toside/4.0.0/LMWP3/thirdparty/gcc/include/c++/5.1.0/x86_64-unknown-linux-gnu/"/>
+									<listOptionValue builtIn="false" value="/app/toside/4.0.0/LMWP3/thirdparty/gcc/include/c++/5.1.0/"/>
+									<listOptionValue builtIn="false" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/"/>
+									<listOptionValue builtIn="false" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/AP/3_5_0/Include/"/>
+									<listOptionValue builtIn="false" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/3pp/ACE/6_1_6/"/>
+									<listOptionValue builtIn="false" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/3pp/ACE/6_1_6/ACE_wrappers/"/>
+									<listOptionValue builtIn="false" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/3pp/BOOST/LATEST/include/"/>
+									<listOptionValue builtIn="false" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/3pp/expect/LATEST/include/"/>
+									<listOptionValue builtIn="false" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/3pp/libXerces/LATEST/include/"/>
+									<listOptionValue builtIn="false" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/3pp/libssh2/LATEST/"/>
+									<listOptionValue builtIn="false" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/3pp/log4cplus/LATEST/log4cplus/"/>
+									<listOptionValue builtIn="false" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/CMW/4_5/include/"/>
+									<listOptionValue builtIn="false" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/COM/7_4/"/>
+									<listOptionValue builtIn="false" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/LDE/4_3/usr/include/"/>
+									<listOptionValue builtIn="false" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/SEC/2_2_2/acs/inc/"/>
+									<listOptionValue builtIn="false" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/SEC/2_2_2/crypto/inc/"/>
+									<listOptionValue builtIn="false" value="/afs/.sunrise.ericsson.se/app/APG43L/SDK/SEC/2_2_2/credu/inc/"/>
+								</option>
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.198506263" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="BOOST_THREAD_PLATFORM_PTHREAD=1"/>
+								</option>
+								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.756807412" languageId="org.eclipse.cdt.core.g++" languageName="GNU C++" sourceContentType="org.eclipse.cdt.core.cxxSource,org.eclipse.cdt.core.cxxHeader" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+							</tool>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.1764255196" name="GNU C" superClass="org.eclipse.cdt.build.core.settings.holder">
+								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.628241971" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath">
+									<listOptionValue builtIn="false" value="/vobs/IO_Developments/3PP_SDK/libXerces/include/xercesc/"/>
+									<listOptionValue builtIn="false" value="/vobs/IO_Developments/3PP_SDK/libXerces/include/"/>
+									<listOptionValue builtIn="false" value="/vobs/IO_Developments/3PP_SDK/libssh2/"/>
+									<listOptionValue builtIn="false" value="/vobs/IO_Developments/3PP_SDK/log4cplus/"/>
+									<listOptionValue builtIn="false" value="/vobs/IO_Developments/AP_SDK/Include/"/>
+									<listOptionValue builtIn="false" value="/vobs/IO_Developments/BOOST_SDK/boost_1_44_0/include/"/>
+									<listOptionValue builtIn="false" value="/vobs/IO_Developments/COM_SDK/"/>
+									<listOptionValue builtIn="false" value="/app/toside/4.0.0/LMWP3/thirdparty/gcc/include/c++/5.1.0/x86_64-unknown-linux-gnu/"/>
+									<listOptionValue builtIn="false" value="/app/toside/4.0.0/LMWP3/thirdparty/gcc/include/c++/5.1.0/"/>
+								</option>
+								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.2116303096" languageId="org.eclipse.cdt.core.gcc" languageName="GNU C" sourceContentType="org.eclipse.cdt.core.cSource,org.eclipse.cdt.core.cHeader" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+							</tool>
+						</toolChain>
+					</folderInfo>
+				</configuration>
+			</storageModule>
+			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
+		</cconfiguration>
+	</storageModule>
+	<storageModule moduleId="cdtBuildSystem" version="4.0.0">
+		<project id="conf_cnz.null.2014355832" name="conf_cnz"/>
+	</storageModule>
+	<storageModule moduleId="scannerConfiguration">
+		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		<scannerConfigBuildInfo instanceId="0.1814003270">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		</scannerConfigBuildInfo>
+	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
+	<storageModule moduleId="refreshScope" versionNumber="2">
+		<configuration configurationName="Default">
+			<resource resourceType="PROJECT" workspacePath="/conf_cnz"/>
+		</configuration>
+	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets"/>
+</cproject>

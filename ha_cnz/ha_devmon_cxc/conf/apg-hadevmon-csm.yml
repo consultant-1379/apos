@@ -1,0 +1,47 @@
+csm-version: '1.0'
+components:
+- uid: apos.hadevmon
+  name: apos-hadevmon
+  description: APOS HADEVMON component
+  availability-manager: AMF
+  software:
+    sdp: ERIC-APOS_HADEVMONBIN-CXC1371468
+  supersedes:
+  - base-component: ERIC-APG_DEVMON
+  availability-properties:
+    control-policy:
+      type: ADVANCED
+    multiplicity-policy:
+      node-active: ONE
+      node-standby: ONE
+      cluster-active: ONE
+      cluster-standby: ONE
+    lifecycle-control:
+      prefix: /opt/ap/apos/bin
+      start: apos_ha_devmon_clc instantiate
+      stop: apos_ha_devmon_clc cleanup
+      monitor-keys:
+      - key: apos_ha_devmond_hck
+        period: 240s
+        timeout: 180s
+      promote-demote-timeout: 200s
+      migrate-timeout: 60s
+      recovery-policy: COMPONENT_RESTART
+      start-stop-timeout: 100s
+  constraints:
+    installation:
+      after:
+      - component: acs.lct.lib
+        method: DIFFERENT-STEP
+    upgrade:
+      after:
+      - component: acs.lct.lib
+        method: DIFFERENT-STEP
+  meta-data:
+    component-version: 10.0.0-1
+    deliverable:
+      deployment-package: apos_hadevmon-10.0.0-1-deployment-CXC1371468.tar.gz
+      runtime-package: apos_hadevmon-10.0.0-1-runtime-CXC1371468.tar.gz
+    software:
+    - file-name: APOS_HADEVMONBIN-CXC1371468_10-R1A01.x86_64.sdp
+      bundle-name: ERIC-APOS_HADEVMONBIN-CXC1371468_10-R1A01

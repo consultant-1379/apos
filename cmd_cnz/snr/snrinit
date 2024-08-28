@@ -1,0 +1,2835 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#   snrinit
+# Description:
+#   This script is a shell-pluggable command to recover the failed node.
+##
+# Usage:
+#   snrinit [ -v]
+#   snrinit -i 
+#   snrinit -p [ -v]
+#   snrinit -s [ -v]
+##
+# Output:
+#   'SUCCESS'         - if the single node recovery is successfull.
+#   'FAILED:<REASON>' - if the recovery is failed. REASON, indicates
+#                       the reason of failure.
+##
+# Changelog:
+# - Fri Feb 11 2021 -Dharma Teja (XDHATEJ)
+#   - added fix for TR HZ60448 DNDR failing in GEP5 and GEP7 when raid structure is wrong.
+# - Mon Jan 21 2021 - Venkateshwar Chirra(xvechir)
+#   Fix for TR HY79272 
+# - Mon Aug 17 2020 - Pratap Reddy(xpraupp)
+#   Included WA for drbd0 full sync from Peer node(CC-24943)
+# - Thu Apr 16 2020 - Pratap Reddy(xpraupp)
+#   Fix for TR HY30527 
+# - Fri Jan 17 2020 - Swapnika Baradi(xswapba)
+#   Fix for TR HX98722 snrinit failed when SIGHUP signal recevied in case of hard recovery vApz
+# - Fri Dec 27 2019 - Poorna Chandra Gorle(zgorpoo)
+#   Fix for TR HY15085 snrinit command did not change the MAC Address  
+# - Thu Dec 19 2019 - Pravalika P(zprapxx)/Paolo Palmieri(epaopal)
+#   SSH/TLS hardening feature:Implemented the comments received
+# - Mon Dec 16 2019 - Pravalika P(zprapxx)/Paolo Palmieri(epaopal)
+#   SSH/TLS hardening feature: Aligning sshd configuration files on faulty node
+# - Wed May 08 2019 - Dharma Theja (XDHATEJ)
+#   HX63113 snrinit -p is failing for GEP5-64 boards
+# - Mon Dec 10 2018 - Anjali Mochi (XANJALI)
+#   Added support for ephemeral storage
+# - Thu Nov 15 2018 - Anjali Mochi (xanjali)
+#   Added support for SwM2.0
+#   Improved error handling for drbd invalidate 
+# - Thu Apr 12 2018 - Amit Varma (xamivar)
+#   Added function to handle peer node reboot after redeployment.
+# - Thu Apr 12 2018 - Amit Varma (xamivar)
+#   Removed the code for adhoc template solution.
+# - Wed Feb 28 2018 - Raghavendra Koduri(xkodrag)
+#   Removed impacts for GEP7L spare part handling
+# - Wed Dec 06 2017 - Raghavendra Koduri(xkodrag)
+#   Added impacts for GEP7L spare part handling
+# - Tue Nov 29 2017 - Pranshu Sinha (XPRANSI)
+#   Changes done to adapt new mechanism of estimated time calculation for drbd0 sync
+# - Fri Sep 01 2017 - Pranshu Sinha (XPRANSI)
+#   Changes done to adapt for SLES12 SP2
+# - Fri Nov 04 2016 - Pratapareddy Uppada
+#   HV29983 TR fix, updated "calculate_timeout_for_drbd" function
+# - Fri 11 Nov 2016 - Swapnika Baradi (XSWAPBA)
+#   Fix for TR HU79440(Adding ETX character at confirmation)
+# - Fri Sep 02 2016 - Raghavendra Koduri(xkodrag)
+#   Added logic to start server socket when faulty node is not reachable
+# - Thr April 28 2016 - Anjali Mochi(xanjali)
+#   Added support to recover APG in virtual environment
+#   disabled -p and -s options in virtual environment
+# - Wed Mar 02 2016 - Baratam Swetha(xswebar)
+#   HU63316  snrinit needs to be handled for spare board replacement for GEP5  
+# - Wed Nov 25 2015 - Baratam Swetha(xswebar)
+#   Added impacts of GEP5-64 
+# - Thr Jul 02 2015 - Swapnika Baradi(xswapba)
+#   TR HT91684 AXE15A CM006 DRBD synchronization error after APUB board is replaced 
+# - Tue May 19 2015 - Fabio Ronca (xfabron)
+#   Impacts on functions "set_dhcpd", "reset_dhcpd" and "restore_dhcpd" 
+#   to align them at new behaviour of LDEwS 2.6 SH1 
+# - Web Feb 17 2015 - Crescenzo Malvone (ecremal)
+#   Removed wrong printout
+# - Web Feb 10 2015 - Pratap Reddy (xpraupp)
+#   SLES12 impacts
+# - Thr Jul 02 2015 - Swapnika Baradi(xswapba)
+#   TR HT91684 AXE15A CM006 DRBD synchronization error after APUB board is replaced 
+# - Tue May 19 2015 - Fabio Ronca (xfabron)
+#   Impacts on functions "set_dhcpd", "reset_dhcpd" and "restore_dhcpd" 
+#   to align them at new behaviour of LDEwS 2.6 SH1 
+# - Mon Aug 4  2014 - Pratapa Reddy(xpraupp)
+#   oh hook copy fix
+# - Tue Jun 24 2014 - Malangsha Shaik(xmalsha)
+#   dhcp rollback when snrinit fails
+# - Wed Jun 04 2014 - Malangsha Shaik(xmalsha)
+#   SCBRP packet flooding issue fix
+# - Wed May 21 2014 - Malangsha Shaik(xmalsha)
+#   Updated snrinit function to create lvm structure for GEP5
+# - Fri Feb 21 2014 - Stefano Volpe (estevol)
+#   Added impacts to fetch shelf architecture and support BSP environmnet
+# - Tue Dec 10 2013- Greeshmalatha C (xgrecha)
+#   Modified to handle parsing of options.
+# - Thu Nov 29 2013 - Greeshmalatha C (xgrecha)
+#   Added function update_ip_byname to avoid faiilures due
+#   to wrong IPs during execution of snrinit with option "-p"
+# - Tue Oct 22 2013 - Fabio Imperato (efabimp)
+#   Impacts for handling RTFD 
+# - Tue Sep 24 2013 - Malangsha Shaik(xmalsha)
+#   DNR: GEP5 introduction
+# - Tue Apr 30 2013 - Pratap reddy (xpraupp)
+#   Added drbd1 synchronization to complete
+# - Wed Apr 17 2013 - Krishna Chaitanya (xchakri)
+#   Modified the code for TR HR25440
+# - Mon Mar 10 2013 - Pratap Reddy(xpraupp)
+#   Added baudrate setting function in prepare environment
+# - Fry May 24 2013 - Gianluigi Crispino (egiacri)
+#   Modified the code for AP2 confguration
+# - Wed Apr 17 2013 - Krishna Chaitanya (xchakri)
+#   Modified the code for TR HR25440
+# - Mon Mar 10 2013 - Pratap Reddy(xpraupp)
+#   Added baudrate setting function in prepare environment
+# - Thu Jan 31 2013 - Malangsha Shaik (xmalsha)
+#   Code cleanup and print-out modifications to align PC Comments.
+# - Wed Nov 21 2012 - Malangsha Shaik (xmalsha)
+#   added dialog mode and modified node names to SC-2-1/SC-2-2.
+# - Fri Jun 08 2012 - Pratap Reddy (xpraupp)
+#   Major rework
+# - Wed Jul 20 2011 - Pranshu Sinha (xpransi)
+#   First version.
+##
+
+# Load the apos common functions.
+. /opt/ap/apos/conf/apos_common.sh 
+
+LOG_TAG='snrinit'
+LOG_DIR='/tmp'
+LOG_FILE='snrinit.log'
+S_OPTION_FILE='S_OPTION'
+P_DIR='/opt/ap/apos/bin'
+P_INFO='.progress.snrinit'
+REBUILD_INFO='.snrinit.rebuild'
+ERR_PRINTOUT='FAILED'
+PROGRESS_PRINTOUT=''
+ERR_REASON=''
+SCRIPT_NAME='snrinit'
+SCRIPT_OPTS=''
+
+CACHE_DIR="/dev/shm/"
+CACHE_FILE=""
+
+# script-wide variables
+true=$( true; echo $? )
+false=$( false; echo $? )
+l_board_name=''
+r_board_name=''
+s_board_slot=''
+l_board_slot=''
+s_board_id=0
+prep_env=$false
+reset_env=$false
+install=$false
+verbose=$false
+virtual_env=$false
+progress_info=$false
+hard_recovery=$false
+is_dhcpd_mdfyd=$false
+is_mvl_down=$false
+ap_node_num=''
+ap_shelf_id=''
+GEP=''
+apub_slot_mapping=''
+shelf_architecture=''
+shelfmngr=''
+interface='mvl1'
+bonding_master='bond0'
+recover_peer_in_progress=$false
+verbose_off=$false
+server_pid=-1
+peer_instance_uuid=''
+cmw_status_timeout=''
+
+# command-list
+immfind='/usr/bin/immfind'
+immlist='/usr/bin/immlist'
+pxetest='/opt/ap/apos/bin/pxetest'
+ping='/bin/ping'
+cmw_status='/opt/coremw/bin/cmw-status'
+cmd_hwtype='/opt/ap/apos/conf/apos_hwtype.sh'
+cluster_conf='/cluster/etc/cluster.conf'
+sed='/usr/bin/sed'
+grep='/usr/bin/grep'
+awk='/usr/bin/awk'
+cluster='/usr/bin/cluster'
+cat='/bin/cat'
+mv='/bin/mv'
+cp='/bin/cp'
+date='/bin/date'
+ssh='/usr/bin/ssh'
+rm='/bin/rm'
+getopt='/usr/bin/getopt'
+dmidecode='/usr/sbin/dmidecode'
+drbd_overview='/sbin/drbd-overview'
+scsi_cmd='/opt/ap/apos/bin/apos_ha_scsi_operations'
+cmd_ifenslave='/sbin/ifenslave'
+cmd_touch='/usr/bin/touch'
+cmd_cluster='/usr/bin/cluster'
+cmd_drbdadm='/sbin/drbdadm'
+cmd_cmw_reboot='/opt/coremw/bin/cmw-node-reboot'
+cmd_drbd_status='/opt/ap/apos/conf/apos_drbd_status'
+cmd_cmw_node_lock='/opt/coremw/bin/cmw-node-lock'
+cmd_cmw_node_unlock='/opt/coremw/bin/cmw-node-unlock'
+
+# exit-code error flags
+exit_sucs=0
+exit_fail=1
+exit_usge=2
+exit_actv_eror=3
+exit_dhcp_eror=4
+exit_atfp_eror=5
+exit_clus_eror=6
+exit_cmwx_eror=7
+exit_smgr_setx=8
+exit_smgr_rest=9
+exit_smgr_rbot=10
+exit_ping_tmot=11
+exit_drbd_tmot=12
+exit_cmwx_tmut=13
+exit_clvf_eror=14
+exit_clre_eror=15
+exit_updt_eror=16
+exit_inst_tmot=17
+exit_dhcp_srvr=18
+exit_ipmi_eror=19
+exit_cmnd_abrt=20
+exit_scsi_eror=21
+exit_scbx_eror=22
+exit_ddsk_tmot=24
+exit_clearrtfd_err=25
+exit_clean_rootfs_err=26
+exit_drbd_inval_err=27
+exit_ssh_err=28
+exit_cmw_reboot_err=29
+exit_recovery_server=30
+exit_reboot_time_stamps=31
+exit_recovery_method_error=32
+
+
+#-----------------------------------------------------------------------------
+# log to system-log
+function fetch_architecture(){
+  shelf_architecture=$($immlist -a apgShelfArchitecture axeFunctionsId=1 | awk 'BEGIN { FS = "=" } ; {print $2}') 
+  if [ ! $shelf_architecture ]; then
+    abort "Cannot read APG Shelf Architecture" $exit_fail
+  fi
+
+  if [ "$shelf_architecture" == "2" ]; then
+    apub_slot_mapping='/opt/ap/apos/bin/bspm/lib/common/slot_by_name.dat'
+    shelfmngr='/opt/ap/apos/bin/bspm/bspmngr'
+  else
+    apub_slot_mapping='/opt/ap/apos/bin/sm/lib/common/slot_by_name.dat'
+    shelfmngr='/opt/ap/apos/bin/sm/shelfmngr'
+  fi
+}
+
+#-----------------------------------------------------------------------------
+# log to system-log
+function log(){
+  /bin/logger -t "$LOG_TAG" "$*"
+  flog "$*"
+}
+
+#-----------------------------------------------------------------------------
+# This version of abort is used if the command is aborted by user.
+function abort_v1(){
+  console_print "$ERR_PRINTOUT: $ERR_REASON"
+  log "ABORTING: <"ERROR: $1">"
+  log "END: <$0>"
+  exit $2
+}
+
+#-----------------------------------------------------------------------------
+# log and exit from the script
+# this is invoked with snrinit option
+function abort(){
+  console_print "$ERR_PRINTOUT: $ERR_REASON"
+
+  # restore dhcpd, mvl on the current node in case there is an abort
+  restore_all
+
+  # report abort in messages
+  log "ABORTING: <"ERROR: $1">"
+  log "END: <$0>"
+
+  # update progress info file
+  PROGRESS_PRINTOUT="last recovery failed ($ERR_REASON)"
+  log_progress
+  exit $2
+}
+
+#-----------------------------------------------------------------------------
+function console_print(){
+  echo -e
+  echo -e "$1"
+  echo -e
+}
+
+#-----------------------------------------------------------------------------
+function flog(){
+  echo "[$($date --utc +'%Y-%m-%d %H:%M:%S')] $@" >>$LOG_DIR/$LOG_FILE
+}
+
+#-----------------------------------------------------------------------------
+function log_progress(){
+  echo "$SCRIPT_NAME: $PROGRESS_PRINTOUT" >$P_DIR/$P_INFO
+}
+
+#-----------------------------------------------------------------------------
+function handle_int(){
+  log "Interrupt(SIGINT) received"
+
+  local recovery_type=$(get_recovery_type)
+  if [ "$recovery_type" == "redeployment" ]; then
+    log "Interrupt(SIGINT) received, proceeding with the execution anyway"
+    #CTRL+C should not be handled, when recovery socket is in listen state
+    #When rebuild of faulty node is failed, user can abort the snrinit 
+    #using CTRL+C
+    if [ $server_pid -ne -1 ]; then
+      #kill the recovery server if running
+      if kill -0 $server_pid 2> /dev/null; then
+        kill -9 $server_pid &>/dev/null
+      fi
+      exit $exit_fail
+    fi
+  elif [ "$recovery_type" == "reinstallation" ]; then
+    log "Interrupt(SIGINT) received, exit"
+    exit $exit_fail
+  else
+    log "Interrupt(SIGINT) received, exit"
+    exit $exit_fail
+  fi
+
+}
+
+#-----------------------------------------------------------------------------
+function handle_hup(){
+  log "Interrupt(SIGHUP) received, proceeding with the execution anyway"
+}
+
+#-----------------------------------------------------------------------------
+function handle_term(){
+  log "Interrupt(SIGTERM) received, exiting..."
+  PROGRESS_PRINTOUT='last recovery failed (Internal Error, Signal SIGTERM received)'
+  log_progress 
+
+  if [ $server_pid -ne -1 ]; then
+    if kill -0 $server_pid 2> /dev/null; then
+      kill -9 $server_pid &>/dev/null
+    fi
+  fi
+
+  exit $exit_fail
+}
+
+#-----------------------------------------------------------------------------
+function sanity_check(){
+
+  # register for traps
+  trap handle_int SIGINT
+  trap handle_hup SIGHUP
+  trap handle_term SIGTERM
+
+  if [ $virtual_env -eq $true ]; then 
+    sanity_check_vapg
+  else
+    sanity_check_native
+  fi 
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function sanity_check_vapg() {
+
+  # fetch target ap node system number
+  fetch_ap_node_num
+
+  # fetch hardware type
+  hw_ver=$( $cmd_hwtype -V | awk -F'hw-type=' '{ print $2 }' | tr -d '\n')
+  GEP=${hw_ver%-*}
+  [ $? != 0 ] && flog "GEP Error" && abort "Count not retreive GEP version" $exit_updt_eror
+}
+
+#-----------------------------------------------------------------------------
+function sanity_check_native() {
+
+  # fetch shelf architecture and initialize variables
+  fetch_architecture
+
+  [ ! -f $apub_slot_mapping ] && abort "$apub_slot_mapping file not found" $exit_fail
+  local node_id=$(</etc/cluster/nodes/this/id)
+
+  # fetch hardware type
+  hw_ver=$( $cmd_hwtype -V | awk -F'hw-type=' '{ print $2 }' | tr -d '\n')
+  GEP=${hw_ver%-*}
+  [ $? != 0 ] && flog "GEP Error" && abort "Count not retreive GEP version" $exit_updt_eror
+
+  # fetch target ap node system number
+  fetch_ap_node_num
+
+  # fetch target-node shelf_id
+  fetch_shelf_id
+
+  #update ipn IPs (skip in BSP environment)
+  if [ "$shelf_architecture" != "2" ]; then
+    update_ip_byname
+  fi
+  
+
+  # update local apub slot information	
+  get_local_apub_slot
+  [[ ! $? -eq 0 && -z "$l_board_slot" ]] && abort "Failed to fetch slot number for local node" $exit_fail
+
+  # update peer apub slot informaton
+  get_peer_apub_slot
+  [[ ! $? -eq 0 && -z "$s_board_slot" ]] && abort "Failed to fetch slot number of peer node" $exit_fail
+  [ $node_id -eq 1 ] && {
+    $($sed -i 's/apub_a;apa=.*/apub_a;apa='$l_board_slot'/g' $apub_slot_mapping)
+    [ $? != 0 ] && abort "$apub_slot_mapping updation failed" $exit_fail
+    $($sed -i 's/apub_b;apb=.*/apub_b;apb='$s_board_slot'/g' $apub_slot_mapping)
+    [ $? != 0 ] && abort "$apub_slot_mapping updation failed" $exit_fail
+  }
+  [ $node_id -eq 2 ] && {
+    $($sed -i 's/apub_a;apa=.*/apub_a;apa='$s_board_slot'/g' $apub_slot_mapping)
+    [ $? != 0 ] && abort "$apub_slot_mapping updation failed" $exit_fail
+    $($sed -i 's/apub_b;apb=.*/apub_b;apb='$l_board_slot'/g' $apub_slot_mapping)
+    [ $? != 0 ] && abort "$apub_slot_mapping updation failed" $exit_fail
+  }
+  
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function cleanup(){
+
+  if [ $progress_info -eq $false ]; then
+    # cleanup - temporary log files
+    [ -f $LOG_DIR/$LOG_FILE ] && $($rm -f $LOG_DIR/$LOG_FILE)
+    
+    # cleanup progress info file
+    [ -f $P_DIR/$P_INFO ] && $($rm -f $P_DIR/$P_INFO)
+  fi
+
+  [ -f $P_DIR/$REBUILD_INFO ] && $rm -f $P_DIR/$REBUILD_INFO
+
+  #Cleaning board_type created during the DNR
+  [ -f /cluster/home/board_type ] && $rm -f /cluster/home/board_type
+
+  # reset trap to the default handlers
+  trap - SIGINT SIGHUP SIGTERM
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function is_verbose(){
+  [ $verbose -eq $true ] && return $true
+  return $false
+}
+
+#-----------------------------------------------------------------------------
+function get_recovery_type() {
+  
+  local recovery_type=''
+  recovery_type=$(getAxeInfo "HardRecoveryMethod")
+  [ -z "$recovery_type" ] && ERR_REASON="Internal Error, recovery failed" && abort "Unable to determinate recovery method"  $exit_recovery_method_error
+  echo $recovery_type
+  
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function usage_error(){
+
+  if [ $virtual_env -eq $true ]; then
+    $cat << USAGE
+Incorrect Usage
+
+Usage:
+  snrinit [ -v]
+  snrinit -r [ -v]
+  snrinit -i
+
+USAGE
+  else
+    $cat << USAGE
+Incorrect Usage
+
+Usage:
+  snrinit [ -v]
+  snrinit -i 
+  snrinit -p [ -v]
+  snrinit -s [ -v]
+
+USAGE
+  fi
+
+  log "Incorrect Usage"
+  log "END: <$0>"
+  exit $exit_usge
+}
+
+#----------------------------------------------------------------------------------------
+function confirm(){
+
+  CMD=""
+  local rCode
+  while [ "$CMD" != "y" ] && [ "$CMD" != "n" ]; do
+    [ -z "$SCRIPT_OPTS" ] && echo -e "Execute $SCRIPT_NAME with no parameters:"
+    [ ! -z "$SCRIPT_OPTS" ] && {
+      echo -e "Execute $SCRIPT_NAME with these parameters:"
+      echo -e "$SCRIPT_OPTS"
+    }
+    echo -en "[y=yes, n=no]?\003:"
+    read CMD
+  done
+
+  if [ "$CMD" == "y" ]; then
+    rCode=0
+  else
+    rCode=1
+  fi
+  return $rCode
+}
+
+#-----------------------------------------------------------------------------
+# parse command-line option if provided.
+function parse_args(){
+
+  # This variable setting is to reduce invocation of 'is_vAPG' function
+  # multiple times. Initially this variable set to <false> and set <true>
+  # if environment is virtual.
+  is_vAPG && virtual_env=$true
+
+  [ $# -eq 0 ] && {
+    # when command is invoked without any option
+    install=$true
+    return $exit_sucs
+  }
+
+  local rCode
+  local options='i p s v r'
+  $getopt --quiet --quiet-output --options="$options" -- "$@"
+  rCode=$?
+  [ $rCode -ne $true ] && usage_error
+
+  SCRIPT_OPTS="$SCRIPT_NAME $*"
+  local args="$@"
+  eval set -- "$args"
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -i)
+        [ $progress_info -eq $true ] && usage_error
+        progress_info=$true
+      ;;
+      -p)
+        [ $prep_env -eq $true ] && usage_error
+        prep_env=$true
+      ;;
+      -s)
+        [ $reset_env -eq $true ] && usage_error
+        reset_env=$true
+      ;;
+      -v)
+        [ $verbose -eq $true ] && usage_error
+        verbose=$true
+      ;;
+      -r)
+        [ $hard_recovery -eq $true ] && usage_error
+        hard_recovery=$true
+        install=$true
+      ;;
+      *)
+        usage_error
+      ;;
+    esac
+    shift
+  done
+
+  # check if snrinit is invoked with -p -s option in virtual environment
+  [ $virtual_env -eq $true ] && [[ $prep_env -eq $true || $reset_env -eq $true ]] && usage_error
+
+  # check if snrinit is invoked with -r option in native environment
+  [ $virtual_env -eq $false ] && [[ $hard_recovery -eq $true ]] && usage_error
+
+  if [ $virtual_env -eq $true ]; then
+    local recovery_type=$(get_recovery_type)
+    [ "$recovery_type" != "reinstallation" ] && [[ $hard_recovery -eq $true ]] && {
+      echo "Illegal option in this system configuration"
+      exit $exit_usge
+    }
+  fi
+
+  # implementing mutual exclusion between incompatible options
+  local sum=$(( $prep_env + $reset_env ))
+  [ $sum -eq 0 ] && usage_error
+
+  sum=$(( $prep_env + $progress_info ))
+  [ $sum -eq 0 ] && usage_error
+
+  sum=$(( $reset_env + $progress_info ))
+  [ $sum -eq 0 ] && usage_error
+
+  sum=$(( $verbose + $progress_info ))
+  [ $sum -eq 0 ] && usage_error
+
+  sum=$(( $prep_env + $reset_env + $progress_info ))
+[ $sum -eq 0 ] && usage_error
+
+  # check if snrinit alone is invoked wih -v option
+  [[ $prep_env -eq $false && $reset_env -eq $false && $verbose -eq $true ]] && install=$true
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+# fetch peer node slot
+function get_peer_apub_slot() {
+
+  LOCAL_ETH3_IP=$(ip -f inet addr show eth3 | grep 192.168.169.[1234][^0-9] | $awk '{print $2}'| $awk -F'/' '{print $1}')
+  for BLADE in $($immfind | $grep '^apBladeId='); do
+    FBN="$($immlist -a functionalBoardName $BLADE | $awk -F'=' '{print $2}')"
+    SYSTEM_NUM="$($immlist -a systemNumber $BLADE | $awk -F'=' '{print $2}')"
+    if [[ "$FBN" -eq 300  && "$SYSTEM_NUM" -eq $ap_node_num ]]; then	
+      if [ "$($immlist -a ipAddressEthA $BLADE | $awk -F'=' '{print $2}')" != "$LOCAL_ETH3_IP" ]; then
+        s_board_slot=$( echo  "$BLADE"| $awk -F',' '{print $1}'| $awk -F'=' '{print $2}')
+        return $exit_sucs
+      fi
+    fi
+  done
+  return $exit_fail
+}
+
+#-----------------------------------------------------------------------------
+# fetch peer node slot
+function get_local_apub_slot() {
+
+  LOCAL_ETH3_IP=$(ip -f inet addr show eth3 | grep 192.168.169.[1234][^0-9] | $awk '{print $2}'| $awk -F'/' '{print $1}')	
+  for BLADE in $($immfind | $grep '^apBladeId='| $grep "shelfId=$ap_shelf_id"); do
+    FBN="$($immlist -a functionalBoardName $BLADE | $awk -F'=' '{print $2}')"
+    if [ "$FBN" == "300" ]; then
+      if [ "$($immlist -a ipAddressEthA $BLADE | $awk -F'=' '{print $2}')" == "$LOCAL_ETH3_IP" ]; then
+        l_board_slot=$( echo  "$BLADE"| $awk -F',' '{print $1}'| $awk -F'=' '{print $2}')
+        return $exit_sucs
+      fi
+    fi
+  done
+  return $exit_fail
+}
+
+#-----------------------------------------------------------------------------
+# fetch target-node ap_node_num
+function fetch_ap_node_num(){
+
+  ERR_REASON='Internal Error, NODE ID not found'
+  flog "Fetching the AP node number..."
+  ap_node_num=0
+  ap_node_num=$($immlist -a apNodeNumber axeFunctionsId=1  | $awk -F'=' '{print $2}')
+  [[ $ap_node_num -ne 1 && $ap_node_num -ne 2 ]] && abort "apNodeNumber not found" $exit_fail
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+# fetch target-node shelf_id
+function fetch_shelf_id(){
+
+  ERR_REASON='Internal Error, NODE ID not found'
+  flog "Fetching the AP shelf id..."
+  ap_shelf_id=''
+  [ $ap_node_num -eq 1 ] && ap_shelf_id="$($immlist -a apBladesDn apgId=AP1,logicalMgmtId=1,AxeEquipmentequipmentMId=1 | $awk -F'=' '{print $4}'| $awk -F',' '{print $1}')"
+  [ $ap_node_num -eq 2 ] && ap_shelf_id="$($immlist -a apBladesDn apgId=AP2,logicalMgmtId=1,AxeEquipmentequipmentMId=1 | $awk -F'=' '{print $4}'| $awk -F',' '{print $1}')"			
+  [ -z $ap_shelf_id ] && abort "ap_shelf_id not found" $exit_fail
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+# fetch target-node board name
+function fetch_board_name(){
+
+  ERR_REASON='Internal Error, NODE ID not found' 
+  if [ ! -f /etc/cluster/nodes/this/id ]; then
+    abort "/etc/cluster/nodes/this/id does not exist" $exit_fail
+  fi
+  s_board_id=$(</etc/cluster/nodes/peer/id)	
+  local node_id=$(</etc/cluster/nodes/this/id)
+
+  # fetch peer apub slot number, fail if it is not valid
+  get_peer_apub_slot
+  [[ ! $? -eq 0 && -z "$s_board_slot" ]] && abort "Failed to fetch slot number for local node" $exit_fail
+
+  [ -z $s_board_slot ] && abort "Failed to fetch slot number for peer node" $exit_fail
+  if [ $node_id -eq 1 ]; then
+    l_board_name="A"
+    r_board_name="B"
+  else
+    l_board_name="B"
+    r_board_name="A"
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function update_ip_byname(){
+  # check the magazine that we are running on and
+  # populate /opt/ap/apos/bin/sm/lib/common/ip_by_name.dat
+  # for EVO and GEP machines.
+  local shelf_ip=/opt/ap/apos/bin/sm/lib/common/ip_by_name.dat
+
+  # GEP1/GEP2 and EVO case
+  # SCB-RP/SCX are located at solots 0, 25
+  # So fetch hardware information of these slots to get ips
+  # slot 0: dn -> otherBladeId=0,shelfId=${SHELF_ID},hardwareMgmtId=1,AxeEquipmentequipmentMId=1
+  # slot 25: dn -> otherBladeId=0,shelfId=${SHELF_ID},hardwareMgmtId=1,AxeEquipmentequipmentMId=1
+  local SHELF_ID=$ap_shelf_id
+  [ -z "$SHELF_ID" ] && abort "Not able to fetch shelfId" $exit_fail
+
+  slot0_ipna=$($immlist -a ipAddressEthA otherBladeId=0,shelfId=${SHELF_ID},hardwareMgmtId=1,AxeEquipmentequipmentMId=1 2>/dev/null | cut -d = -f2)
+  slot0_ipnb=$($immlist -a ipAddressEthB otherBladeId=0,shelfId=${SHELF_ID},hardwareMgmtId=1,AxeEquipmentequipmentMId=1 2>/dev/null | cut -d = -f2)
+
+  slot25_ipna=$($immlist -a ipAddressEthA otherBladeId=25,shelfId=${SHELF_ID},hardwareMgmtId=1,AxeEquipmentequipmentMId=1 2>/dev/null | cut -d = -f2)
+  slot25_ipnb=$($immlist -a ipAddressEthB otherBladeId=25,shelfId=${SHELF_ID},hardwareMgmtId=1,AxeEquipmentequipmentMId=1 2>/dev/null | cut -d = -f2)
+
+  [[ -z $slot0_ipna || -z $slot0_ipnb || -z $slot25_ipna || -z $slot25_ipnb ]] && abort 'Could not fetch SCX/SCB-RP IP address from IMM' $exit_scbx_eror
+  [ ! $( grep -i -q $slot0_ipna $shelf_ip)  ] && sed -i 's/sc_a;sca=ipna:.*/sc_a;sca=ipna:'$slot0_ipna'/g'  $shelf_ip
+  [ ! $( grep -i -q $slot0_ipnb $shelf_ip)  ] && sed -i 's/sc_a;sca=ipnb:.*/sc_a;sca=ipnb:'$slot0_ipnb'/g'  $shelf_ip
+  [ ! $( grep -i -q $slot25_ipna $shelf_ip) ] && sed -i 's/sc_b;scb=ipna:.*/sc_b;scb=ipna:'$slot25_ipna'/g' $shelf_ip
+  [ ! $( grep -i -q $slot25_ipnb $shelf_ip) ] && sed -i 's/sc_b;scb=ipnb:.*/sc_b;scb=ipnb:'$slot25_ipnb'/g' $shelf_ip
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+# check health of active node using pxetest
+function check_health(){
+
+  local rCode=0
+  flog "Checking Node '$l_board_name' Health:"
+
+  if is_verbose; then
+    $pxetest 2>/dev/null || rCode=$?
+  else
+    $pxetest &>/dev/null || rCode=$?	
+  fi
+
+  [ $rCode -eq $exit_fail 	 ] && ERR_REASON='Internal Error, NODE ID not found'
+  [ $rCode -eq $exit_actv_eror ] && ERR_REASON='Active node error'		
+  [ $rCode -eq $exit_dhcp_eror ] && ERR_REASON='DHCP error'		
+  [ $rCode -eq $exit_atfp_eror ] && ERR_REASON='ATFTP error'	
+  [ $rCode -eq $exit_clus_eror ] && ERR_REASON='Cluster error'		
+  [ $rCode -eq $exit_cmwx_eror ] && ERR_REASON='Middleware error'		
+  [ $rCode -eq $exit_scbx_eror ] && ERR_REASON='SCB/SCX IP fetch error'		
+
+  if [ $rCode != $exit_sucs ]; then
+    flog "Checking Node $l_board_name Health...Failed"
+    is_verbose && echo -e "Checking Node $l_board_name Health...Failed"
+    abort "$pxetest failed on active node" $rCode
+  else
+    flog "Checking Node $l_board_name Health...OK"
+    is_verbose && echo -e "Checking Node $l_board_name Health...OK"
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+# set boot-order of first boot device to PXE boot  
+function set_boot_order(){
+
+  ERR_REASON='Setting boot-oder to PXE boot failed'
+  flog  "Setting Node $r_board_name boot order to PXE boot"
+  is_verbose && echo -en "Setting Node $r_board_name boot order to PXE boot..."
+  $($shelfmngr set bootdev --eth=3 $s_board_slot &> /dev/null)
+  if [ $? != 0 ]; then
+    flog "Failed"
+    is_verbose && echo -e "Failed"
+    abort "\"$shelfmngr set bootdev --eth=3 $s_board_slot \" failed on active node" $exit_smgr_setx
+  else
+    flog "OK"
+    is_verbose && echo -e "OK"
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+# wait for the target node to reset completely.
+function check_board_reset(){
+    
+  local timeout=240	
+  local count=0
+  local iteration=0
+
+  # fetch peer node id & ip
+  peer_id=$(</etc/cluster/nodes/peer/id)
+  peer_ip=$(</etc/cluster/nodes/all/$peer_id/networks/internal/primary/address)
+
+  flog "Waiting for Node $r_board_name actual reset:"
+  while ((count < timeout))
+  do
+    # check if the node is responding to ping
+    if $($ping -c 1 -W 1 $peer_ip &> /dev/null); then
+      flog "'$r_board_name' is still responding to ping"
+    else
+      flog "'$r_board_name' is not responding to ping"
+      # make sure the situation is same after a minute as well.
+      if [ $iteration -eq 0 ]; then
+        iteration=$count
+      else
+        ((iteration ++))
+        if [ $iteration -eq $count ]; then
+          break
+        else
+          iteration=0
+        fi
+     fi
+    fi
+    sleep 1
+    ((count ++))
+  done
+
+  if test $count -eq $timeout; then
+    flog "Failed"
+    abort "time-out: target-node reset failed" $exit_ping_tmot
+  else
+    flog "OK"
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+# reset target-node to install it from pxe-boot(actvie-node)
+function reset_target_node(){
+
+  ERR_REASON='Reset faulty node failed'
+  flog  "Resetting Node $r_board_name to install from Node $l_board_name"
+  is_verbose && echo -en "Resetting Node $r_board_name to install from Node $l_board_name..."
+  $($shelfmngr set reboot $s_board_slot &> /dev/null)
+  if [ $? != 0 ]; then
+    flog "Failed"
+    is_verbose && echo -e "Failed"
+    abort "\"$shelfmngr set reboot $s_board_slot\" failed on active-node" $exit_smgr_rbot
+  else
+    # make sure that the board is atually reset.
+    check_board_reset	
+    flog "OK"
+    is_verbose && echo -e "OK"
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+# set boot-order of first boot device to systemdisk
+function reset_boot_order(){
+
+  ERR_REASON='Setting boot-order to Systemdisk failed'
+  flog "Setting Node $r_board_name boot order to System Disk"
+  is_verbose && echo -en "Setting Node $r_board_name boot order to System Disk..."
+  $($shelfmngr set bootdev --disk=systemdisk $s_board_slot &> /dev/null)
+  if [ $? != 0 ]; then
+    flog "Failed"
+    is_verbose && echo -e "Failed"
+    abort "\"$shelfmngr set bootdev --disk=systemdisk $s_board_slot\" failed on active-node" $exit_smgr_rest
+  else
+    flog "OK"
+    is_verbose && echo -e "OK"
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+# To check CoreMW to come up
+function wait_for_cmw_status(){
+
+  ERR_REASON='Node '$r_board_name' Middleware not healthy'	
+  local timeout=240
+  local count=0
+
+  if [ ! -z "$cmw_status_timeout" ]; then
+    timeout=$cmw_status_timeout
+  fi
+
+  # store the actual verbose value 
+  verbose_org=$verbose
+  [ $verbose_off -eq $true ] && verbose=$false
+
+  local OPTS='node'
+  [ -f $P_DIR/$REBUILD_INFO ] && OPTS='node app sg su comp si csiass'
+
+  flog "Waiting for Node $r_board_name CoreMw Status..."
+  is_verbose && echo -en "Waiting for Node $r_board_name Middleware Status..."
+
+  while ((count < timeout))
+  do
+    $cmw_status $OPTS  &>/dev/null
+    if [ $? == 0 ]; then
+      break
+    else
+      sleep 1
+     ((count ++))
+    fi
+  done
+
+  if test $count -eq $timeout; then
+    flog "Failed"
+    is_verbose && echo -e "Failed"
+    abort "time-out: $r_board_name CoreMW status failed" $exit_cmwx_tmut
+  else
+    flog "OK"
+    is_verbose && echo -e "OK"
+  fi
+  
+  # reste the verbose switch options
+  verbose=$verbose_org
+  verbose_off=$false
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+# Wait for drbd Synchronization to start
+# to wait for automatic reboot
+function wait_for_drbdsync_start(){
+  # We are still at PXE boot installation stage.
+  # LOTC installation will cause the network outage
+  # to mount the file-systems and finally the node 
+  # will be auto-rebooted to install the target-node
+  # from the system-disk. So the timeout is calcuated
+  # keeping all these factors in account.
+  # timeout go get to the auto-reboot stage : 30 secs
+  # timeout on auto-reboot : 10 secs
+  # timeout to install the node from the system-disk: 180 + 60 (GEP5 changes) 
+  # (this timeout includes the node to get to the drbd
+  # synchronization session start.
+  # latency timeout (buffer) : 60 secs
+  # So total timeout: 30 + 10 + 240 + 60 =340 secs
+  ERR_REASON='System disk installation timeout error'
+  timeout=340
+  count=0
+  log_ping=1
+  log_noping=1
+
+  flog "Waiting for Node $r_board_name Installation from System Disk..."
+  is_verbose && echo -en "Waiting for Node $r_board_name Installation from System Disk..."
+
+  # fetch peer node id & ip
+  peer_id=$(</etc/cluster/nodes/peer/id)
+  peer_ip=$(</etc/cluster/nodes/all/$peer_id/networks/internal/primary/address)
+
+  while ((count < timeout))
+  do
+    conn_status=$($cmd_drbd_status repstate drbd0)
+    if [ "$conn_status" == "SyncSource" ];then
+      break
+    else
+      sleep 1
+      ((count ++))
+      # check if the node is responding to ping
+      if $($ping -c 1 -W 1 $peer_ip &> /dev/null); then
+        if [ $log_ping -eq 1 ]; then
+          flog "'$r_board_name' is now responding to ping"
+          log_ping=0
+        else
+          log_noping=1
+        fi
+      else
+        if [ $log_noping -eq 1 ]; then
+          flog "'$r_board_name' is not responding to ping"
+          log_noping=0
+        else
+          log_ping=1
+        fi
+      fi
+    fi
+  done
+
+  if test $count -eq $timeout; then
+    flog "Failed"
+    is_verbose && echo -e "Failed"
+    abort "time-out: target-node '$r_board_name'Installation from system-disk failed" $exit_inst_tmot
+  else
+    flog "OK"
+    is_verbose && echo -e "OK"
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function wait_for_drbd0_sync(){
+
+  ERR_REASON='DRBD synchronization error'
+  # Ok. session is started. Calcuate timeout
+  # to wait for sync (session) to complete
+  start_time=$(date +%s)
+  local timeout=$(calculate_timeout_for_drbd)
+
+  count=0
+  attempt=1
+  max_attempts=5
+
+  # store the actual verbose value
+  verbose_org=$verbose
+  [ $verbose_off -eq $true ] && verbose=$false
+
+  flog "Waiting for Node $r_board_name DRBD Synchronization...$timeout"
+  is_verbose && echo -en "Waiting for Node $r_board_name DRBD Synchronization..."
+  while true
+  do
+    disk1_status=$($cmd_drbd_status dstate drbd0 local)
+    disk2_status=$($cmd_drbd_status dstate drbd0 peer)
+
+    # check if the both the disks are upto date
+    if [ "$disk1_status" == "$disk2_status" ]; then
+      flog "OK"
+      is_verbose && echo -e "OK"
+      break
+    else
+      sleep 1
+      ((count ++))
+    fi
+
+    # continue for 4 more attempts, if it fails for the first time
+    if test $count -ge $timeout; then
+      if test $attempt -eq $max_attempts; then
+        flog "Failed"
+        is_verbose && echo -e "Failed"
+        abort "time-out: target-node synchronization failed" $exit_drbd_tmot
+      else
+        timeout=$(calculate_timeout_for_drbd)
+        count=0
+        ((attempt ++))
+        flog "Attempt count...$attempt, timeout...$timeout"
+      fi
+    fi
+  done
+
+  # reste the verbose switch options
+  verbose=$verbose_org
+  verbose_off=$false
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function calculate_timeout_for_drbd(){
+  #waiting for drbd0 to sync for some extent
+  sleep 10
+  #Calculating elapsed time
+  current_time=$(date +%s)
+  elapsed_time=$(expr $current_time \- $start_time)
+  #Checking the percentage of sync done in 10 Sec
+  local rebuild_percentage=$($cmd_drbd_status status drbd0 | $grep -w "SyncSource" | $awk -F "done:" '{print $2}')
+  rebuild_percentage=$( printf "%.0f" $rebuild_percentage )
+  #Calculating the time for 100 percent sync
+  if [ -z "$rebuild_percentage" ]; then
+    local timeout=0
+  else
+    timeout=$(expr $elapsed_time \* 100 \/ $rebuild_percentage 2>/dev/null)
+  fi
+  # add 60 secs latency to the timeout.
+  timeout=$(expr $timeout + 60)
+  echo $timeout
+
+}
+#-----------------------------------------------------------------------------
+# wait for the target-node installation to complete/timeout
+function wait_for_timeout(){
+
+  ERR_REASON='PXE boot installation timeout error'
+  # assume default timeout to 180 secs (3 mins)
+  # this paramter need to be aligned with actual reboot time
+  timeout=240
+  count=0
+
+  # fetch peer node id & ip
+  peer_id=$(</etc/cluster/nodes/peer/id)
+  peer_ip=$(</etc/cluster/nodes/all/$peer_id/networks/internal/primary/address)
+
+  # wait for the installation to complete
+  flog "Waiting for Node $r_board_name installation from Node $l_board_name"
+  is_verbose && echo -en "Waiting for Node $r_board_name installation from Node $l_board_name..."
+  while ((count < timeout))
+  do
+    # check if the peer node is booted from pxe boot
+    if $($ping -c 1 -W 1 $peer_ip &> /dev/null); then
+      # echo "target-node is now responding to ping"
+      break
+    else
+      # echo "waiting for the target-node to show-up"
+      sleep 1
+      ((count ++))
+    fi
+  done
+
+  if test $count -eq $timeout; then
+    flog "Failed"
+    is_verbose && echo -e "Failed"
+    abort "time-out: target-node installation failed" $exit_ping_tmot
+  else
+    flog "OK"
+    is_verbose && echo -e "OK"
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function set_dhcpd(){
+
+  #Create a file in shared memory to force the start of DHCP on bond0 
+  # if the DRBD resouces are not alligned with the NODE (Active/pasisve) status
+  CACHE_FILE=$(mktemp --tmpdir=$CACHE_DIR apos_snrinit.cacheXXX --quiet)	
+  if [ $? -ne 0 ]; then 
+    flog "Failed" 
+    is_verbose && echo -e "Failed"
+    abort "Could not set a flag in shared memory" $exit_dhcp_srvr
+  fi
+  is_dhcpd_mdfyd=$true
+
+  ERR_REASON='DHCP Server error'
+  flog "Stopping Node '$l_board_name' DHCP Server..."
+  is_verbose && echo -en "Stopping Node $l_board_name DHCP Server..."
+  apos_servicemgmt stop apg-dhcpd.service &>/dev/null
+  if test $? != 0; then
+    flog "Failed" 
+    is_verbose && echo -e "Failed"
+    abort "Could not stop dhcp server" $exit_dhcp_srvr 
+  fi
+  is_verbose && echo -e "OK"
+  flog "OK"
+
+  flog "Starting Node $l_board_name DHCP Server on Boot Network..."
+  is_verbose && echo -en "Starting Node $l_board_name DHCP Server on Boot Network..."
+  apos_servicemgmt start apg-dhcpd.service &>/dev/null
+  #$(/usr/bin/monitord -n dhcpd -c "/usr/sbin/dhcpd -q -f bond0")
+  #rCode=$?
+  if test $? != 0; then
+    flog "Failed" 
+    is_verbose && echo -e "Failed"
+    abort "Could not start dhcp server on bond0 interface" $exit_dhcp_srvr
+  fi
+
+  is_dhcpd_mdfyd=$true
+  flog "OK"	
+  is_verbose && echo -e "OK"
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function restore_all(){
+
+  # restore dhcpd if it is modified
+  [ $is_dhcpd_mdfyd -eq $true ] && restore_dhcpd
+
+  # bring up mvl if it is down
+  [ $is_mvl_down -eq $true ] && bringup_mvl
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function restore_dhcpd(){
+
+  flog "Restoring DHCP Server:"
+  flog "Stoping Node $l_board_name DHCP Server..."
+  apos_servicemgmt stop apg-dhcpd.service &>/dev/null
+  [ $? != 0 ] && flog "Failed" && return $exit_fail
+  flog "Success"
+  flog "Starting dhcp server to listen on eth3 eth4."
+  apos_servicemgmt start apg-dhcpd.service &>/dev/null
+  [ $? != 0 ] && flog "Failed" && return $exit_fail
+  flog "Success"
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function reset_dhcpd(){
+
+  if [ -f $CACHE_FILE ]; then
+    rm $CACHE_FILE
+    [ $? != 0 ] && flog "Failed Could not remove the flag file" 
+  else
+    flog "Warning: flag file not present"
+  fi
+
+  ERR_REASON='DHCP Server error'
+  is_verbose && echo -en "Stopping Node $l_board_name DHCP Server..."
+  flog "Stoping Node $l_board_name DHCP Server..."
+  apos_servicemgmt stop apg-dhcpd.service &>/dev/null
+  [ $? != 0 ] && flog "Failed" && abort "Could not stop dhcp server" $exit_dhcp_srvr
+  flog "OK"
+  is_verbose && echo -e "OK"
+
+  is_verbose && echo -en "Starting Node $l_board_name DHCP Server on Default Network..."
+  flog "Starting dhcp server to listen on eth3 eth4."
+  apos_servicemgmt start apg-dhcpd.service &>/dev/null
+  [ $? != 0 ] && flog "Failed" && abort  "Could not start dhcp server " $exit_dhcp_srvr 
+  flog "OK"	
+  is_verbose && echo -e "OK"
+  is_dhcpd_mdfyd=$false
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function increase_mac(){
+  printf '%012x' $(( 16#${1} + ${2} ))|tr [:lower:] [:upper:]| $sed 's/../&:/g;s/:$//'
+}
+
+#-----------------------------------------------------------------------------
+function fetch_vmac(){
+  offset=020000000000
+  eth=$(echo ${1}| tr -d ':')
+  printf '%012x' $(( 16#$eth + 16#$offset ))|tr [:lower:] [:upper:]| sed 's/../&:/g;s/:$//'
+}
+
+#-----------------------------------------------------------------------------
+function update_cluster_conf(){
+
+  ERR_REASON='Cluster Configuration Update Error'
+  flog "Updating Cluster Configuration with new MAC addresses..."
+  is_verbose && echo -en "Updating Cluster Configuration with new MAC addresses..."
+
+  base_mac=$($shelfmngr get mac --base $s_board_slot | cut -d = -f2 | $sed 's/[[:blank:]]//g' 2>/dev/null)
+  [ $? != 0 ] && abort "Could not fetch base mac address" $exit_updt_eror
+  
+    
+  
+  # following are the conversion rules.
+  # GEP1:
+  # eth3 -> base + 1
+  # eth4 -> base + 2
+  # eth2 -> base + 3
+  # eth0 -> base + 4
+  # eth1 -> base + 5
+  # GEP2:
+  # eth3 -> base + 1
+  # eth4 -> base + 2
+  # eth2 -> base + 3
+  # eth0 -> base + 5
+  # eth1 -> base + 6
+  # GEP5:
+  # eth3 -> base + 1
+  # eth4 -> base + 2
+  # eth2 -> base + 3
+  # eth5 -> base + 5
+  # eth6 -> base + 6
+  # eth0 -> base + 8
+  # eth1 -> base + 9
+  # GEP5-64:
+  # eth3 -> base + 1
+  # eth4 -> base + 2
+  # eth2 -> base + 3
+  # eth5 -> base + 5
+  # eth6 -> base + 6
+  # eth7 -> base + 15
+  # eth8 -> base + 16
+  # eth0 -> base + 8
+  # eth1 -> base + 9
+  # GEP7:
+  # eth3 -> base + 1
+  # eth4 -> base + 2
+  # eth2 -> base + 5
+  # eth5 -> base + 7
+  # eth6 -> base + 8
+  # eth7 -> base + 12
+  # eth8 -> base + 13
+  
+  case "$GEP" in
+  GEP1)
+    flog "GEP Version: GEP1"
+    offset=4
+    mac_eth0=$(increase_mac $base_mac $offset)
+    offset=5
+    mac_eth1=$(increase_mac $base_mac $offset)
+    offset=3
+    mac_eth2=$(increase_mac $base_mac $offset)
+    offset=1
+    mac_eth3=$(increase_mac $base_mac $offset)
+    offset=2
+    mac_eth4=$(increase_mac $base_mac $offset)
+  ;;
+  GEP2)
+    flog "GEP Version: GEP2"
+    offset=5
+    mac_eth0=$(increase_mac $base_mac $offset)
+    offset=6
+    mac_eth1=$(increase_mac $base_mac $offset)
+    offset=3
+    mac_eth2=$(increase_mac $base_mac $offset)
+    offset=1
+    mac_eth3=$(increase_mac $base_mac $offset)
+    offset=2
+    mac_eth4=$(increase_mac $base_mac $offset)
+  ;;
+  GEP5)
+    flog "GEP Version: GEP5"
+    offset=8
+    mac_eth0=$(increase_mac $base_mac $offset)
+    offset=9
+    mac_eth1=$(increase_mac $base_mac $offset)
+    offset=3
+    mac_eth2=$(increase_mac $base_mac $offset)
+    offset=1
+    mac_eth3=$(increase_mac $base_mac $offset)
+    offset=2
+    mac_eth4=$(increase_mac $base_mac $offset)
+    offset=5
+    mac_eth5=$(increase_mac $base_mac $offset)
+    offset=6
+    mac_eth6=$(increase_mac $base_mac $offset)
+  ;;
+  GEP5-64*)
+    flog "GEP Version: GEP5-64"
+    offset=8
+    mac_eth0=$(increase_mac $base_mac $offset)
+    offset=9
+    mac_eth1=$(increase_mac $base_mac $offset)
+    offset=3
+    mac_eth2=$(increase_mac $base_mac $offset)
+    offset=1
+    mac_eth3=$(increase_mac $base_mac $offset)
+    offset=2
+    mac_eth4=$(increase_mac $base_mac $offset)
+    offset=5
+    mac_eth5=$(increase_mac $base_mac $offset)
+    offset=6
+    mac_eth6=$(increase_mac $base_mac $offset)
+    offset=15
+    mac_eth7=$(increase_mac $base_mac $offset)
+    offset=16
+    mac_eth8=$(increase_mac $base_mac $offset)
+  ;;
+   GEP7-128|GEP7L*)
+    flog "GEP Version: GEP7"
+    offset=5
+    mac_eth2=$(increase_mac $base_mac $offset)
+    offset=1
+    mac_eth3=$(increase_mac $base_mac $offset)
+    offset=2
+    mac_eth4=$(increase_mac $base_mac $offset)
+    offset=7
+    mac_eth5=$(increase_mac $base_mac $offset)
+    offset=8
+    mac_eth6=$(increase_mac $base_mac $offset)
+    offset=12
+    mac_eth7=$(increase_mac $base_mac $offset)
+    offset=13
+    mac_eth8=$(increase_mac $base_mac $offset)
+  ;;
+  *)
+  abort "$GEP HW-TYPE not supported" $exit_updt_eror
+  ;;
+  esac
+  
+  # Fetch mac vlans
+  vmac_eth2=$(fetch_vmac $mac_eth2) 
+  vmac_eth3=$(fetch_vmac $mac_eth3)
+  vmac_eth4=$(fetch_vmac $mac_eth4)
+
+  # Update mac vlan in cluster.conf  
+  $($sed -i 's/interface '$s_board_id' mvl2 macvlan eth2.*/interface '$s_board_id' mvl2 macvlan eth2 '$vmac_eth2'/g' $cluster_conf)
+  [ $? != 0 ] && flog "Failed" && abort "cluster.conf updation failed" $exit_updt_eror
+  
+  $($sed -i 's/interface '$s_board_id' mvl0 macvlan eth3.*/interface '$s_board_id' mvl0 macvlan eth3 '$vmac_eth3'/g' $cluster_conf)
+  [ $? != 0 ] && flog "Failed" && abort "cluster.conf updation failed" $exit_updt_eror
+
+  $($sed -i 's/interface '$s_board_id' mvl1 macvlan eth4.*/interface '$s_board_id' mvl1 macvlan eth4 '$vmac_eth4'/g' $cluster_conf)
+  [ $? != 0 ] && flog "Failed" && abort "cluster.conf updation failed" $exit_updt_eror
+
+  
+
+  # Ok. we have the mac addresses of all the ethernet devices
+  # Update the /cluster/etc/cluster.conf with the same
+  
+  [[ ! "$GEP" =~ 'GEP7' ]] && {
+  flog "updating eth0 mac address in cluster.conf"
+  $($sed -i 's/interface '$s_board_id' eth0 ethernet.*/interface '$s_board_id' eth0 ethernet '$mac_eth0'/g' $cluster_conf)
+  [ $? != 0 ] && flog "Failed" && abort "cluster.conf updation failed" $exit_updt_eror
+
+  flog "updating eth1 mac address in cluster.conf"
+  $($sed -i 's/interface '$s_board_id' eth1 ethernet.*/interface '$s_board_id' eth1 ethernet '$mac_eth1'/g' $cluster_conf)
+  [ $? != 0 ] && flog "Failed" && abort "cluster.conf updation failed" $exit_updt_eror
+  }
+
+  flog "updating eth2 mac address in cluster.conf"
+  $($sed -i 's/interface '$s_board_id' eth2 ethernet.*/interface '$s_board_id' eth2 ethernet '$mac_eth2'/g' $cluster_conf)
+  [ $? != 0 ] && flog "Failed" && abort "cluster.conf updation failed" $exit_updt_eror
+
+  flog "updating eth3 mac address in cluster.conf"
+  $($sed -i 's/interface '$s_board_id' eth3 ethernet.*/interface '$s_board_id' eth3 ethernet '$mac_eth3'/g' $cluster_conf)
+  [ $? != 0 ] && flog "Failed" && abort "cluster.conf updation failed" $exit_updt_eror
+
+  flog "updating eth4 mac address in cluster.conf"
+  $($sed -i 's/interface '$s_board_id' eth4 ethernet.*/interface '$s_board_id' eth4 ethernet '$mac_eth4'/g' $cluster_conf)
+  [ $? != 0 ] && flog "Failed" && abort "cluster.conf updation failed" $exit_updt_eror
+
+  [[ "$GEP" =~ "GEP5" || "$GEP" =~ "GEP7" ]] && {
+    flog "updating eth5 mac address in cluster.conf"
+    $($sed -i 's/interface '$s_board_id' eth5 ethernet.*/interface '$s_board_id' eth5 ethernet '$mac_eth5'/g' $cluster_conf)
+    [ $? != 0 ] && flog "Failed" && abort "cluster.conf updation failed" $exit_updt_eror
+
+    flog "updating eth6 mac address in cluster.conf"
+    $($sed -i 's/interface '$s_board_id' eth6 ethernet.*/interface '$s_board_id' eth6 ethernet '$mac_eth6'/g' $cluster_conf)
+    [ $? != 0 ] && flog "Failed" && abort "cluster.conf updation failed" $exit_updt_eror
+
+    [[ "$GEP" =~ "GEP5-64" || "$GEP" =~ "GEP7" ]] && {
+      flog "updating eth7 mac address in cluster.conf"
+      $($sed -i 's/interface '$s_board_id' eth7 ethernet.*/interface '$s_board_id' eth7 ethernet '$mac_eth7'/g' $cluster_conf)
+      [ $? != 0 ] && flog "Failed" && abort "cluster.conf updation failed" $exit_updt_eror
+
+      flog "updating eth8 mac address in cluster.conf"
+      $($sed -i 's/interface '$s_board_id' eth8 ethernet.*/interface '$s_board_id' eth8 ethernet '$mac_eth8'/g' $cluster_conf)
+      [ $? != 0 ] && flog "Failed" && abort "cluster.conf updation failed" $exit_updt_eror
+    }
+
+	
+  }
+  is_verbose && echo -e "OK"
+  flog "OK"
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function verify_cluster_conf(){
+
+  ERR_REASON='Cluster Configuration Verification Error'
+  is_verbose && echo -en "Checking Cluster Configuration..."
+  flog "Checking Cluster Configuration..."
+  $($cluster config -v &> /dev/null)
+  [ $? -ne 0 ] && flog "Failed" && abort "cluster conf verification failed" $exit_clvf_eror
+  flog "OK"
+  is_verbose && echo -e "OK"
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function reload_cluster_conf(){
+
+  ERR_REASON='Cluster Configuration Reload Error'
+  is_verbose && echo -en "Reloading the Cluster Configuration..."
+  flog "Reloading the Cluster Configuration..."
+  $($cluster config -r &> /dev/null)
+  [ $? -ne 0 ] && flog "Failed" && abort "cluster conf reload failed" $exit_clre_eror
+  flog "OK"
+  is_verbose && echo -e "OK"
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function set_baudrate(){
+
+  ERR_REASON='Setting baudrate to 115200 failed'
+  flog "Setting Node $r_board_name baudrate to 115200"
+  is_verbose && echo -en "Setting Node $r_board_name baudrate to 115200..."
+  $($shelfmngr set baudrate --rate=115200 $s_board_slot &> /dev/null)
+  if [ $? != 0 ]; then
+    flog "Failed"
+    is_verbose && echo -e "Failed"
+    abort "\"$shelfmngr set baudrate --rate=115200 $r_board_name\" failed on active-node" $exit_smgr_rest
+  else
+    flog "OK"
+    is_verbose && echo -e "OK"
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function prepare_environment(){
+
+  # fetch the name of newly inserted board
+  fetch_board_name
+
+  # Update the baudrate of the newly inserted board (applicable for GEP1 and GEP2 only)
+  [[ ! "$GEP" =~ "GEP5" ]] && [[ ! "$GEP" =~ "GEP7" ]] && set_baudrate
+  
+  # update the cluster configuration file (cluster.conf)
+  # with the new board MAC address.
+  update_cluster_conf
+
+  # verify if the updated cluster configuration is Ok.
+  verify_cluster_conf
+
+  # reload the cluster configuration file
+  reload_cluster_conf
+
+  # check-health of active node
+  check_health
+
+  # set target-node first boot device to pxe-boot
+  set_boot_order
+
+  # clear the scsi registrations of the old board(applicable for MD only)
+  ! isDRBD && clear_scsi_registration
+  
+
+  console_print "SUCCESS"
+  log "SUCCESS"
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function ipmi_conf(){
+
+  ERR_REASON='IPMI Configuration Error'
+  local EXDIR='/opt/ap/apos/bin/ic/'
+
+  flog "Executing ipmiconf on Node $r_board_name"
+  is_verbose && echo -en "Executing ipmiconf on Node $r_board_name..."
+
+  rnode=$(</etc/cluster/nodes/peer/hostname)
+
+  # launch the script now.
+  $( $ssh $rnode "cd $EXDIR && ./ipmiconf" &>/dev/null)	
+  [ $? -ne 0 ] &&  flog "Failed" && abort "Could not execute ipmiconf on $rnode" $exit_ipmi_eror
+  flog "OK"
+  is_verbose && echo -e "OK"
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function clear_scsi_registration(){
+
+  # Overriting the registrations on scsi devices
+  # (sdb/sdc/sdd) made by the old board. This is
+  # because, the new replaced board on its boot,
+  # would not be able to overrite the registrations
+  # and hence ha-agent would fail to bring the board up.
+  ERR_REASON='SCSI Registration Removal Error'
+
+  local disk_one=''
+  local disk_two=''
+
+  case "$GEP" in
+    GEP1)
+      disk_one=sdb
+      disk_two=sdc
+    ;;
+    GEP2)
+      disk_one=sdc
+      disk_two=sdd
+    ;;
+    *)
+      abort "$GEP HW-TYPE not supported" $exit_updt_eror
+    ;;
+  esac
+
+  # check if the old board has made any registrations
+  local node_id=$(</etc/cluster/nodes/this/id)
+  local peer_id=2
+  [ $node_id -eq 2 ] && peer_id=1
+  peer_key=$( $scsi_cmd --read-registrations $disk_one | tail -n +2 | $grep "0x$peer_id")
+  [ ! -z $peer_key ] && {
+    # invoke scsi cmd to preempt the registration on diskone.
+    $( $scsi_cmd --preempt-disk $disk_one &>/dev/null)
+    [ $? -ne 0 ] && abort "Failed to clear the registration on the disk" $exit_scsi_eror
+  }
+  peer_key=''
+  peer_key=$( $scsi_cmd --read-registrations $disk_two | tail -n +2 | $grep "0x$peer_id")
+  [ ! -z $peer_key ] && {
+    # invoke scsi cmd to preempt the registration on disktwo.
+    $( $scsi_cmd --preempt-disk $disk_two &>/dev/null)
+    [ $? -ne 0 ] && abort "Failed to clear the registration on the disk" $exit_scsi_eror
+  }
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function isDRBD () {
+  local DRBD=2
+  local datadisk_replication_type=$( $immlist -a dataDiskReplicationType axeFunctionsId=1 2>/dev/null | $awk -F'=' '{print $2}')
+  [ $datadisk_replication_type -eq $DRBD ] && return $true
+  return $false
+}
+
+#-----------------------------------------------------------------------------
+function wait_for_drbd1_sync() {
+
+  ERR_REASON='Data Disk synchronization error'
+  # Calcuate timeout to wait for sync (session) 
+  # to complete.
+  #timeout_hou=`$cat $proc_drbd | $grep -E "1:|finish:" | $awk -F: '/finish/{print $2}'`
+  #timeout_min=`$cat $proc_drbd | $grep -E "1:|finish:" | $awk -F: '/finish/{print $3}'`
+  #timeout_sec=`$cat $proc_drbd | $grep -E "1:|finish:" | $awk -F: '/finish/{print $4}'| $awk '{print $1}'`
+  #[ -z $timeout_hou ] && timeout_hou=0
+  #[ -z $timeout_min ] && timeout_min=0
+  #[ -z $timeout_sec ] && timeout_sec=0
+  #timeout=`expr $timeout_hou \* 3600 + $timeout_min \* 60 + $timeout_sec`
+
+  # add 300 secs latency to the timeout.
+  #timeout=`expr $timeout + 300`
+  timeout=1800
+  count=0
+
+  flog "Waiting for Node $r_board_name Data-disk Synchronization..."
+  is_verbose && echo -en "Waiting for Node $r_board_name data disk synchronization..."
+  while ((count < timeout)); do
+    disk1_status=$( $cmd_drbd_status dstate drbd1 local )
+    disk2_status=$( $cmd_drbd_status dstate drbd1 peer )
+    # check if the both the Data Disks are upto date
+    if [ $disk1_status == $disk2_status ];then
+      break
+    else
+      sleep 5
+      ((count ++))      
+    fi
+  done
+
+  if test $count -eq $timeout; then
+    flog "Failed"
+    is_verbose && echo -e "Failed"
+    abort "time-out: target-node data disk synchronization failed" $exit_ddsk_tmot
+  else
+    flog "OK"
+    is_verbose && echo -e "OK"
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function set_oh_hook(){
+
+  ERR_REASON='Internal error, hook not found'
+  local blade_1=''
+  local blade_2=''
+  local oh_hook='post-installation.tar.gz'
+  local hook_path='/cluster/hooks'
+  local node_id=$( cat /etc/cluster/nodes/this/id)
+  local peer_id=$( cat /etc/cluster/nodes/peer/id)
+  local dnr_oh1='/cluster/hooks/post-installation.tar.gz'
+  local dnr_oh2='/opt/ap/apos/etc/deploy/cluster/hooks/post-installation.tar.gz'
+  local storage_config_path='/usr/share/pso/storage-paths/config'
+  local storage_path=$(cat $storage_config_path)
+  local cfg_file='apos'
+  local raidmgr_tgz='non_exec-raidmgr.tgz'
+
+  if [ -f $dnr_oh2 ]; then
+    /bin/cp -f $dnr_oh2 $dnr_oh1
+  else
+    abort "\"$dnr_oh2 not found" $exit_fail
+  fi
+
+  # Prepare oh hook to create GEP5 LVM structure
+  # copy installation_hw and drbd_network_capacity 
+  # files from storage path and include it in oh hook
+  tmpdir='/tmp/snr_hook_dir'
+  [ ! -d $tmpdir ] &&  mkdir -p $tmpdir
+  pushd $tmpdir >/dev/null 2>&1
+  # Extract the oh hook available in /cluster/hooks path
+  /bin/tar -xzf $dnr_oh2 -C $tmpdir &>/dev/null
+  /usr/bin/find $tmpdir -name $raidmgr_tgz -exec tar -xzvf {} \; &>/dev/null
+  if [ -d $tmpdir/raid ]; then
+    # copy installation_hw and drbd_network_capacity files to raid folder
+    /bin/cp $storage_path/$cfg_file/{installation_hw,drbd_network_capacity} $tmpdir/raid 2>/dev/null
+	
+
+    # copy s_option file to raid folder
+    [[ $reset_env -eq $true || $hard_recovery -eq $true ]] && $cmd_touch raid/$S_OPTION_FILE 2>/dev/null
+    # Now tar the installation_hw,drbd_network_capacity and raidmgr_dnr files
+    /bin/tar czf $raidmgr_tgz raid/
+  fi
+  # Clean up raid folder
+  rm -rf /$tmpdir/raid/
+
+  if [ $node_id -eq 2 ]; then
+    for hook in $(find $tmpdir -type f -not -name 'non_exec-*' -exec basename {} \; | sort -n); do
+      [[ "${hook}" == *_blade$peer_id ]] && {
+        blade_1=$hook
+        /bin/rm -f $hook
+      }
+    [[ "${hook}" == *_blade$node_id ]] && blade_2=$hook
+    done
+    
+    # now move the blade_2 hook to blade_1
+    /bin/mv $tmpdir/$blade_2 $tmpdir/$blade_1  &> /dev/null
+    [ $? -eq 1 ] && abort "$tmpdir/$blade_2 not found" $exit_fail  
+  fi
+
+  # now tar all files including common file
+  /bin/tar czf $hook_path/$peer_id/$oh_hook *
+  [[ $? -ne 0 ]] && abort "Unable to create hook" $exit_fail
+  /usr/bin/chmod ugo+r $hook_path/$peer_id/$oh_hook
+  [[ $? -ne 0 ]] && abort "Unable to set permission on  $hook_path/$peer_id/$oh_hook" $exit_fail
+  popd >/dev/null 2>&1
+
+  # Remove the content of the tmpdir folder
+  /usr/bin/find $tmpdir/* -depth -delete &>/dev/null
+
+  # Clean up raid folder
+  rm -rf /$tmpdir/
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function copy_oh_hook() {
+
+  local dnr_oh1='/cluster/hooks/post-installation.tar.gz'
+  local dnr_oh2='/opt/ap/apos/etc/deploy/cluster/hooks/post-installation.tar.gz'
+
+  # copy original dnr hooks to /cluster/hooks folder
+  /bin/cp -f $dnr_oh2 $dnr_oh1
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function restore_after_rtfd() {
+
+  #This function restores default Bios image and Bios Pointer to UPG and
+  #reset the RtfdStartedFlag flag in case of EGEM2 magazine
+  #In case of EGEM magazine this function restores only the default Bios image to UPG  	
+  ERR_REASON='Restore parameters after RTFD failed'   
+
+  #These printouts are shown only in case of RTFD 
+  local is_rtfd=$($shelfmngr get rtfdflag $s_board_slot 2> /dev/null)
+                        
+  if [ "$is_rtfd" == "RtfdStartedFlag on" ]; then                                                                                                                               
+    flog  "Restore parameters after RTFD for Node $r_board_name "   
+    is_verbose && echo -en "Restore parameters after RTFD for Node $r_board_name..."                                                                
+  fi
+
+  #This steps are mandatory in order to set the right BIOS version to be used, also in case RTFD is not triggered
+  $shelfmngr set clearrtfd $s_board_slot &> /dev/null
+  local ret_code=$?
+  if [ $ret_code -ne 0 ]; then
+    flog "Failed"
+    is_verbose && echo -e "Failed"
+    abort "\"$shelfmngr set clearrtfd $s_board_slot\" failed on active-node" $exit_clearrtfd_err
+  elif [[ $ret_code -eq 0 && "$is_rtfd" == "RtfdStartedFlag on" ]]; then
+    flog "OK"
+    is_verbose && echo -e "OK"
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function reset_environment(){
+
+  # update progress info first
+  PROGRESS_PRINTOUT='recovery in progress'
+  log_progress
+
+  # fetch target board name
+  fetch_board_name
+
+  # start dhcp server on bond0
+  set_dhcpd
+
+  # restore Default BIOS Image, BIOS pointer and RtfdStartedFlag after an RTFD for a GEP5 Boards
+  [[ "$GEP" =~ "GEP5" || "$GEP" =~ "GEP7" ]] && restore_after_rtfd
+          
+  # reset target-node to install it from pxe-boot(current-node)
+  reset_target_node
+
+  # bring down mvl1 interface
+  bringdown_mvl
+
+  # create symbolic link for after-hook
+  [[ "$GEP" =~ "GEP5" || "$GEP" =~ "GEP7" ]] && set_oh_hook
+
+  # wait for the target-node pxe-installation
+  wait_for_timeout
+
+  # reset dhcp server to listen on eth3 and eth4
+  reset_dhcpd
+
+  # set target-node first boot device to system-disk
+  reset_boot_order
+
+  # wait for synchronization session to start
+  wait_for_drbdsync_start
+
+  # bring up mvl1 interface
+  bringup_mvl
+
+  # copy dnr original hooks
+  #[[ "$GEP" =~ "GEP5" || "$GEP" =~ "GEP7" ]] && copy_oh_hook
+
+  # wait for drbd-0 synchronization session to complete
+  wait_for_drbd0_sync
+
+  # wait for CoreMW state to complete
+  wait_for_cmw_status
+
+  # invoke ipmiconf to set ROJ
+  [[ ! "$GEP" =~ "GEP5" || "$GEP" =~ "GEP7" ]] && ipmi_conf
+
+  console_print "SUCCESS"
+  log  "SUCCESS"
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function bringdown_mvl(){
+  flog "setting $interface down... "
+  if echo $(</sys/class/net/${bonding_master}/bonding/slaves) | grep -q "$interface"; then
+    $cmd_ifenslave -d ${bonding_master} $interface 2>/dev/null
+    if [ $? -ne 0 ]; then
+      flog "Removing interface($interface) from ${bonding_master} failed." 
+    else
+      flog "done"
+      is_mvl_down=$true
+    fi
+  else
+    flog "interface($interface) is not slave of ${bonding_master}"
+  fi
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function bringup_mvl(){
+  flog "setting $interface up... "
+  UPDELAY_VALUE=500
+  if ! echo $(</sys/class/net/${bonding_master}/bonding/slaves) | grep -q "$interface"; then
+    echo ${UPDELAY_VALUE} > /sys/class/net/${bonding_master}/bonding/updelay
+    $cmd_ifenslave ${bonding_master} $interface 2>/dev/null
+    [ $? -ne 0 ] && flog "Adding interface($interface) to ${bonding_master} failed" ||
+    flog "done"
+  else
+    flog "interface($interface) is already slave of ${bonding_master} "
+  fi
+  is_mvl_down=$false
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function snrinit_native(){
+
+  # update progress info first
+  PROGRESS_PRINTOUT='recovery in progress'
+  log_progress
+
+  # fetch target board name
+  fetch_board_name
+
+  # check-health of active node
+  check_health
+
+  # start dhcp server on bond0
+  set_dhcpd
+
+  # set target-node first boot device to pxe-boot
+  set_boot_order
+
+  # restore Default BIOS Image, BIOS pointer and RtfdStartedFlag 
+  # after an RTFD for a GEP5 Boards
+  [[ "$GEP" =~ "GEP5" || "$GEP" =~ "GEP7" ]] && restore_after_rtfd
+
+  # reset target-node to install it from pxe-boot(current-node)
+  reset_target_node
+
+  # bring down mvl1 interface 
+  bringdown_mvl
+
+  # set oh hook for GEP5 board
+  [[ "$GEP" =~ "GEP5" || "$GEP" =~ "GEP7" ]] && set_oh_hook
+
+  # wait for the target-node pxe-installation
+  wait_for_timeout
+
+  # set target-node first boot device to system-disk
+  reset_boot_order
+
+  # wait for synchronization session to start
+  wait_for_drbdsync_start
+
+  # bring up mvl1 interface
+  bringup_mvl
+
+  # wait for synchronization session to complete
+  wait_for_drbd0_sync
+
+  # wait for CoreMW state to complete
+  wait_for_cmw_status
+
+  # reset dhcp server to listen on eth3 and eth4
+  reset_dhcpd
+
+  console_print "SUCCESS"
+  log  "SUCCESS"
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function recover_peer(){
+
+  local recovery_type=''
+  recover_peer_in_progress=$true
+  
+  # clean the root file system
+  clean_rootfs
+
+  # invalidate the drbd
+  invalidate_drbd0
+  
+  # clear last reboot timestamps
+  clear_reboot_timestamps
+
+  # reboot peer node
+  reset_peer_node
+
+  # verify peer node is down while reboot
+  check_board_reset
+
+  # verify peer node reachability after reboot
+  ping_peer
+
+  # wait for synchronization session to complete
+  wait_for_drbd0_sync
+
+  # wait for CoreMW state to complete
+  wait_for_cmw_status
+
+  is_verbose && echo -e "Finalizing recovery...OK"
+
+  console_print "SUCCESS"
+  log  "SUCCESS"
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+# This function verifies both nodes lde version and returns true in case of 
+# LDE versions are different and returns false in case of LDE versions are equal
+function is_lde_rpm_sync_needed() {
+
+  local sync_status=$true
+  local rhost=$(</etc/cluster/nodes/peer/hostname)
+
+  # fetching Active node lde-info 
+  local THIS_NODE_LDE_VER=$(/usr/bin/lde-info | grep -w 'Numeric Version'| \
+   awk -F: '{print $2}' | sed -e 's/^[[:space:]]*//')
+  [ -z "$THIS_NODE_LDE_VER" ] && abort 'Failed to fetch the this node LDE information'
+  flog "This node LDE version: $THIS_NODE_LDE_VER"
+
+  # fetching peer node lde-info
+  local PEER_LDE_INFO=$(/usr/bin/ssh ${rhost} "/usr/bin/lde-info | grep -w 'Numeric Version'" 2>/dev/null)
+  if [ -n "$PEER_LDE_INFO" ]; then 
+    local PEER_NODE_LDE_VER=$(echo $PEER_LDE_INFO | awk -F: '{print $2}' | sed -e 's/^[[:space:]]*//')
+  else
+    abort 'Failed to fetch the peer node LDE information'
+  fi 
+  flog "Peer node LDE version: $PEER_NODE_LDE_VER"
+ 
+  # If LDE version is same in active and faulty node then 
+  # rpm sync is skipped. 
+  if [ "$THIS_NODE_LDE_VER" == "$PEER_NODE_LDE_VER" ]; then 
+    flog 'Found both nodes LDE version is equal, skipping rpm sync...'
+    sync_status=$false
+  fi
+  
+  return $sync_status
+}
+
+#-----------------------------------------------------------------------------
+function sync_golden_image_rpms() {
+
+   flog 'Synchronizing golden image rpms...'
+   # Handling active and peer node LDE rpm versions sync
+   local rhost=$(</etc/cluster/nodes/peer/hostname)
+   local peer_id=$(</etc/cluster/nodes/peer/id)
+   /usr/bin/ssh ${rhost} "$cmd_cluster rpm --sync --node ${peer_id}" &>/dev/null
+   [ $? -ne 0 ] && abort "Failed to sync golden image rpms"
+   flog 'Synchronizing golden image rpms...OK'
+
+   # Settle down time after sync 
+   sleep 20 
+
+   # Reboot the peer node to sync with active node rpms
+   flog 'Rebooting the peer node after rpm sync...'
+   $cmd_cluster reboot -n ${peer_id} &>/dev/null
+   [ $? -ne 0 ] && flog 'Rebooting the peer node after rpm sync...failed' 
+
+   return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function handle_rebuild(){
+  
+  local hostname=$(</etc/cluster/nodes/peer/hostname)
+  
+  # create rebuild flag, used by apos-recovery-conf.sh when the reboot happens
+  $cmd_touch $P_DIR/$REBUILD_INFO
+
+  #fetch faulty node  instance uuid
+  get_faulty_node_instance_uuid
+
+  # start recovery server
+  start_recovery_server
+
+  # check_ssh_connectivity
+  check_ssh_connectivity
+
+  if [ $is_swm_2_0 -eq $FALSE ]; then 
+    # lock all applications
+    lock_node $hostname
+
+    #fix apos_finalize_systemconf.sh
+    apply_apos_finalize_fix $hostname
+
+    # wait for drbd0 to sync
+    wait_for_drbd0_sync
+
+    # wait for peer node down 
+    wait_for_peer_down
+
+    # unlock the applications
+    unlock_node $hostname
+
+    # wait for CoreMW state to complete
+    cmw_status_timeout=420
+    wait_for_cmw_status 
+   
+    # apply node-up configuration
+    apply_compute_resource_config 
+
+  else
+
+    # wait for drbd0 to sync
+    wait_for_drbd0_sync
+
+    # wait for CoreMW state to complete
+    verbose_off=$true
+    cmw_status_timeout=420
+    wait_for_cmw_status
+   
+    # apply node-up configuration
+    apply_compute_resource_config
+    
+    # Resume drbd1 sync
+    if ! /usr/bin/ssh $hostname '/sbin/drbdadm resume-sync drbd1' &>/dev/null; then
+      flog 'applying resume-sync on drbd1... failed'
+    else
+      flog 'applying resume-sync on drbd1... success'
+    fi
+    
+    # Cleanup stage file and snrinit rebuild file
+    cleanup_patch_files ${hostname}
+  fi 
+
+  # After snrinit hard recovery, recovered node has IPv6 folders under
+  # /etc/cluster file system in IPv4 stack and vice versa. This is becasue, 
+  # the golden image contains both IPv4 and IPv6 IP address entries in 
+  # cluster.conf. When node boot up with golden image, initial cluster.conf 
+  # reloaded and accordingly /etc/cluster file system is created. After that
+  # when sync(drbd0) with Actve node is complete, it just updating folders 
+  # and not recreating it. Reboot the peer node to align the cluster configuration 
+  # in local file system i.e /etc/cluster/ file structure
+  local peer_id=$(</etc/cluster/nodes/peer/id)
+  flog 'Rebooting the peer node to align configuration files...'
+  $cmd_cluster reboot -n ${peer_id} &>/dev/null
+  if [ $? -eq 0 ]; then
+    # Wait for peer node down after reboot
+    wait_for_peer_down
+  else
+    flog 'Reboot the peer node...failed'
+  fi
+ 
+  # wait(i.e. around ~8mins) for peer node cmw-status to come up
+  cmw_status_timeout=500
+  wait_for_cmw_status
+
+  console_print "SUCCESS"
+  log  "SUCCESS"
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function wait_for_peer_down() {
+  # this paramter need to be aligned with actual reboot time
+  local timeout=120
+  local count=0
+
+  # fetch peer node id & ip
+  local peer_id=$(</etc/cluster/nodes/peer/id)
+  local peer_ip=$(</etc/cluster/nodes/all/$peer_id/networks/internal/primary/address)
+ 
+  flog "Wait for peer node to go down..."
+  while ((count < timeout))
+  do
+    # check if the peer node is down 
+    if $($ping -c 1 -W 1 $peer_ip &> /dev/null); then
+      # Peer node is still responding to ping"
+      flog "Peer node is still responding to ping"
+      sleep 2
+      ((count ++))
+    else
+      # Peer node is not responding to ping"
+      flog "Peer node is not responding to ping"
+      break
+    fi
+  done
+
+ return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function lock_node(){
+  local hostname="$1"
+  ERR_REASON="Internal Error, recovery failed"
+
+  flog "applying $hostname lock"
+  $cmd_cmw_node_lock $hostname
+  if [ $? -ne 0 ]; then
+    flog "applying $hostname lock... failed"
+    abort "applying $hostname lock... failed" $exit_fail
+  else
+    flog "applying $hostname lock... success"
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function unlock_node(){
+  local hostname="$1"
+  ERR_REASON="Internal Error, recovery failed"
+
+  flog "applying $hostname unlock"
+  $cmd_cmw_node_unlock $hostname
+  if [ $? -ne 0 ]; then
+    flog "applying $hostname unlock... failed"
+    abort "applying $hostname unlock... failed" $exit_fail
+  else
+    flog "applying $hostname unlock... success"
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function run_command(){
+  local cmd="$*"
+  local max_retry=3
+  local rCode
+
+  flog "applying apos_finalize_system_conf fix"
+  while (( max_retry > 0 ))
+  do
+    $( $cmd) &>/dev/null
+    rCode=$?
+    if [[ $rCode -eq 0 || $rCode -eq 124 ]]; then
+      flog "applying apos_finalize_system_conf fix... success"
+      break
+    else
+      flog "applying apos_finalize_system_conf fix...peer connection failed"
+      ((max_retry --))
+    fi
+  done
+
+  if [[ $max_retry -eq 0 && $rCode != 0 && $rCode != 124 ]]; then
+    flog "applying apos_finalize_system_conf fix... failed"
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function apply_apos_finalize_fix(){
+  flog "apply_apos_finalize_fix (enter)"
+
+  local hostname="$1"
+  local apos_finalize_system_conf='/opt/ap/apos/conf/apos_finalize_system_conf.sh'
+  local apos_finalize_system_conf_orig='/opt/ap/apos/conf/apos_finalize_system_conf.sh_orig'
+  local cmd=''
+  if $ssh $hostname "/usr/bin/test -f $apos_finalize_system_conf" &>/dev/null; then 
+    # take the backup of the original file
+    cmd="$ssh $hostname /usr/bin/cp -f $apos_finalize_system_conf $apos_finalize_system_conf_orig"
+    run_command "$cmd"
+
+    if $ssh $hostname "/usr/bin/grep -q 'sync_rpms' $apos_finalize_system_conf" &>/dev/null; then
+      # If above pattern matches, Golden image is from 3.5 SW level
+      PATTERN_MATCH='sync_rpms'
+      # modify apos finalize
+      cmd="$ssh $hostname sed -i '/^[[:space:]]*unlock_this_node/,/^[[:space:]]*${PATTERN_MATCH}/ s/^/# SNR_PATCH/' $apos_finalize_system_conf"
+      run_command "$cmd"
+
+      # modify apos finalize
+      cmd="$ssh $hostname sed -i 's/^# SNR_PATCH[[:space:]]*${PATTERN_MATCH}/  ${PATTERN_MATCH}/' $apos_finalize_system_conf"
+      run_command "$cmd"
+
+    elif $ssh $hostname "/usr/bin/grep -q 'adhoc_template_manager' $apos_finalize_system_conf" &>/dev/null; then
+      # If above pattern matches, Golden image is from 3.4.3 SW level
+      PATTERN_MATCH='clean_rootfs'
+      cmd="$ssh $hostname sed -i '/^[[:space:]]*unlock_this_node/,/^[[:space:]]*${PATTERN_MATCH}/ s/^/# SNR_PATCH/' $apos_finalize_system_conf"
+      run_command "$cmd"
+
+      local peer_id=$(</etc/cluster/nodes/peer/id)
+      SNR_PATCH_CMD="/usr/bin/cluster rpm --sync --node ${peer_id}"
+      cmd="$ssh $hostname sed -i '/^# SNR_PATCH[[:space:]]*${PATTERN_MATCH}/ a ${SNR_PATCH_CMD}' $apos_finalize_system_conf"
+      run_command "$cmd"
+    else
+      abort 'Pattern not found while patching apos_finalize_system_conf.sh script'
+    fi
+  fi   
+
+  flog "apply_apos_finalize_fix (exit)"
+  return $true
+}
+
+#-----------------------------------------------------------------------------
+function cleanup_patch_files() {
+  local hostname="$1"
+  # 1. remove rebuildinprogress file
+  local snrinit_rebuildinprogress='/boot/.snrinit.rebuildinprogress'
+  if $ssh $hostname "/usr/bin/test -f $snrinit_rebuildinprogress" &>/dev/null; then
+    $ssh $hostname "/usr/bin/rm -f $snrinit_rebuildinprogress" || \
+      flog 'Failed to remove snrinit rebuild file on peer host'
+  fi
+
+  #2. remove configstage file
+  local stage_file='/boot/.config_stage'
+  if $ssh $hostname "/usr/bin/test -f $stage_file" &>/dev/null; then
+     $ssh $hostname "/usr/bin/rm -f $stage_file" || \
+      flog 'Failed to remove config stage file on peer host'
+  fi
+  return $true
+}
+
+#-----------------------------------------------------------------------------
+function apply_compute_resource_config(){
+  
+  ERR_REASON="Internal Error, recovery failed"
+  # delete compute resource objects
+  flog "delete_compute_resource... "
+  local roleId='20011'
+  local node_id=$(</etc/cluster/nodes/peer/id)
+  if [ $node_id -eq 2 ]; then
+    roleId='20012'
+  fi
+
+  for cr_obj in $(immfind -c AxeEquipmentComputeResource); do
+    cr_roleID=$(immlist -a crRoleId $cr_obj | awk -F "=" '{print $2}' 2>/dev/null)
+    if [ $? -ne 0 ]; then 
+      flog "ERROR failed to fetch roleID for  $cr_obj"
+      abort "ERROR failed to fetch roleID for  $cr_obj" $exit_fail
+    fi
+
+    if [ -z $cr_roleID ]; then 
+      flog "Error in fetching cr_roleID  $cr_obj"
+      abort "Error in fetching cr_roleID  $cr_obj" $exit_fail
+    fi
+
+    if [ "$cr_roleID" == "$roleId" ]; then
+      node_prev_uid=$(echo $cr_obj | cut -d '=' -f 2 | cut -d ',' -f 1)
+      immcfg -d $cr_obj
+      break
+    fi
+  done
+  flog "delete_compute_resource... success"
+
+  flog "applying apos_crmconf.sh"
+  # AP VMs ComputeResource objects
+  local hostname=$(</etc/cluster/nodes/peer/hostname)
+  if ! $ssh $hostname /opt/ap/apos/conf/apos_crmconf.sh &>/dev/null; then 
+    flog "applying apos_crmconf.sh... failed"
+    abort "applying apos_crmconf.sh... failed" $exit_fail
+  fi
+  flog "applying apos_crmconf.sh... success"
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function handle_reinstallation(){
+  
+  # check-health of active node
+  check_health
+  
+  # fetch faulty node instance uuid
+  get_faulty_node_instance_uuid
+
+  # set oh hook for VM board
+  set_oh_hook  
+
+  if [ $hard_recovery -eq $true ]; then
+    peer_id=$(</etc/cluster/nodes/peer/id)
+    peer_ip=$(</etc/cluster/nodes/all/$peer_id/networks/internal/primary/address)
+
+    # print the message to the console for proceeding with
+    #the manual reboot (from network) of faulty VM
+    console_print "A manual intervention (re-installation) on VM $peer_instance_uuid is needed."
+    CMD=""
+    while [ "$CMD" != "c" ]; do
+      echo -n "Press 'c' once the manual intervention is done: "
+      read CMD
+    done
+    echo -e "\nResuming recovery"
+  else
+    # print the message to the console for proceeding with
+    #the manual reboot (from network) of faulty VM
+    console_print "Automatic recovery not possible.\n\
+A manual intervention (re-installation) on VM $peer_instance_uuid is needed."
+
+    # wait for peer node up
+    local cmd_ping="$ping -c 1 -W 1 $peer_ip"
+    while ! $cmd_ping &> /dev/null; do sleep 2; done
+    echo -e "Resuming recovery"
+  fi
+
+  # wait for synchronization session to start
+  wait_for_drbdsync_start
+
+  # wait for drbd-0 synchronization session to complete
+  wait_for_drbd0_sync
+
+  # wait for CoreMW state to complete
+  wait_for_cmw_status
+
+  is_verbose && echo -e "Finalizing recovery...OK"
+ 
+  console_print "SUCCESS"
+  log  "SUCCESS"
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function snrinit_vapg(){
+  
+  local recovery_type=''
+  # update progress info first
+  PROGRESS_PRINTOUT='recovery in progress'
+  log_progress
+
+  # fetch target board name
+  fetch_board_name
+
+  if [ $hard_recovery -eq $true ]; then
+    handle_reinstallation
+    return $exit_sucs
+  fi
+
+  if ping_peer && check_ssh_connectivity; then
+    recover_peer
+  else
+    recovery_type=$(get_recovery_type)
+    if [ "$recovery_type" == "redeployment" ]; then
+      handle_rebuild
+    elif [ "$recovery_type" == "reinstallation" ]; then
+      handle_reinstallation
+    else
+      ERR_REASON="Internal Error, recovery failed"
+      abort "Unable to determinate recovery method"  $exit_recovery_method_error
+    fi
+  fi 
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function progress_info(){
+  # prinout format should be:
+  # snrinit: last recovery failed (ERROR REASON)
+  # snrinit: no recovery in progress 
+  # snrinit: recovery in progress 
+  # snrinit: recovery in progress (rebuild:%s complete)
+
+  if [ ! -f $P_DIR/$P_INFO ]; then
+    local PRINTOUT=''
+    PROGRESS_PRINTOUT='no recovery in progress'
+    isDRBD && {
+      #local REBUILD=$( $drbd_overview | $grep '1:drbd1' -A 2 | $grep -E "[[:space:]]sync'ed: " | $sed 's@^.*: @@g' | $awk '{print $1}')
+      local REBUILD=$($cmd_drbdadm status drbd1 | $grep -w "SyncSource" | $awk -F "done:" '{print $2}')
+      [ ! -z "$REBUILD" ] && PROGRESS_PRINTOUT="recovery in progress (rebuild:$REBUILD complete)"
+    }	
+    PRINTOUT="$SCRIPT_NAME: $PROGRESS_PRINTOUT"
+    console_print "$PRINTOUT"
+  else
+    PROGRESS_PRINTOUT="$( cat $P_DIR/$P_INFO)"
+    console_print "$PROGRESS_PRINTOUT"	
+  fi
+
+  return $exit_sucs
+}
+
+#----------------------------------------------------------------------------
+function ping_peer(){
+
+  ERR_REASON="Unable to connect to Node $r_board_name"
+  local ping_attempts=120
+  local ping_interval=1
+  local ping_timeout=1
+
+  flog "Waiting for Node $r_board_name connectivity..."
+  is_verbose && echo -en "Waiting for Node $r_board_name connectivity..."
+
+  #fetch peer node id & ip
+  peer_id=$(</etc/cluster/nodes/peer/id)
+  peer_ip=$(</etc/cluster/nodes/all/$peer_id/networks/internal/primary/address)
+  local cmd_ping="$ping -c 1 -W 1 $peer_ip"
+
+  kill_after_try $ping_attempts $ping_interval $ping_timeout $cmd_ping &> /dev/null
+  if [ $? -eq 0 ]; then
+    flog "OK"
+    is_verbose && echo -e "OK"
+  elif [ $recover_peer_in_progress -eq $true ]; then
+    flog "Failed"
+    is_verbose && echo -e "Failed"
+    abort "time-out: Unable to reach the Node $r_board_name" $exit_ping_tmot
+  else
+    flog "Failed"
+    is_verbose && echo -e "Failed"
+    return $exit_fail
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------------------------------------------------------------------
+function check_ssh_connectivity(){
+
+  rhost=$(</etc/cluster/nodes/peer/hostname)
+  ERR_REASON="Internal Error, ssh to Node $r_board_name failed"
+  flog "Checking ssh connectivity to Node ${r_board_name}..."
+  is_verbose && echo -en "Checking ssh connectivity to Node ${r_board_name}..."
+  
+  local attempts=120
+  local interval=1
+  local timeout=2
+  
+  kill_after_try $attempts $interval $timeout $ssh $rhost 'id -un' 2>/dev/null | grep -Eq '^root$'
+  if [ $? -eq 0 ]; then
+    is_verbose && echo -e "OK"
+    flog "OK"
+  elif [ $recover_peer_in_progress -eq $true ]; then
+    flog "Failed"
+    is_verbose && echo -e "Failed"
+    abort "time-out: ssh connectivity to Node $r_board_name failed." $exit_ssh_err
+  else
+    flog "Failed"
+    is_verbose && echo -e "Failed"
+    return $exit_fail
+  fi
+
+  return $exit_sucs
+}
+
+#----------------------------------------------------------------------------
+function clean_rootfs(){
+
+  local peer_id
+  peer_id=$(</etc/cluster/nodes/peer/id)
+  rhost=$(</etc/cluster/nodes/peer/hostname)
+
+  ERR_REASON="Unable to clean rootfs on Node $r_board_name"
+  flog "Cleaning the rootfs of Node ${r_board_name}..."
+  is_verbose && echo -en "Cleaning root file system on Node ${r_board_name}..."
+
+  #cleaning the root file system for the faulty VM node
+  $cmd_cluster rootfs -c -o -n $peer_id
+  if [ $? -ne 0 ]; then
+    flog "Failed"
+    is_verbose && echo -e "Failed"
+    abort "clean rootfs failed."  $exit_clean_rootfs_err
+  else
+    is_verbose && echo -e "OK"
+    flog "OK"
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function invalidate_drbd0(){
+
+  ERR_REASON="DRBD Invalidation Failed"
+  flog "Invalidating DRBD..."
+  rhost=$(</etc/cluster/nodes/peer/hostname)
+
+  # store the actual verbose value
+  verbose_org=$verbose
+  [ $verbose_off -eq $true ] && verbose=$false
+
+  # Invalidating DRBD0 on passive node.
+  is_verbose && echo -en "Invalidating drbd..."
+
+  # Skips the drbd invalidation if active node
+  # drbd role is Secondary
+  role=$($cmd_drbdadm role drbd0)
+  if [ "$role" == 'Secondary' ]; then
+    is_verbose && echo -e  "OK"
+    flog "current node drdb0 role: $role , skipping the invalidation"
+    return $exit_sucs
+  fi
+
+  $ssh $rhost "$cmd_drbdadm invalidate drbd0" &>/dev/null
+  local ecode=$?
+  if [ "$ecode" == "$true"  ]; then
+    is_verbose && echo -e  "OK"
+    flog "OK"
+  else 
+    is_verbose && echo -e "Failed"
+    flog "ecode($ecode), Failed"
+    abort "ecode ($ecode), Failed" $exit_drbd_inval_err
+  fi
+
+  # reste the verbose switch options
+  verbose=$verbose_org
+  verbose_off=$false
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function reset_peer_node(){
+
+  ERR_REASON="Node $r_board_name reboot failed"
+  local rhost=$(</etc/cluster/nodes/peer/hostname)
+  is_verbose && echo -en "Rebooting Node $r_board_name..."
+  
+  local cmd="$ssh $rhost '/sbin/reboot -f' &>/dev/null"
+  kill_after 5 $cmd
+  #($ssh $rnode '/sbin/reboot -f' &>/dev/null) & 
+  if [[ $? -eq 0 || $? -eq 124 ]]; then 
+    is_verbose && echo -e "OK"
+    flog "OK"
+  else 
+    is_verbose && echo -e "Failed"
+    flog "Failed"
+    abort "Failed to reboot Node $r_board_name" $exit_cmw_reboot_err
+  fi 
+
+  return $exit_sucs
+}
+
+#------------------------------------------------------------------------
+function get_faulty_node_instance_uuid() {
+
+  ERR_REASON="Fetching faulty node instance uuid..."
+  flog "Fetching faulty node instance uuid..."
+  is_verbose && echo -en "Fetching faulty node instance uuid..."
+
+  # Here roleId for Node1 and Node2 are fixed
+  local nodeA_roleid='20011'
+  local nodeB_roleid='20012'
+  local nodeA_uuid=''
+  local nodeB_uuid=''
+
+  local peer_id=$(</etc/cluster/nodes/peer/id)
+  local COUNT=0
+  local TIME_OUT=5
+  peer_instance_uuid=''
+
+  while [[ $COUNT -lt $TIME_OUT ]]
+  do
+    for obj in $(immfind -c AxeEquipmentComputeResource ); 
+    do
+      local roleID=$(immlist -a crRoleId $obj | awk -F "=" '{print $2}' 2>/dev/null)
+
+      #extracting instance uuid
+      local uuid=$(echo $obj | awk -F "=" '{print $2}' | awk -F "," '{print $1}')
+      [ "$roleID" == "$nodeA_roleid" ] && nodeA_uuid=$uuid
+      [ "$roleID" == "$nodeB_roleid" ] && nodeB_uuid=$uuid
+    done
+    
+    [[ -n "$nodeA_uuid" && -n "$nodeB_uuid" ]] && break
+    sleep 1
+    ((COUNT ++))
+  done
+  
+  if [ $COUNT -eq $TIME_OUT ]; then
+    is_verbose && echo -e "Failed"
+    flog "Failed"
+    abort "timeout: error in fetching faulty node instance uuid" $exit_fail
+  fi
+  peer_instance_uuid=$nodeA_uuid
+  if [ "$peer_id" -eq 2 ]; then
+    peer_instance_uuid=$nodeB_uuid
+  fi
+
+  is_verbose && echo -e "OK"
+  flog "OK"
+
+  return $exit_sucs
+
+ }
+
+#-------------------------------------------------------------------------------------------
+function clear_reboot_timestamps()
+{
+  ERR_REASON="Removal of last reboot timestamps failed"
+  flog "Removing last reboot timestamps..."
+  is_verbose && echo -en "Removing last reboot timestamps..."
+
+  rnode=$(</etc/cluster/nodes/peer/hostname)
+   
+  local removeExitCode=''
+
+  if $ssh $rnode "/usr/bin/test -f /var/log/last_reboot_time_stamps" ; then  
+    $ssh $rnode "/usr/bin/rm /var/log/last_reboot_time_stamps"
+    removeExitCode=$(echo $?)
+  else
+    removeExitCode=254
+  fi
+
+  if [ "$removeExitCode" == "$true"  ]; then
+    is_verbose && echo -e  "OK"
+    flog "OK"
+  elif [ "$removeExitCode" == "254"  ]; then
+    is_verbose && echo -e "Skipped"
+    flog "errorcode $removeExitCode... Skipped"
+  else
+    is_verbose && echo -e "Failed"
+    flog "errorcode $removeExitCode... Failed"
+    abort "Failed to  remove reboot timestamps " $exit_reboot_time_stamps
+  fi
+  return $exit_sucs
+}
+
+#-------------------------------------------------------------------------------------------
+# This function triggers full sync from Active node in hard recovery scenarios in CEE.
+# LDE provided high level solution to overcome drdb0 unsync issues in 
+# hard recovery scenario in CEE. This solution is customized according to APG needs.
+# Note: LDE responsible for drbd0 operations and in future if LDE provides an API, this function 
+# invocation should be removed.
+function peer_drbd0_force_sync() {
+
+  local peer_host=$(</etc/cluster/nodes/peer/hostname)
+  flog "Starting peer drbd0 full synchronization..."
+
+  # Stop the lde-failoverd service in order to
+  # initiate drbd0 full sync from Active side.
+  flog "Stopping lde-failoverd service on peer node..."
+  if ! ssh ${peer_host} "systemctl -q is-active lde-failoverd" 2>/dev/null; then
+    flog "lde-failoverd is not active on peer side"
+  else
+    ssh ${peer_host} "systemctl stop lde-failoverd" &>/dev/null
+    [ $? -ne 0 ] && flog "Failure while stopping lde-failoverd service"
+    # Wait until lde-failoverd service stops
+    while true; do
+      sleep 2
+      if ! ssh ${peer_host} "systemctl -q is-active lde-failoverd"; then
+        break
+      else
+        flog "lde-failoverd still active..."
+      fi
+    done
+  fi
+  flog "Stopped lde-failoverd service on peer node..."
+
+  # invalidate the drbd
+  flog "Creating peer drbd0 meta data..."
+  ssh ${peer_host} "drbdadm -- --force apply-al drbd0"
+  ssh ${peer_host} "drbdadm -- --force dump-md drbd0 >/var/log/${peer_host}-$(date +%Y%m%d_%H%M%S)-drbd0-meta.bak"
+  ssh ${peer_host} "drbdadm -- --force create-md drbd0 >/dev/null 2>&1"
+  [ $? -ne 0 ] && flog "Failure while creating create-md on peer side..."
+
+  # Start the lde-failoverd service after invalidating the drbd0
+  ssh ${peer_host} "systemctl start lde-failoverd" &>/dev/null
+  if [ $? -ne 0 ]; then
+    flog "Failed to start the lde-failoverd on peer node"
+    abort 'Failed to start the lde-failoverd on peer node'
+  else
+   flog "lde-failoverd started on peer node..."
+  fi
+
+  verbose_off=$true
+  wait_for_drbd0_sync
+
+  flog "peer node drbd0 synchronization completed!"
+
+  return $exit_sucs 
+}
+
+#-------------------------------------------------------------------------------------------
+ #this method is to start recovery socket in healthy node if rebuld is not finished
+function start_recovery_server() {
+
+  is_swm_2_0=$TRUE
+  ERR_REASON="Internal Error, Failed to start the recovery server, recovery process is aborted" 
+  flog "Starting recovery server..."
+  is_verbose && echo -en "Starting recovery server..."
+  
+  local cmd_snrinit_rebuild='/opt/ap/apos/conf/apos_snrinit_rebuild.sh'
+  if [ ! -x $cmd_snrinit_rebuild ]; then
+    is_verbose && echo -e "Failed"
+    flog "Failed"
+    abort "Failed to start recovery server. [ $cmd_snrinit_rebuild ] execute permissions not found" $exit_fail	
+  fi
+
+  # kick-start the server process in separate thread
+  $( $cmd_snrinit_rebuild --start-server &>/dev/null)&
+  server_pid=$!
+
+  # sleep for a while to check if the server is successfully spawned
+  sleep 5
+  if ! kill -0 $server_pid 2> /dev/null; then
+    is_verbose && echo -e "Failed"
+    flog "Failed"
+    abort "Failed to start recovery server." $exit_recovery_server
+  fi
+
+  if $cmd_snrinit_rebuild --is-server-running; then
+    is_verbose && echo -e  "OK"
+    flog "OK"
+
+    # now the server is successfully spwaned; print the message to the console for
+    # proceeding with the rebuild process and wait for the client to connect
+    console_print "Automatic recovery not possible.\n\
+A manual intervention (re-deployment) on VM $peer_instance_uuid is needed."
+
+    # fetch peer node id & ip
+    local peer_id=$(</etc/cluster/nodes/peer/id)
+    local peer_ip=$(</etc/cluster/nodes/all/$peer_id/networks/internal/primary/address)
+    local peer_host=$(</etc/cluster/nodes/peer/hostname)
+    local cmd_ping="$ping -c 1 -W 1 $peer_ip"
+    # wait for peer node up
+    while ! $cmd_ping &> /dev/null; do sleep 2; done
+
+    kill_after_try 10 3 3 /usr/bin/ssh ${peer_host} test -f '/boot/.config_stage' 2>/dev/null
+    if [ $? -eq 0 ]; then 
+      is_swm_2_0=$FALSE
+      flog "Detected Golden image re-deployed with SWM 1.0 level"
+    else
+      flog "Detected Golden image re-deployed with SWM 2.0 level"
+    fi 
+
+    if [ $is_swm_2_0 -eq $TRUE ]; then
+      launch_cmd="ssh ${peer_host} 'echo 2 > /boot/.config_stage'"
+      kill_after_try 10 3 3 ${launch_cmd} &>/dev/null
+
+      # Handling of golden image rpm sync with Active node rpms
+      if is_lde_rpm_sync_needed; then 
+        
+        # Note: drbd0 disk data on the node will be
+        # destroyed for full synchronization from peer
+        peer_drbd0_force_sync
+ 
+        sync_golden_image_rpms
+      fi 
+    fi 
+
+    # this should be a blocking call till the client connects
+    wait $server_pid
+    local child_exit_code=$?
+    if [ $child_exit_code -eq 129 ]; then
+      wait $server_pid
+      child_exit_code=$?
+    fi
+    if [ $child_exit_code -ne 0 ]; then
+      abort "Recovery server aborted with exit code $child_exit_code" $exit_recovery_server
+    fi
+    server_pid=-1
+    console_print "Resuming recovery"
+  else 
+    is_verbose && echo -e "Failed"
+    flog "Failed"
+    abort "Failed to start recovery server." $exit_recovery_server
+  fi
+
+  return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+function invoke(){
+
+  if [ $progress_info -eq $false ]; then
+    if  ! confirm; then
+      ERR_REASON='Command execution aborted by user'
+      abort_v1 "Command aborted by user" $exit_cmnd_abrt
+    fi
+  fi
+
+  # if the request is to prepare the environment
+  # for the newly replaced board,
+  [ $prep_env  -eq $true ] && prepare_environment
+
+  # if the request is to reset the environment
+  [ $reset_env -eq $true ] && reset_environment
+
+  # if the request for single node recovery
+  if [ $install -eq $true ];then
+    if [ $virtual_env -eq $true ] ;then
+      # This version of snrinit is triggered when snrinit command is issued on vAPZ environment.
+      snrinit_vapg
+    else
+      # This version of snrinit is triggered when snrinit command is issued on native environment.
+      snrinit_native
+    fi
+  fi
+
+  # if the request is for progress info
+  [ $progress_info -eq $true ] && progress_info
+
+  return $exit_sucs
+}
+
+
+
+# _____________________ _____________________
+#|    _ _   _  .  _    |    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |   | ) ) (_| | | )   |
+#|_____________________|_____________________|
+# Here begins the "main" function...
+
+# Set the interpreter to exit if a non-initialized variable is used.
+set -u
+
+log "START: <$0>"
+
+# parse command line
+parse_args $*
+
+# This version of sanity_check is triggered when snrinit is 
+# issued on vAPZ and native
+sanity_check
+
+# invoke right command
+invoke
+
+log "END: <$0>"
+
+# cleanup activity
+cleanup
+
+# exit with success return code
+exit $exit_sucs
+

@@ -1,0 +1,7 @@
+Usage:  usermgmt group delete [--help] <--gname=group_name>
+
+Delete a group account using the values specified.
+ 
+<--gname=>              Specify the Group name to remove.
+
+<--help>                This help.

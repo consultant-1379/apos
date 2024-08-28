@@ -1,0 +1,236 @@
+#!/bin/bash
+# Author: Satya Deepthi
+
+# Changelog
+# Updated by XPRANSI
+# Date: 27-10-2011
+
+# Funtions
+
+# User-Input validations	
+
+#validation for target
+ validate_target() {
+                        target=${!1}
+                        if [ -z $target ] ; then
+                                return 1
+                        else
+                        num=$( echo $target | grep -Eq "^[0-9]+$")
+                        chk_num=$?
+                                if [ $chk_num -ne 0 -a "$target" != "control" -a "$target" != "payload" -a "$target" != "all" ] ; then
+                                return 1
+                                fi
+                        fi
+                        echo $target
+        }
+
+#validation for id
+ validate_id() {
+                        id=${!1}
+                        if [ -z $id ] ; then
+                                return 1
+                        else
+			flg=0
+                       for i in $(cat $clu_Conf_path$clu_Conf_file | grep ^"node" | cut -d ' ' -f 2)
+                        do
+                         if [ $i == $id ]
+                         then flg=1
+                         fi
+                        done
+                                if [ "$flg" == 0 ]
+                                then return 1
+                                fi
+                        fi
+                        echo $id
+        }
+
+# validation for rulenumber
+ validate_integer() {
+                        rule=${!1}
+                        if [ -z $rule ] ; then
+                                return 1
+                        else
+                        num=$( echo $rule | grep -Eq "^[0-9]+$")
+                        chk_num=$?
+                                if [ $chk_num -eq 1 ] ; then
+                                return 1
+                                fi
+                        fi
+                        echo $rule
+        }
+
+# To delete an existing rule
+ delete() {
+        word=${!1}
+        rule=${!2}
+        rule_num=`validate_integer rule`
+        if [ $? -ne 0 ]
+        then
+                help
+                echo "Enter rule number as argument. Empty values not accepted "
+                exit 1
+        fi
+
+        # Calling cluster_parse file to delete rule
+        $clu_file $word --delete $rule_num
+	}
+
+# To modify an existing rule
+  add_mod() {
+        word=${!1}
+        target=${!3}
+        ids=${!4}
+	cnt=${!5}
+	st=${!6}
+
+	w1=$(echo $arg | cut -d : -f 2)
+	if [ ! "$w1" == "loader" ]
+	 then 	
+		echo "Wrong format"
+		help
+		exit 1
+	fi
+        if [ $st == "modify" ]
+	then 
+		rule=$(echo $arg | cut -d: -f 1)
+        	rule_num=`validate_integer rule`
+	        if [ $? -ne 0 ]
+	        then
+        	        help
+                	echo "Enter correct format of arguments. "
+	                exit 1
+        	fi
+	fi
+
+        target_new=`validate_target target`
+        if [ $? -ne 0 ]
+        then
+                help
+               echo "Target value should be existing node number. Empty values not accepted "
+                exit 1
+        fi
+
+                for i in $( seq 1 $cnt)
+        do
+                id=$( echo $ids | cut -d ' ' -f $i)
+	#	echo "id=$id"
+                id_ip=`validate_id id`
+	#	echo $?
+                if [ $? -ne 0 ]
+                then
+                        help
+                        echo "Loaders Error. Empty values not accepted "
+                        exit 1
+                fi
+        done
+
+
+        # Calling cluster_parse file to modify boot rule
+	rule="$word $target_new $ids"
+	chk_rule="$word $target_new"
+        if [ $st == "modify" ]
+	then 
+        	$clu_file $word --modify $rule_num $rule $chk_rule
+	else
+		$clu_file $word --add $rule $chk_rule
+	fi
+        }
+
+# To display existing DNS rules
+ display() {
+        $clu_file $word --display
+	}
+
+# To display help
+help()
+{
+echo "
+Usage: clu_$word <option> <rule>
+
+Options:
+-a|--add 	<New-rule>			To add a new netconsole rule 
+-d|--delete 	<Existing-rule-number>		To delete an existing dns rule
+-m|--modify 	<rule number>:<new-rule>	To modify an existing dns rule
+-D|--display					To display all the existing rules
+-h|--help					To display help
+
+Rule: $word <target> <id>
+<target>           			target node acting as loader for members of loading grp
+<target 1> ... <target n>		one or more members of loading group
+"
+}
+
+
+#Main
+
+
+pwd=`pwd`
+fname="clu_parse"
+clu_file="/opt/ap/apos/bin/clusterconf/$fname"
+word="loader"
+
+if [ -f /cluster/etc/cluster.conf ];then
+        clu_Conf_path="/cluster/etc/"
+        clu_Conf_file="cluster.conf"
+else
+        echo -e "\n/cluster/etc/cluster.conf file does not exists"
+        exit 1
+fi
+
+        if [ -f $clu_file ];then
+                if [ -x $clu_file ];then
+                 ch=$1
+		 arg=$2
+		 arg3=$3
+		 
+		  case $ch in
+			--add|-a)
+				st="add"
+				cnt=$(( $# - 3 ))
+                                shift 3
+                                id=$*
+			#	echo $id
+				add_mod word arg arg3 id cnt st
+		   	   	;;
+			--delete|-d)
+				if [ $# -gt 2 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else  
+					delete word arg
+		   	   	fi
+				;;
+			--modify|-m)
+				st="modify"
+				cnt=$(( $# - 3 ))
+                                shift 3
+                                id=$*
+				add_mod word arg arg3 id cnt st
+		   	   	;;
+			--display|-D) 
+				if [ $# -gt 1 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					display
+		   	   	fi
+				;;
+			--help|-h)
+				if [ $# -gt 1 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					help
+				fi
+				;;
+			*) 	echo -e "\nWrong input format, please follow the below format...\n"
+				help
+				;;
+		  esac 
+	else
+                        echo -e "\n$clu_file is not executable"
+                fi
+        else
+                echo -e "\n$clu_file file does not exists"
+        fi
+

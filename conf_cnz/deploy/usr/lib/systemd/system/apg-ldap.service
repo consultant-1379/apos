@@ -1,0 +1,7 @@
+[Unit]
+Description=APG LDAP
+
+[Service]
+ExecStart=/usr/lib/systemd/scripts/apg-ldap.sh
+Type=forking
+Restart=always

@@ -1,0 +1,1143 @@
+#Definitions
+AP1: &AP1 AP1 
+AP2: &AP2 AP2 
+GEP1: &GEP1 GEP1
+GEP2: &GEP2 GEP2
+GEP5: &GEP5 GEP5
+GEP5SMX: &GEP5SMX GEP5SMX
+GEP7: &GEP7 GEP7
+GEP7SMX: &GEP7SMX GEP7SMX
+GEP7SCX: &GEP7SCX GEP7SCX
+Virtual: &Virtual VM
+MCP: &MCP MCP
+SCP: &SCP SCP
+
+components:
+- name: ITHBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *GEP5SMX
+    - *GEP7SMX
+    - *GEP7SCX
+- name: STSMAINBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: STSCONVBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX
+- name: STSPROVBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX
+- name: MAUSLBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX
+- name: ADHADMBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX 
+- name: CPFBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX   
+- name: BUSRVBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX  
+- name: BUFTPDBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX    
+- name: CFETCMDBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX  
+- name: IPNAADMBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX   
+- name: AIAPBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX   
+- name: BUAPBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX      
+- name: CPTASPAPI
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX   
+- name: CPTASPCENTRALA
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX 
+- name: CPTASPCENTRALB
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX    
+- name: CPTASPCENTRAL
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX    
+- name: CPTASPMML
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX     
+- name: ALECBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX     
+- name: AMIHBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX    
+- name: TREFCBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX    
+- name: ALDABIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX    
+- name: EVHANDLCLIENT
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX     
+- name: LMBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX     
+- name: CPTMP2DBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX     
+- name: CPTMP3DBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX     
+- name: MSRMHBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX   
+- name: CQPHBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX   
+- name: CQRHBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX   
+- name: APSESHBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX   
+- name: MISCLHBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX     
+- name: EMFBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX    
+- name: NSFBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX    
+- name: CCHBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX    
+- name: CMXHBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+- name: TINYCOREBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual     
+- name: SYSCONBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX     
+- name: MAUS1BIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX  
+- name: MAUS2BIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX
+  systype:
+    - *MCP  
+- name: MAUSCBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX  
+- name: MAUSOBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX  
+- name: CPTMP4DBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX      
+- name: CPTASPCENTRALC
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX      
+- name: DDTBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX      
+- name: APCMHBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX     
+- name: FIXELHCMDBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7      
+    - *GEP7SMX
+    - *GEP7SCX     
+- name: GPRSHMBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+- name: SCHBIN
+  aptype:
+    - *AP1
+  targetenv:
+    - *Virtual
+- name: XBRMBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX
+    - *GEP7
+    - *GEP7SMX
+    - *GEP7SCX
+- name: OSCONFBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: OSCMDBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: OSEXTBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: AEHBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: APGCCBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: TRAUTLBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: ACSBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: GCCBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: JTPBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: PRCBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: OHIBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: SWRBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: HCSBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: HCBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: APRCBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: DSDBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: CSBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: SSUBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: ASECBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: HAAGENTBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: HADEVMONBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: TESRVCMDBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: CDHBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: DBOBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: CLHBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: SGSBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: ALOGBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: LCTBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: LOGMBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: ALHBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: TOCAPBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: APBMBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: AFPBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: CSYNCBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: MTZBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: HBEATBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: TRAPDSBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: BURBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: USABIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: USAFMBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: ACABIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: RTRBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: FCSRVBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: NCLIBBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX
+- name: CLOGGCMDBIN
+  aptype:
+    - *AP1
+    - *AP2
+  targetenv:
+    - *Virtual
+    - *GEP1
+    - *GEP2
+    - *GEP5
+    - *GEP5SMX  
+    - *GEP7  
+    - *GEP7SMX
+    - *GEP7SCX

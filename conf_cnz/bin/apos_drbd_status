@@ -1,0 +1,230 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2017 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       apos_drbd_status
+# Description:
+#       This script is a wrapper for drbdadm status command
+#       It provides required output for status, role, cstate and dstate for drbd resource_name
+##
+# Usage:
+#      apos_drbd_status cstate <resource_name>
+#      apos_drbd_status dstate <resource_name> <node>
+#      apos_drbd_status role <resource_name> <node>
+#      apos_drbd_status status <resource_name>
+#      apos_drbd_status repstate <resource_name>
+##
+#Change log:
+# - Tue Aug 01 2017 - Pranshu Sinha (xpransi)
+#                     First Revision
+#
+
+#Global variables
+LOG_TAG='apos_drbd_status'
+CMD_DRBDADM="/sbin/drbdadm"
+CMD_DRBDSETUP="/sbin/drbdsetup"
+OWN_HOSTNAME=$(</etc/cluster/nodes/this/hostname)
+PEER_HOSTNAME=$(</etc/cluster/nodes/peer/hostname)
+CMD_AWK='/usr/bin/awk'
+CMD_GREP='/usr/bin/grep'
+
+# exit-code error flags
+exit_sucs=0
+exit_fail=1
+exit_usge=2
+
+# log to system-log
+function log(){
+        /bin/logger -t "$LOG_TAG" "$*"
+}
+
+# log and exit from the script
+function abort(){
+  # report abort in messages
+  echo "ABORTING: <"ERROR: $1">"
+  log "ABORTING: <"ERROR: $1">"
+  log "END: <$0>"
+  exit $2
+}
+
+#This function displays the help to use the script
+function show_help(){
+  echo "usage : apos_drbd_status cstate <resource_name>"
+  echo "        apos_drbd_status dstate <resource_name> <node>"
+  echo "        apos_drbd_status role <resource_name> <node>"
+  echo "        apos_drbd_status status <resource_name>"
+  echo "        apos_drbd_status repstate <resource_name>"
+  echo "        <resource_name> : drbd0 , drbd1"
+  echo "        <node> : local , peer"
+}
+
+#This function displays drbdadm status for a drbd resource
+function show_status(){
+  local drbd_status=""
+  drbd_status=$($CMD_DRBDADM $1 $2)
+  if [ "$drbd_status" == "" ]; then
+    abort "Failed to fetch status for drbd resource" $exit_fail
+  fi
+  echo $drbd_status
+}
+
+#This function is to fetch cstate of drbd resource
+function show_cstate(){
+  local val_cstate=""
+  val_replication_state=$($CMD_DRBDSETUP status $2 --verbose | $CMD_GREP "replication" | $CMD_AWK -F "replication:" '{print $2}' | $CMD_AWK '{print $1}')
+  if [ "$val_replication_state" == "Established" ] || [ "$val_replication_state" == "Off" ]; then
+    val_cstate=$($CMD_DRBDSETUP status $2 --verbose | $CMD_GREP "connection" | $CMD_AWK -F "connection:" '{print $2}' | $CMD_AWK '{print $1}')
+  else
+    val_cstate=$val_replication_state
+  fi
+  if [ "$val_cstate" == "" ]; then
+    abort "Failed to fetch cstate for $2" $exit_fail
+  fi
+  echo $val_cstate
+}
+
+#This function displays role for local and peer node in a drbd resource
+function show_role(){
+  local own_role=""
+  local peer_role=""
+  if [ $3 == "local" ]; then
+    own_role=$($CMD_DRBDADM status $2 | $CMD_GREP -w "$2 $1" | $CMD_AWK -F : '{print $2}' | $CMD_AWK '{print $1}')
+    if [ "$own_role" == "" ]; then
+      abort "Failed to fetch role of local node for $2" $exit_fail
+    fi
+    echo $own_role
+  elif [ $3 == "peer" ]; then
+    peer_role=$($CMD_DRBDADM status $2 | $CMD_GREP -w "$PEER_HOSTNAME $1" | $CMD_AWK -F : '{print $2}' | $CMD_AWK '{print $1}')
+    if [ "$peer_role" == "" ]; then
+      abort "Failed to fetch role of peer node for $2" $exit_fail
+    fi
+    echo $peer_role
+  else
+    show_help
+    abort "Invalid argument $3" $exit_usge
+  fi
+}
+
+#This function displays dstate for local and peer node in a drbd resource
+function show_dstate(){
+  local own_dstate=""
+  local peer_dstate=""
+  if [ $3 == "local" ]; then
+    #own_dstate=$($CMD_DRBDADM status $2 | $CMD_GREP -w " disk" | $CMD_AWK -F : '{print $2}' | $CMD_AWK '{print $1}')
+    own_dstate=$($CMD_DRBDADM dstate $2 | awk -F "/" '{print $1}')
+    if [ "$own_dstate" == "" ]; then
+      abort "Failed to fetch dstate of local node for $2" $exit_fail
+    fi    
+    echo $own_dstate
+  elif [ $3 == "peer" ]; then
+    #peer_dstate=$($CMD_DRBDADM status $2 | $CMD_GREP -w "peer-disk" | $CMD_AWK -F 'peer-disk:' '{print $2}'| $CMD_AWK '{print $1}')
+    peer_dstate=$($CMD_DRBDADM dstate $2 | awk -F "/" '{print $2}')
+    if [ "$peer_dstate" == "" ]; then
+      abort "Failed to fetch dstate of peer node for $2" $exit_fail
+    fi
+    echo $peer_dstate
+  else
+    show_help
+    abort "Invalid argument $3" $exit_usge
+  fi
+}
+
+#This function displays replication state of drbd resource
+function show_repstate(){
+  local rep_state=""
+  local is_replicating=""
+  is_replicating=$($CMD_DRBDADM status $2 | $CMD_GREP -w " replication")
+  if [ "$is_replicating" == "" ]; then
+    rep_state=$($CMD_DRBDADM cstate $2)
+  else
+    rep_state=$($CMD_DRBDADM status $2 | $CMD_GREP -w " replication" | $CMD_AWK -F : '{print $2}' | $CMD_AWK '{print $1}')
+    if [ "$rep_state" == "" ]; then
+      abort "Failed to fetch replication state of local node for $2" $exit_fail
+    fi
+  fi
+  echo $rep_state
+}
+
+
+#This function validates the inputs given to the script
+function parse_cmdline(){
+  if [[ $# -lt 1 ]] || [[ $# -gt 3 ]]; then
+    show_help
+    abort "Invalid number of arguments" $exit_usge
+  fi
+  if [[ $1 == "status" ]] || [[ $1 == "cstate" ]] || [[ $1 == "repstate" ]]; then
+    if [[ $# -ne 2 ]]; then
+      show_help
+      abort "Invalid number of arguments" $exit_usge
+    else
+      if [[ $2 != "drbd0" ]] && [[ $2 != "drbd1" ]]; then
+        show_help
+        abort "Invalid arguments \"$2\"" $exit_usge
+      fi
+    fi
+  fi
+  if [[ $1 == "role" ]] || [[ $1 == "dstate" ]]; then
+    if [[ $# -ne 3 ]]; then
+      show_help
+      abort "Invalid number of arguments" $exit_usge
+    else
+      if [[ $2 != "drbd0" ]] && [[ $2 != "drbd1" ]]; then
+        show_help
+        abort "Invalid arguments \"$2\"" $exit_usge
+      fi
+      if [[ $3 != "local" ]] && [[ $3 != "peer" ]]; then
+        show_help
+        abort "Invalid arguments \"$3\"" $exit_usge
+      fi
+    fi
+  fi
+}
+
+#                                              __    __   _______   _   __    _
+#                                             |  \  /  | |  ___  | | | |  \  | |
+#                                             |   \/   | | |___| | | | |   \ | |
+#                                             | |\  /| | |  ___  | | | | |\ \| |
+#                                             | | \/ | | | |   | | | | | | \   |
+#                                             |_|    |_| |_|   |_| |_| |_|  \__|
+#
+
+# Here begins the "main" function...
+
+# Set the interpreter to exit if a non-initialized variable is used.
+set -u
+
+#log "START: <$0>"
+
+# parse command line
+parse_cmdline $@
+case $1 in
+  help)
+    show_help
+  ;;
+  status)
+    show_status $@
+  ;;
+  role)
+    show_role $@
+  ;;
+  cstate)
+    show_cstate $@
+  ;;
+  dstate)
+    show_dstate $@
+  ;;
+  repstate)
+    show_repstate $@
+  ;;
+  *)
+    show_help
+    abort "option \"$1\" not valid" $exit_usge
+  ;;
+esac
+
+# exit with success return code
+exit $exit_sucs
+

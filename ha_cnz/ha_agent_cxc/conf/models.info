@@ -1,0 +1,149 @@
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2014 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# models.info
+##
+# Description:
+#       Configuration file used to perform IMM model changes during software upgrade for HAAGENT block.
+##
+##
+# Changelog:
+# - Jan 16 2014 - Phaninder Gattu (XPHAGAT)
+#       First version
+##
+# log($message) ===> Use it to append a notice to the system log
+# log_error($message) ===> Use it to append an error message to the system log
+##
+##
+#-----------------------------------------------------------------------
+#		CHANGE-LOG
+#----------------------------------------------------------------------
+# no operations
+#
+VERSION: CXC1371467_13-R1H
+
+VERSION: CXC1371467_13-R1G
+
+VERSION: CXC1371467_13-R1F
+
+VERSION: CXC1371467_13-R1E
+
+VERSION: CXC1371467_13-R1D
+
+VERSION: CXC1371467_13-R1C
+
+VERSION: CXC1371467_13-R1B
+
+VERSION: CXC1371467_13-R1A01
+
+VERSION: CXC1371467_12-R1A04
+
+VERSION: CXC1371467_12-R1A03
+
+VERSION: CXC1371467_12-R1A02
+
+VERSION: CXC1371467_12-R1A01
+
+VERSION: CXC1371467_11-R1A01
+
+# Adaptations to SwM2.0
+VERSION: CXC1371467_10-R1A01
+
+
+VERSION: CXC1371467_9-R1A06
+VERSION: CXC1371467_9-R1A05
+VERSION: CXC1371467_9-R1A04
+VERSION: CXC1371467_9-R1A03
+VERSION: CXC1371467_9-R1A02
+VERSION: CXC1371467_9-R1A01
+
+VERSION: CXC1371467_8-R1A02
+log " No model changes introduced in version CXC1371467_8-R1A02"
+
+VERSION: CXC1371467_8-R1A01
+log " No model changes introduced in version CXC1371467_8-R1A01"
+
+VERSION: CXC1371467_7-R1A01
+log " No model changes introduced in version CXC1371467_7-R1A01"
+
+VERSION: CXC1371467_5-R1A03
+log " No model changes introduced in version CXC1371467_5-R1A03"
+
+VERSION: CXC1371467_5-R1A02
+log " No model changes introduced in version CXC1371467_5-R1A02"
+
+VERSION: CXC1371467_5-R1A01
+log " No model changes introduced in version CXC1371467_5-R1A01"
+
+VERSION: CXC1371467-R1E
+log " No model changes introduced in version CXC1371467-R1E "
+
+VERSION: CXC1371467-R1D
+log " No model changes introduced in version CXC1371467-R1D "
+
+VERSION: CXC1371467-R1C
+log " No model changes introduced in version CXC1371467-R1C "
+
+VERSION: CXC1371467-R1B
+log " No model changes introduced in version CXC1371467-R1B "
+
+VERSION: CXC1371467-R1A10
+log " No model changes introduced in version CXC1371467-R1A10 "
+
+# no operations
+VERSION: CXC1371467-R1A09
+log " No model changes introduced in version CXC1371467-R1A09 "
+
+# no operations
+VERSION: CXC1371467-R1A08
+log " No model changes introduced in version CXC1371467-R1A08 "
+
+# no operations
+VERSION: CXC1371467-R1A07
+log " No model changes introduced in version CXC1371467-R1A07 "
+
+# no operations
+VERSION: CXC1371467-R1A06
+log " No model changes introduced in version CXC1371467-R1A06 "
+
+# no operations
+VERSION: CXC1371467-R1A05
+log " No model changes introduced in version CXC1371467-R1A05 "
+
+# no operations
+VERSION: CXC1371467-R1A04
+log " No model changes introduced in version CXC1371467-R1A04 "
+
+# no operations
+VERSION: CXC1371467-R1A03
+log " No model changes introduced in version CXC1371467-R1A03 "
+
+# no operations
+VERSION: CXC1371467-R1A02
+log " No model changes introduced in version CXC1371467-R1A02 "
+
+# no operations
+VERSION: CXC1371467-R1A01
+log " No model changes introduced in version CXC1371467-R1A01 "
+
+# no operations
+VERSION: CXC1371407-R1F
+log " No model changes introduced in version CXC1371407-R1F "
+
+# no operations
+VERSION: CXC1371407-R1E
+log " No model changes introduced in version CXC1371407-R1E "
+
+# no operations
+VERSION: CXC1371407-R1D
+log " No model changes introduced in version CXC1371407-R1D "
+
+# no operations
+VERSION: CXC1371407-R1C
+log " No model changes introduced in version CXC1371407-R1C "
+
+# no operations
+VERSION: CXC1371407-R1B
+log " No model changes introduced in version CXC1371407-R1B "

@@ -1,0 +1,865 @@
+#!/bin/bash -u
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2019 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       spadm
+# Description:
+#       A script to enable/disable security patches in APG
+##
+# Usage:
+#       spadm --help
+##
+# Changelog:
+#  - Tue Apr 18 2023 - Kishore Velkatoori (ZKISVEL)
+#    TR IA34261 fix
+#  - Thu Mar 2 2023 - Naveen Kumar G (ZGXXNAV)
+#    Fix provided to disable MDS, TAA speculative mitigations by appending "MMIO STALE DATA" mitigations because 
+#    MDS, TAA and MMIO Stale Data mitigations are inter-related
+#  - Wed Feb 8 2023 - Kishore Velkatoori (ZKISVEL)
+#    Implemented changes for adding retbleed mitigation
+#    and for not affected patches enable/disable prinout improvement
+#  - Wed Dec 30 2020 - Yeswanth Vankayala (XYESVAN)
+#    Implemented changes to align behaviour of mds and tsx_async_abort
+#  - Tue Apr 21 2020 - Ramya Medichelmi (ZMEDRAM)
+#    Implemented Review comments
+#  - Mon Mar 30 2020 - Ramya Medichelmi (ZMEDRAM)
+#    Implemented Review comments
+#  - Thu Mar 03 2020 - Harika Bavana (XHARBAV)
+#    Adapted for wave4 mitigations.
+#  - Mon Nov 25 2019 - Pratap Reddy Uppada (XPRAUPP)
+#    Adapted for a new security mitigation(mds) and Fix for TR HY12817.
+#  - Wed Mar 13 2019 - Anjali M (XANJALI)
+#    First version.
+##
+
+# Global Variables
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+LOG_TAG='spadm'
+CLUSTER_CONF_FILE=/cluster/etc/cluster.conf
+SYS_PATH='/sys/devices/system/cpu/vulnerabilities'
+ETC_PATH='/etc/cluster/nodes/this/kernel-cmdline'
+
+CMD_CAT='/bin/cat'
+CMD_GETOPT='/usr/bin/getopt'
+CMD_ECHO='/bin/echo'
+CMD_CUT='/usr/bin/cut'
+CMD_GREP='/usr/bin/grep'
+CMD_AWK='/usr/bin/awk'
+CMD_TR='/usr/bin/tr'
+CMD_LOGGER='/bin/logger'
+CMD_TOUCH='/usr/bin/touch'
+CMD_CHMOD='/usr/bin/chmod'
+CMD_SSH='/usr/bin/ssh'
+CMD_PING='/bin/ping'
+CMD_SED='/usr/bin/sed'
+
+PATCH_LIST=( )
+CMD_LINE_PARAMETER=''
+EXISTING_PATCH_INFO=''
+
+#  The following variables shall be updated if any new mitigation is introduced by LDE:
+#   - APPLICABLE_PATCHES_LIST: This varaible is a Global one. It is used to validate
+#                              the mitigations against the input provided to this command
+# 
+#   - MITIGATIONS_SUPPORTED_LIST : This variable is a Global one.It is used to 
+#                                  process(i.e. to display and to configure) 
+#                                  the complete list of mitigations 
+#   
+#   - SUPPORTED_PATCHES : This variable is a global one. It is used in validate 
+#                         & display patches.
+#
+#   - MAPPED_LIST : This variable is a global one. It is used to replace mitigation name
+#                  provided in spdm command with alias in sys folder if both are different.
+#
+#   - DEFAULT_PATCH_LIST : This variable is a global one. It is used to display 
+#                          patches that are ENABLED by default and cannot be disabled.
+#    
+# FAQ ] When these variables requires a change?
+# Ans ] If new LDE introduces any new mitigation, these variables needs to be 
+#       updated with new ones to the existing mitigations content.
+#       Refer LDE PRI document for new mitigations info.
+# 
+#  Below is the syntax for MITIGATIONS_SUPPORTED_LIST :
+#  --------------------------------------------------
+#  <Mitigation-name-to-display>:<absolute_path/alias-name>:<kernel-cmdline parameter>
+#
+#  Note:
+#	Mitigation-name-to-display : Mitigation to display on console. 
+#                                    Replace space with '-' if mitigation name contains space
+#	absolute_path/alias-name   : Check the existance of alias in sys(i.e. 
+#                                    /sys/devices/system/cpu/vulnerabilities) folder
+#                                    If it is present then include $SYS_PATH as an absolute path
+#                                    If it is not present then include $ETC_PATH
+#	kernel-cmdline parameter   : kernel-cmdline parameters to include in cluster.conf 
+#                                    to toggle off the mitigations.
+#
+#  Below is the syntax for MAPPED_LIST :
+#  ----------------------------------
+#  <patch-name>:<alias-name>
+#
+#  Note:
+#      patch-name : Mitigation name provided in spadm command
+#      alias-name : alais in sys folder(i.e., /sys/devices/system/cpu/vulnerabilities/)
+#
+
+APPLICABLE_PATCHES_LIST=( "spectre_v2" "pti" "spec_store_bypass" "eagerfpu" "l1tf" "mds" "swapgs" "tsx_async_abort" "retbleed" )
+MITIGATIONS_SUPPORTED_LIST="Swapgs:$SYS_PATH/spectre_v1:nospectre_v1
+		            Spectre-V2:$SYS_PATH/spectre_v2:nospectre_v2,nospec
+		            Meltdown:$SYS_PATH/meltdown:nopti
+		            Spectre-V4:$SYS_PATH/spec_store_bypass:nospec_store_bypass_disable
+			    MDSUM:$SYS_PATH/mds:mds=off,mmio_stale_data=off,tsx_async_abort=off
+		            Lazy-FPU:$ETC_PATH/eagerfpu:eagerfpu=off
+		            L1-Terminal-Fault:$ETC_PATH/l1tf:l1tf=off
+			    Tsx-Async-Abort:$SYS_PATH/tsx_async_abort:mds=off,mmio_stale_data=off,tsx_async_abort=off
+			    Retbleed:$SYS_PATH/retbleed:retbleed=off"
+
+SUPPORTED_PATCHES='spectre_v2 | pti | spec_store_bypass | eagerfpu | l1tf | mds | swapgs | tsx_async_abort | retbleed'
+MAPPED_LIST=( "pti:meltdown" "swapgs:spectre_v1" )
+DEFAULT_PATCH_LIST=( "Spectre-V1" )
+## Option variables
+OPT_ENABLE=$FALSE
+OPT_DISABLE=$FALSE
+OPT_PATCH=$FALSE
+OPT_LIST=$FALSE
+OPT_HELP=$FALSE
+OPT_ALL=$FALSE
+
+# Exit Flags
+exit_success=0
+exit_fail=1
+exit_usage=2
+exit_clu_err=3
+exit_peer_err=4
+exit_no_file=127
+exit_skip='254'
+
+function alias_to_mitigation_status() {
+
+ local PATCH_ARGS=$1
+ local mitig_stat=''
+ local mitig_return=''
+ local mitig_out=''
+ for mitig in ${MITIGATIONS_SUPPORTED_LIST}; do
+   mitig_stat=$($CMD_ECHO $mitig | $CMD_GREP -i $PATCH_ARGS  | $CMD_AWK -F: '{print $2}')
+   mitig_return="$mitig_return $mitig_stat"
+   done
+ mitig_out=$($CMD_CAT ${mitig_return} 2>/dev/null)
+ $CMD_ECHO $mitig_out
+}
+
+
+# ------------------------------------------------------------------------------
+function log(){
+  local PRIO='-p user.notice'
+  local MESSAGE="${*:-notice}"
+  $CMD_LOGGER $PRIO $LOG_TAG "$MESSAGE" &>/dev/null
+}
+
+# ------------------------------------------------------------------------------
+# The function will log an error message in the system log. If the --verbose
+# option has been specified, it will print the same message on stderr too.
+function log_error(){
+  local PRIO='-p user.err'
+  local MESSAGE="${*:-error}"
+  $CMD_LOGGER $PRIO $LOG_TAG "$MESSAGE" &>/dev/null
+}
+
+# ------------------------------------------------------------------------------
+function abort(){
+  console_print ''
+  ${CMD_ECHO} "$1"
+  log_error "$1"
+  console_print ''
+  exit $2
+}
+
+# ------------------------------------------------------------------------------
+function console_abort(){
+  console_print ''
+  console_print "$1"
+  console_print ''
+  exit $exit_skip
+}
+
+# ------------------------------------------------------------------------------
+function undo_configuration() {
+
+  trap ' ' SIGINT SIGHUP SIGTERM
+
+  local rCode=$FALSE
+  if ${CMD_GREP} -q '^[[:space:]]*kernel-cmdline[[:space:]]all[[:space:]]*.*$' ${CLUSTER_CONF_FILE} 2>/dev/null; then
+    if [ -z "${EXISTING_PATCH_INFO}" ]; then
+      ${CMD_SED} -i -r '/^[[:space:]]*kernel-cmdline[[:space:]]all[[:space:]]*.*$'/d ${CLUSTER_CONF_FILE} 2>/dev/null
+      rCode=$?
+    else
+      ${CMD_SED} -i "s/kernel-cmdline all */kernel-cmdline all ${EXISTING_PATCH_INFO}/g" ${CLUSTER_CONF_FILE} 2>/dev/null
+      rCode=$?
+    fi
+  else
+     rCode=$TRUE
+     if [ -n "${EXISTING_PATCH_INFO}" ]; then
+       ${CMD_SED} -i -r "$ i\kernel-cmdline all ${EXISTING_PATCH_INFO}" ${CLUSTER_CONF_FILE} 2>/dev/null
+       rCode=$?
+     fi
+  fi
+
+  if [ $rCode -eq $TRUE ]; then
+    /usr/sbin/lde-config --reload --all &>/dev/null
+    if [ $? -ne $TRUE ]; then
+      log_error 'lde-config failed to relaod the undo changes'
+    fi
+  else
+    log_error 'command execution is failed for undo configuration'
+  fi
+  trap - SIGINT SIGHUP SIGTERM
+}
+
+#-------------------------------------------------------------------------------
+function handle_int(){
+  log "SIGINT received... ignoring it"
+}
+
+#-------------------------------------------------------------------------------
+function handle_hup(){
+  log "SIGHUP received... ignoring it"
+}
+
+#-------------------------------------------------------------------------------
+function handle_term(){
+  log "SIGTERM received... exiting"
+  undo_configuration 
+  exit $TRUE
+}
+
+# ------------------------------------------------------------------------------
+function sanity_check() {
+ 
+  # verify if peer node is up or not 
+  if ! is_peer_node_up; then 
+    abort 'ERROR: Peer node is not responding' $exit_peer_err
+  fi 
+  
+  # Check for cluster configuration file existence 
+  [ ! -f ${CLUSTER_CONF_FILE} ] && abort 'FAILED: Cluster configuration file not found' $exit_no_file
+
+  # fetch the available patch information from the system
+  EXISTING_PATCH_INFO="$(${CMD_GREP} 'kernel-cmdline all *' ${CLUSTER_CONF_FILE} 2>/dev/null | ${CMD_CUT} -d' ' -f3-)"
+  
+  [ ! -x /usr/sbin/lde-config ] && abort 'Error when executing (general fault)' $exit_no_file
+}
+
+# ------------------------------------------------------------------------------
+# function to print the message on stdout
+function console_print(){
+  ${CMD_ECHO} -e "$1"
+}
+
+# ------------------------------------------------------------------------------
+function is_peer_node_up(){
+  local RHOST=$(</etc/cluster/nodes/peer/hostname)
+  ${CMD_PING} -c 1 -W 1 $RHOST &>/dev/null
+  [ $? -eq 0 ] && return $TRUE
+  return $FALSE
+}
+
+# This function creates /tmp/config_reboot_needed file to help spadm
+# with '-l' option to print the status of patches after reboot
+# ------------------------------------------------------------------------------
+function create_reboot_needed_file(){
+  local filename='/tmp/config_reboot_needed'
+  if [ ! -f $filename ]; then
+    ${CMD_TOUCH} $filename 2>/dev/null
+    # no other user should be able to remove this file
+    ${CMD_CHMOD} 1400 $filename 2>/dev/null
+  fi
+
+  if is_peer_node_up; then
+    local RHOST=$(</etc/cluster/nodes/peer/hostname)
+    if ! ${CMD_SSH} $RHOST ${CMD_TOUCH} $filename &>/dev/null; then
+      log "ERR: Creating [$filename] failed on $RHOST"
+    elif ! ${CMD_SSH} $RHOST ${CMD_CHMOD} 1400  $filename &>/dev/null; then
+      log "ERR: Setting 1400 on [$filename] failed on $RHOST"
+    fi
+  fi
+}
+
+# ------------------------------------------------------------------------------
+function is_patch_already_enabled() {
+  local PATCH_ENABLED=$FALSE
+  local PATCH=$@
+  for patch in ${PATCH[@]}; do
+
+  local STATUS=$(alias_to_mitigation_status $patch)
+
+  if ! ${CMD_GREP} -qw "$patch" ${CLUSTER_CONF_FILE} 2>/dev/null || [ "$STATUS" == "Not affected" ]; then
+    PATCH_ENABLED=$TRUE
+    continue
+  fi 
+  done
+  return $PATCH_ENABLED
+}
+
+# ------------------------------------------------------------------------------
+function is_patch_already_disabled() {
+  local PATCH_DISABLED=$FALSE
+  local PATCH=$@
+  for patch in ${PATCH[@]}; do
+
+  local STATUS=$(alias_to_mitigation_status $patch)
+
+  if ${CMD_GREP} -qw "$PATCH" ${CLUSTER_CONF_FILE} 2>/dev/null || [ "$STATUS" == "Not affected" ]; then 
+    PATCH_DISABLED=$TRUE
+    continue
+  fi
+  done
+  return $PATCH_DISABLED
+}
+
+# ------------------------------------------------------------------------------
+function alias_to_cmdline_formation() {
+  
+  local PATCH_ARGS=$1
+  local CMD_PARAM=''
+  local CMD_PARAM_LIST=''
+  local kernel_cmdline=''
+
+  if [ ${PATCH_ARGS} == 'all' ]; then
+    for alias in ${MITIGATIONS_SUPPORTED_LIST}; do
+      kernel_cmdline=$($CMD_ECHO $alias | $CMD_AWK -F: '{print $3}'| ${CMD_TR} ',' '  ')
+      CMD_PARAM="${CMD_PARAM} ${kernel_cmdline}" 
+    done
+  else
+    for alias in ${MAPPED_LIST[@]}; do
+      local PATCH_ARGS_LIST=$($CMD_ECHO ${alias} | $CMD_AWK -F: '{print $1}')
+      local MAPPED_NAME=$($CMD_ECHO ${alias} | $CMD_AWK -F: '{print $2}')
+      if [ $PATCH_ARGS == $PATCH_ARGS_LIST ]; then
+        PATCH_ARGS=${MAPPED_NAME}
+      fi
+    done
+      
+    for patch in $PATCH_ARGS
+    do
+      CMD_PARAM_LIST=$($CMD_ECHO ${MITIGATIONS_SUPPORTED_LIST} | $CMD_AWK -F"${patch}:" '{print $2}' | \
+                       $CMD_AWK '{print $1}' | ${CMD_TR} ',' '  ')
+      CMD_PARAM="$CMD_PARAM $CMD_PARAM_LIST"
+    done
+  fi
+  $CMD_ECHO "$($CMD_ECHO ${CMD_PARAM} | $CMD_SED -e 's/^[[:space:]]*//')"
+}
+
+# -----------------------------------------------------------------------------
+# function to print spadm command usage on stdout
+function usage(){
+       $CMD_CAT << HEREDOC
+usage:  
+    spadm -e [-p patch,...] [-all]
+    spadm -d [-p patch,...] [-all]
+    spadm -l
+  
+switches:
+   -e    Enable mitigations for patch(es)
+   -d    Disable mitigations for patch(es)
+   -p    Security patch name to be enabled/disabled
+   -all  Applies to all the available patches in APG
+   -l    List mitigation status of all the available patches
+
+Supported patch names:
+    $SUPPORTED_PATCHES
+Examples:
+    Enabling mitigatations for patch(es)
+      spadm -e -p spectre_v2,pti
+      spadm -e -all
+
+    Disabling mitigatations for patch(es)
+      spadm -d -p spectre_v2,pti
+      spadm -d -all
+
+    List mitigatation status for patch(es)
+      spadm -l
+
+Note:
+   spectrev1 patch is enabled by default.Disabling of 'spectrev1' patch not allowed.
+
+HEREDOC
+}
+
+# function to print the error when used incorrect format
+# ------------------------------------------------------------------------------
+function usage_error(){
+  console_print ''
+  if [ $# -gt 0 ]; then
+    console_print "$1"
+  else
+    console_print "Incorrect usage"
+  fi
+  usage
+  exit $exit_usage
+}
+
+# ------------------------------------------------------------------------------
+function parse_cmdline(){
+
+  [ $# -lt 1 ] && usage_error 
+
+  local OPTIONS='e d l h p: all'
+  local PATTERN='[=:@#%-]'
+
+  $CMD_GETOPT --quiet --quiet-output --options="$OPTIONS" -- "$@"
+  [ $? -ne $TRUE ] && usage_error
+
+  eval set -- "$@"
+
+  while [ $# -gt 0 ];do
+    case "$1" in
+      -e)
+        [[ $# -lt 2 || $OPT_ENABLE -eq $TRUE || $OPT_DISABLE -eq $TRUE ]] && usage_error
+        OPT_ENABLE=$TRUE;
+      ;;
+
+      -d)
+        [[ $# -lt 2 || $OPT_DISABLE -eq $TRUE ]] && usage_error 
+        OPT_DISABLE=$TRUE
+      ;;
+
+      -p)
+         [[ ( $OPT_ENABLE -eq $FALSE && $OPT_DISABLE -eq $FALSE ) || ( $OPT_PATCH -eq $TRUE ) ]] && usage_error ]]
+         [[ $2 =~ ^.*,$ ]] && usage_error "Unsupported patch(es)"
+         [ -z "$2" ] && usage_error "Patch names are missing"
+         LAST_PATCH_ARG=$($CMD_ECHO $2 | $CMD_AWK -F, '{print $NF}')
+         [ -z "$LAST_PATCH_ARG" ] && usage_error "Wrong patch input format"
+
+         if $CMD_ECHO "$2" | $CMD_GREP -qP "$PATTERN"; then
+           usage_error "Wrong patch input format"
+         fi
+
+         ARG_LIST=''
+         ARG_LIST=$($CMD_ECHO $2 | tr ',' ' ')
+         PATCH_LIST=( "$ARG_LIST" )
+         OPT_PATCH=$TRUE
+         shift
+      ;;
+
+      -l)
+        [ $# -gt 1 ] && usage_error
+        OPT_LIST=$TRUE
+        shift
+      ;;
+
+      -all)
+        [[ $OPT_ENABLE -eq $FALSE && $OPT_DISABLE -eq $FALSE ]] && usage_error
+        PATCH_LIST=( "all" ) 
+        OPT_ALL=$TRUE
+        shift
+      ;;
+
+      -h)
+        [ $# -gt 1 ] && usage_error
+        OPT_HELP=$TRUE
+        usage 
+        exit $TRUE
+      ;;
+
+      *)
+        console_print 'Invalid options'
+        usage
+        exit $FALSE
+      ;;
+    esac
+  shift
+  done
+
+  # Check for options compatibility with other options
+  validate_options 
+}
+
+# ------------------------------------------------------------------------------
+function validate_options() {
+  # Check allowed options for disable('-d')
+  # Compatible options are '-p -all'
+  if [ $OPT_DISABLE -eq $TRUE ]; then
+    [[ $OPT_LIST -eq $TRUE || $OPT_HELP -eq $TRUE || $OPT_ENABLE -eq $TRUE ]] && usage_error
+  fi
+
+  # Check allowed options for enable('-e')
+  # Compatible options are '-p -all'
+  if [ $OPT_ENABLE -eq $TRUE ]; then
+    [[ $OPT_LIST -eq $TRUE || $OPT_HELP -eq $TRUE || $OPT_DISABLE -eq $TRUE ]] && usage_error
+  fi
+
+}
+
+# ------------------------------------------------------------------------------
+function isValidPatch(){
+  local value=$1
+  local result=$FALSE
+  for i in "${APPLICABLE_PATCHES_LIST[@]}"; do
+    if [ "$value" == "$i" ];then
+      result=$TRUE; break
+    fi
+  done
+
+  # Special case handling for '-all' option 
+  if [ "$value" == 'all' ]; then
+    [ $OPT_ALL -eq $TRUE ] && result=$TRUE
+  fi
+ 
+  return $result
+}
+
+# ------------------------------------------------------------------------------
+function validate_patches() {
+
+  for patch in ${PATCH_LIST[@]}; do
+    if ! isValidPatch $patch; then
+      console_print '' 
+      console_print "Unsupported patch [$patch]"
+      console_print ''
+      console_print "Supported patches to enable/disable are:" 
+      console_print "  ${SUPPORTED_PATCHES}"
+      console_print ''
+      exit $FALSE
+    fi
+  done
+}
+
+# function to invoke the right action as per the options provided
+# ------------------------------------------------------------------------------
+function invoke(){
+
+   # Register for signals
+   trap handle_int SIGINT
+   trap handle_hup SIGHUP
+   trap handle_term SIGTERM
+
+   if [ $OPT_ENABLE -eq $TRUE ];then
+     enable_patches
+   elif [ $OPT_DISABLE -eq $TRUE ];then
+     disable_patches
+   elif [ $OPT_LIST -eq $TRUE ];then
+     list_patches
+   fi
+  
+   trap - SIGINT SIGHUP SIGTERM
+}
+
+# ------------------------------------------------------------------------------
+function skip_configuration() {
+  local input=$1
+  log "INFO: Patches are already $input or not affected. Skipping the command execution"
+  console_print ''
+  console_print "INFO: Patches are already $input or not affected. Skipping the command execution"
+  console_print ''
+  exit $exit_skip
+}
+
+# ------------------------------------------------------------------------------
+function enable_patches() {
+
+  # 'APPLY_CONFIGURATION' variable states that
+  # if configuration is required or not
+  local APPLY_CONFIGURATION=$TRUE
+  local ALREADY_ENABLED=$FALSE
+  local INPUT_PATCH_V2=''
+  local NEW_PATCH_INFO=${EXISTING_PATCH_INFO}
+  local CMD_LINE_VAL=''
+  local TSX_ASYNC_FLAG=$FALSE
+  local MMIO_STALE_DATA="mmio_stale_data=off"
+
+  # validate patches provided as input
+  if ! $(${CMD_ECHO} ${PATCH_LIST[@]}| ${CMD_GREP} -qw 'all'); then
+    validate_patches
+  fi
+   
+  # Fetch the kernel cmdline parameters from alias names
+  for patch in ${PATCH_LIST[@]}; do 
+     INPUT_PATCH_V2=$patch 
+     if [ $INPUT_PATCH_V2 == "tsx_async_abort" ]; then
+                 TSX_ASYNC_FLAG=$TRUE
+     fi
+
+     if [ $INPUT_PATCH_V2 == "mds" -o $INPUT_PATCH_V2 == "tsx_async_abort" ]; then
+       if ${CMD_GREP}  -qw "mds=off tsx_async_abort=off" ${CLUSTER_CONF_FILE} 2>/dev/null; then 
+        ${CMD_SED} -i "s/^[[:space:]]*kernel-cmdline[[:space:]]all[[:space:]]*.*$/kernel-cmdline all $NEW_PATCH_INFO $MMIO_STALE_DATA/g" ${CLUSTER_CONF_FILE} 2>/dev/null
+       fi
+     fi
+      
+   if [ $patch == 'all' ]; then 
+      break
+    else
+     # If SpectreV2 is disabled, retbleed cannot be enabled
+     if ${CMD_GREP}  -qw "nospectre_v2" ${CLUSTER_CONF_FILE} 2>/dev/null; then
+     	   if [[ $patch == "retbleed" ]] ; then    
+                abort "ERROR: Failure while enabling security patches" $exit_clu_err
+	   fi
+     fi 
+     if [ -n "$CMD_LINE_VAL" ]; then 
+       if ${CMD_ECHO} "$CMD_LINE_VAL" | ${CMD_GREP} -q "$patch"; then 
+         continue
+       fi
+     fi  
+      CMD_LINE_VAL=$(alias_to_cmdline_formation $patch)
+      # If patch is already enabled, command execution is skipped
+      if is_patch_already_enabled $CMD_LINE_VAL; then
+        log "INFO: Enabling of $patch patch... Already Enabled or not affected"
+        ALREADY_ENABLED=$TRUE; APPLY_CONFIGURATION=$FALSE; continue
+      else
+        for patch in $CMD_LINE_VAL; do
+          NEW_PATCH_INFO=$(${CMD_ECHO} $NEW_PATCH_INFO| ${CMD_SED} "s/$patch//")
+        done
+        CMD_LINE_PARAMETER="${NEW_PATCH_INFO}"
+      fi
+    fi  
+  done
+# Removing retbleed entry if SpectreV2 patch is disabled 
+    if [[ $INPUT_PATCH_V2 == "spectre_v2" ]]; then
+      if  ${CMD_GREP} -wq "retbleed=off" ${CLUSTER_CONF_FILE} 2>/dev/null; then
+          CMD_LINE_PARAMETER=$(${CMD_ECHO} $CMD_LINE_PARAMETER | ${CMD_SED} "s/retbleed=off//")
+        fi
+      fi
+
+    if [[ $ALREADY_ENABLED == $FALSE ]]; then
+      if [ $TSX_ASYNC_FLAG == $TRUE ]; then
+           local TSX_MDS_STATUS=$($CMD_CAT $SYS_PATH/$INPUT_PATCH_V2)
+           if [[ $($CMD_ECHO $TSX_MDS_STATUS | grep -i "Not affected" | wc -l) > 0 ]]; then
+           ALREADY_ENABLED=$TRUE; APPLY_CONFIGURATION=$FALSE;
+           fi
+      fi
+    fi						  
+
+	
+  if [ $APPLY_CONFIGURATION -eq $TRUE ]; then 
+    if is_peer_node_up; then
+      if ${CMD_GREP} -q '^[[:space:]]*kernel-cmdline[[:space:]]all[[:space:]]*.*$' ${CLUSTER_CONF_FILE} 2>/dev/null; then
+        if [[ $( ${CMD_ECHO} "${PATCH_LIST[@]}" | ${CMD_GREP} -qw  'all') || -z "$CMD_LINE_PARAMETER" ]]; then 
+          ${CMD_SED} -i -r '/^[[:space:]]*kernel-cmdline[[:space:]]all[[:space:]]*.*$'/d ${CLUSTER_CONF_FILE} 2>/dev/null
+          rCode=$?
+        else
+          ${CMD_SED} -i "s/^[[:space:]]*kernel-cmdline[[:space:]]all[[:space:]]*.*$/kernel-cmdline all $CMD_LINE_PARAMETER/g" ${CLUSTER_CONF_FILE} 2>/dev/null
+          rCode=$?
+        fi 
+      else
+        skip_configuration 'enabled'
+      fi
+
+      if [ $rCode -eq 0 ]; then
+        /usr/sbin/lde-config --reload --all &>/dev/null
+          if [ $? -ne 0 ]; then
+            undo_configuration
+            abort "ERROR: Failure while reloading the cluster configuration" $exit_clu_err
+          else
+            console_print ''
+            console_print "Patches enabling ongoing. Reboot needed to complete the configuration"
+            console_print ''
+            create_reboot_needed_file
+          fi
+      else
+        undo_configuration
+        abort "ERROR: Failure while enabling security patches." $exit_clu_err
+      fi
+
+    else
+      abort "ERROR: Peer node is not responding." $exit_peer_err
+    fi
+  else
+    [ $ALREADY_ENABLED -eq $TRUE ] && skip_configuration 'enabled'
+  fi 
+}
+
+# ------------------------------------------------------------------------------
+function disable_patches() {
+
+  # 'APPLY_CONFIGURATION' variable states that 
+  # if configuration is required or not  
+  local APPLY_CONFIGURATION=$TRUE
+  local ALREADY_DISABLED=$FALSE
+  local INPUT_PATCH_V2=''
+  local NEW_PATCH_INFO=${EXISTING_PATCH_INFO}
+  local PATCH_ALIAS=''
+  local TSX_ASYNC_FLAG=$FALSE  
+  # validate patches provided as input
+  if ! $(${CMD_ECHO} ${PATCH_LIST[@]}| ${CMD_GREP} -qw 'all'); then
+    validate_patches
+  fi 
+   
+  # Fetch the kernel cmdline parameters from alias names
+  for patch in ${PATCH_LIST[@]}; do 
+     INPUT_PATCH_V2=$patch 
+	 if [ $INPUT_PATCH_V2 == "tsx_async_abort" ]; then
+                 TSX_ASYNC_FLAG=$TRUE
+         fi								   
+ if [ $patch == 'all' ]; then 
+    CMD_LINE_PARAMETER=$(alias_to_cmdline_formation $patch)
+    break
+  else
+  # If SpectreV2 is disabled, retbleed cannot be disabled
+  if ${CMD_GREP}  -qw "nospectre_v2" ${CLUSTER_CONF_FILE} 2>/dev/null; then
+    if [[ $INPUT_PATCH_V2 == "retbleed" ]] ; then
+         abort "ERROR: Failure while disabling security patches" $exit_clu_err
+    fi
+  fi
+  if [ -n "$PATCH_ALIAS" ]; then
+      if ${CMD_ECHO} "$PATCH_ALIAS" | ${CMD_GREP} -q "$patch"; then
+        continue
+      fi
+    fi
+    PATCH_ALIAS=$(alias_to_cmdline_formation $patch) 
+    # If patch is already disabled, command execution is skipped
+
+    if is_patch_already_disabled $PATCH_ALIAS; then
+      log "INFO: Disabling of $patch patch... Already Disabled or not affected"
+      ALREADY_DISABLED=$TRUE; APPLY_CONFIGURATION=$FALSE; continue
+    else
+	#  NEW_PATCH_INFO_V2=$(${CMD_ECHO} $NEW_PATCH_INFO  $PATCH_ALIAS | ${CMD_SED} "s/retbleed=off//")
+        NEW_PATCH_INFO="$NEW_PATCH_INFO  $PATCH_ALIAS"
+        CMD_LINE_PARAMETER="${NEW_PATCH_INFO}"
+     fi  
+  fi
+  
+  done
+# Removing retbleed entry if SpectreV2 patch is disabled 
+     if [[ $INPUT_PATCH_V2 == "spectre_v2" ]]; then
+      if  ${CMD_GREP} -wq "retbleed=off" ${CLUSTER_CONF_FILE} 2>/dev/null; then
+	  CMD_LINE_PARAMETER=$(${CMD_ECHO} $CMD_LINE_PARAMETER | ${CMD_SED} "s/retbleed=off//")
+	fi
+      fi
+  
+     if [[ $ALREADY_DISABLED == $FALSE ]]; then
+        if [ $TSX_ASYNC_FLAG == $TRUE ]; then
+           local TSX_MDS_STATUS=$($CMD_CAT $SYS_PATH/$INPUT_PATCH_V2)
+           if [[ $($CMD_ECHO $TSX_MDS_STATUS | grep -i "Not affected" | wc -l) > 0 ]]; then
+           ALREADY_DISABLED=$TRUE; APPLY_CONFIGURATION=$FALSE;
+           fi
+        fi
+     fi
+
+  if [ $APPLY_CONFIGURATION -eq $TRUE ]; then
+    if is_peer_node_up; then
+
+      ## 1. Check if paches are already disbaled then skip the command execution
+      if ${CMD_GREP} -q "^[[:space:]]*kernel-cmdline[[:space:]]all[[:space:]]*$CMD_LINE_PARAMETER" ${CLUSTER_CONF_FILE} 2>/dev/null; then
+        skip_configuration "disabled"
+      fi 
+
+      ## 2. Check kernel-cmdline entry is presence in cluster.conf file
+      ##   2.1 If cmdline entry present then update with 
+      ##       latest patches provided as input
+      ##   2.2 If cmdline entry NOT present then insert 
+      ##       the kernel-cmdline with patches provided as input 
+      if ${CMD_GREP} -q '^[[:space:]]*kernel-cmdline[[:space:]]all[[:space:]]*.*$' ${CLUSTER_CONF_FILE} 2>/dev/null; then
+        ${CMD_SED} -i -r "s/^[[:space:]]*kernel-cmdline[[:space:]]all[[:space:]]*.*$/kernel-cmdline all $CMD_LINE_PARAMETER/g" ${CLUSTER_CONF_FILE} 2>/dev/null
+        rCode=$?
+      else
+        ${CMD_SED} -i -r "$ i\kernel-cmdline all $CMD_LINE_PARAMETER" ${CLUSTER_CONF_FILE} 2>/dev/null
+        rCode=$?
+      fi
+     
+      if [ $rCode -eq $TRUE ]; then
+        /usr/sbin/lde-config --reload --all &>/dev/null
+        if [ $? -ne $TRUE ]; then
+          undo_configuration
+          abort "ERROR: Failure while reloading the cluster configuration" $exit_clu_err
+        else
+          console_print ''
+          console_print "Patches disabling ongoing. Reboot needed to complete the configuration"
+          console_print ''
+          create_reboot_needed_file
+        fi
+      else
+        undo_configuration
+        abort "ERROR: Failure while disabling security patches" $exit_clu_err
+      fi
+
+    else
+      abort "ERROR: Peer node is not responding." $exit_peer_err
+    fi
+  else
+    [ $ALREADY_DISABLED -eq $TRUE ] && skip_configuration "disabled"
+  fi 
+}
+
+# ------------------------------------------------------------------------------
+# function to list the status of all available patches
+function list_patches(){
+  # check for reboot needed temporary file created by spadm as a initial check
+  local filename='/tmp/config_reboot_needed'
+  if [ -f $filename ]; then
+    console_abort "Patches configuration ongoing. Reboot needed."
+  else
+    if is_peer_node_up; then
+      local RHOST=$(</etc/cluster/nodes/peer/hostname)
+        if ${CMD_SSH} $RHOST test -f  $filename &>/dev/null; then
+          console_abort "Patches configuration ongoing. Reboot needed."
+        fi
+    fi
+  fi
+
+  console_print ''
+  console_print 'Status of Security Mitigations:'
+  console_print ''
+ 
+  local CONTENT=''
+  for CONTENT in ${DEFAULT_PATCH_LIST[@]}; do
+    local MITIGATION_NAME_TO_DISPLAY=$($CMD_ECHO $CONTENT | tr '-' ' ')
+    if [ "${MITIGATION_NAME_TO_DISPLAY}" ]; then
+      MITIGATION_STATUS='ENABLED'
+    fi
+    printf "    Mitigation for %-18s%-2s:  %s\n"  "$MITIGATION_NAME_TO_DISPLAY" " " "$MITIGATION_STATUS"
+  done
+  for CONTENT in $MITIGATIONS_SUPPORTED_LIST; do
+    local MITIGATION_NAME_TO_DISPLAY=$($CMD_ECHO $CONTENT | $CMD_AWK -F':' '{print $1}'| tr '-' ' ')
+    local MITIGATION_ALIAS=$($CMD_ECHO $CONTENT | $CMD_AWK -F':' '{print $2}')
+    if [ -f "${MITIGATION_ALIAS}" ]; then
+      MITIGATION_STATUS=$(cat ${MITIGATION_ALIAS} 2>/dev/null)
+      if [[ $MITIGATION_STATUS =~ 'Mitigation:' ]]; then
+        MITIGATION_STATUS='ENABLED'
+      elif [[ $MITIGATION_STATUS =~ 'Vulnerable'|'Not affected' ]]; then
+        MITIGATION_STATUS='DISABLED'
+      else
+        MITIGATION_STATUS='NOT APPLICABLE'
+      fi
+    else
+      MITIGATION_STATUS='ENABLED'
+      MITIGATION_ALIAS_PATH=$(dirname ${MITIGATION_ALIAS})
+      MITIGATION_ALIAS_NAME=$(basename ${MITIGATION_ALIAS})
+      if [[ -n "${MITIGATION_ALIAS_PATH}" && -f "${MITIGATION_ALIAS_PATH}" ]]; then
+        if ${CMD_GREP} -qw "${MITIGATION_ALIAS_NAME}=off" ${MITIGATION_ALIAS_PATH}; then
+          MITIGATION_STATUS='DISABLED'
+	fi
+      fi
+    fi
+    printf "    Mitigation for %-18s%-2s:  %s\n"  "$MITIGATION_NAME_TO_DISPLAY" " " "$MITIGATION_STATUS"
+  done
+  console_print ''
+}
+
+# Functions ------------------------------------------END
+
+# _____________________
+#|    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |
+#|_____________________|
+# Here begins the "main" function...
+# Set the interpreter to exit if a non-initialized variable is used.
+set -u
+
+# Log the parameters in the system log
+log "START: <$0 $*>"
+
+# sanity checks to check the state of the node
+sanity_check
+
+# parse the command line options
+parse_cmdline $*
+
+# invokes the required action
+invoke
+
+log "END: <$0>"
+
+exit $TRUE
+
+# END

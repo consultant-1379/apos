@@ -1,0 +1,10 @@
+[Unit]
+Description=Very Secure FTP Daemon
+After=lde-servicestart.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/sbin/vsftpd /opt/ap/apos/conf/vsftpd/vsftpd-APIO_2.conf
+StandardInput=socket
+SuccessExitStatus=2 SIGSYS

@@ -1,0 +1,17 @@
+#%PAM-1.0
+auth	 requisite	pam_nologin.so
+auth     include        common-auth
+account  requisite      pam_nologin.so
+account  include        common-account
+password include        common-password
+session	 required	pam_loginuid.so
+session  include        common-session
+session  optional       pam_lastlog.so   silent noupdate showfailed
+
+#auth       required     /lib/security/pam_unix.so shadow nodelay
+#account    required     /lib/security/pam_nologin.so
+#account    required     /lib/security/pam_unix.so
+#password   required     /lib/security/pam_cracklib.so
+#password   required     /lib/security/pam_unix.so shadow nullok use_authtok
+#session    required     /lib/security/pam_unix.so
+#session    required     /lib/security/pam_limits.so

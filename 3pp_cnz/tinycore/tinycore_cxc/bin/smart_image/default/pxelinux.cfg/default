@@ -1,0 +1,17 @@
+display boot.msg
+default microcore
+label microcore
+	kernel vmlinuz
+	initrd core.gz
+	append loglevel=3
+
+label mc
+	kernel vmlinuz
+	append initrd=core.gz loglevel=3
+implicit 0	
+prompt 1	
+timeout 1
+F1 boot.msg
+F2 f2
+F3 f3
+F4 f4

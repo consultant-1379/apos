@@ -1,0 +1,160 @@
+#!/bin/bash -u
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       reboot
+# Description:
+#       The "set reboot" sub-command of the bspmngr tool.
+##
+# Changelog:
+# Fri Feb 21 2014 - Stefano V
+#		Code cleanup and optimization
+# Fri Mar 09 2014 - Rajeswari P
+#		First Version
+##
+
+. $BSPMNGR_DIR/$LIB_COMMON_DIR/bspmngr_common.sh
+
+check_debug
+
+
+function is_verbose(){
+	return $OPT_VERBOSE	
+}
+
+function set_reboot(){
+	
+  is_slot $BOARD
+  EXIT_CODE=$?
+  if [ $EXIT_CODE -ne $TRUE ]; then
+		clean_xml
+  	abort "Board name specified is not supported"
+  fi
+
+  if [[ $HW_TYPE =~ ^GEP1$|^GEP2$ ]]; then
+		notGEP5_7=$TRUE;
+  else
+		notGEP5_7=$FALSE;
+  fi
+
+  
+  #fetch IP addresses of DMXC
+  fetch_dmxc_ip
+
+  #fetch shelf address
+  fetch_shelf_address
+
+  #fetch shelf id
+  fetch_shelf_id
+
+  #Get Tenant name
+  #fetch_tenant_name
+
+  if [ $notGEP5_7 -ne $TRUE ]; then
+	ledColor="BLUE"
+  else
+	ledColor="YELLOW"
+  fi
+  
+		query=$(printf RST:%02d%02dHARD $SHELF_ID $BOARD )
+		$ironsidecmd -a $DMXC_IP_A -p $DMXC_PORT -s "$query" -o $TMP_FILE > /dev/null
+
+		EXIT_CODE=$?
+#		echo $EXIT_CODE
+		if [ $EXIT_CODE -ne $TRUE ]; then
+			if [ $EXIT_CODE -eq $NC_SESSION_OPEN_FAILED  ]; then
+				clean_xml
+				$ironsidecmd -a $DMXC_IP_B -p $DMXC_PORT -s "$query" -o $TMP_FILE > /dev/null
+				EXIT_CODE=$?
+				if [ $EXIT_CODE -ne $TRUE ]; then
+					abort "Reboot failed"
+				fi
+			else
+				abort "Reboot failed"
+			fi
+		fi
+
+		if [ -s "$TMP_FILE" ];then
+                        retval=$(echo `cat $TMP_FILE` )
+                        if [ "$retval" == "ok" -o "$retval" == "OK" ]; then
+                                printf "Reboot is success\n"
+								clean_xml
+                        else
+								clean_xml
+                                abort "Reboot failed $retval\n"								
+                        fi				
+                else
+                        printf "Reboot failed\n"
+                fi
+		
+}
+
+function usage(){
+	cat $MAN_DIR/set_reboot.man
+}
+
+function parse_cmdline(){
+	# LONG_OPTIONS is a list of space-separated multi-character options.
+	#  The string must be in the form:
+	#   Example: 'option1 option2 ... optionN'.
+	#  Options that takes an argument must be followed by a colon:
+	#   Example: 'option1: option2 ... optionN:'
+	#  Options with an optional argument must be followed by a double colon:
+	#   Example: 'option1:: option2:: ... optionN'
+	local LONG_OPTIONS='help verbose'
+	
+	[ $# -le 0 ] && usage && abort 'missing parameter'
+	
+	/usr/bin/getopt --quiet --quiet-output --longoptions="$LONG_OPTIONS" -- "$@"
+	EXIT_CODE=$?
+	if [ $EXIT_CODE -ne $TRUE ]; then
+		usage
+		abort "Command line parameter error"
+	fi	
+	local ARGS="$@"
+	eval set -- "$ARGS"
+	
+	# Make sure to handle the cases for all the options listed in OPTIONS
+	#  and LONG_OPTIONS and to fill up the right script-wide variables.
+	while [ $# -gt 0 ]; do		
+		case "$1" in
+			$(check_board_format $1 && echo $1))			
+				OPT_BOARD=$TRUE
+				BOARD=$1
+			;;
+#			all-boards)
+#				abort "this applies only to one board at a time"
+#			;;
+#			all-slots)
+#				abort "this applies only to one board at a time"
+#			;;
+			--help)
+				usage
+				exit $TRUE
+			;;
+			--verbose)				
+				OPT_VERBOSE=$TRUE				
+			;;			
+			--)
+				# "end of argument list"
+				shift
+				break
+			;;
+			*)
+				abort "unrecognized option ($1)"
+			;;
+		esac
+		shift
+	done
+	[[ $OPT_BOARD -eq $FALSE  ]] && abort 'missing parameter'
+}
+
+OPT_VERBOSE=$FALSE
+OPT_BOARD=$FALSE
+BOARD=''
+parse_cmdline $@
+set_reboot
+exit $?

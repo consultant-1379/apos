@@ -1,0 +1,132 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2016 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       apos_secacs-config
+# Description:
+#       A script to inject APG-specific code into /opt/eric/sec-acs-cxp9026450/bin/acs-agent
+# Note:
+#       This script is intended to be deployed to the
+#       /usr/lib/lde/config-management/ directory.
+#
+#       It relies on the /opt/ap/apos/conf/apos_common.sh library.
+##
+# Changelog:
+# <script_changelog>
+##
+# LDE_deployment:
+#       type:             config
+#       priority:       570
+##
+
+##
+# libraries -------------------------------------------------------------- BEGIN
+if [ -r /opt/ap/apos/conf/apos_common.sh ]; then
+        . /opt/ap/apos/conf/apos_common.sh
+else
+        echo '/opt/ap/apos/conf/apos_common.sh not found or not readable!' >&2
+        exit 1
+fi
+# libraries ---------------------------------------------------------------- END
+##
+
+
+##
+# functions -------------------------------------------------------------- BEGIN
+function usage(){
+        cat << HEREDOC
+Usage: $(basename $0) <action> <phase> [<etc_root>]
+where:
+        <action> can be "start" or "stop" or "config"
+        <phase> can be "init" or "reload"
+        <etc_root> (optional) specifies the base folder where the configuration
+    will be generated (/etc by default)
+HEREDOC
+}
+
+function do_start(){
+        # TO-DO: implement the start phase if needed.
+        return
+}
+
+function do_stop(){
+        # TO-DO: implement the stop phase if needed.
+        return
+}
+
+function do_config(){
+  local apg_row='/opt/ap/apos/conf/apos_secacs-toolkit.sh'
+  local ACS_AGENT_SCRIPT="/opt/eric/sec-acs-cxp9026450/bin/acs-agent"
+  local hook_pattern='[[:space:]]*tar --no-overwrite-dir -xf "${int_tar_file}" -C / etc/sssd/sssd.conf'
+  local CMD_SED="/usr/bin/sed"
+  #Verify if target file exists
+  if [ ! -e "$ACS_AGENT_SCRIPT" ];then
+    apos_abort "Target file $ACS_AGENT_SCRIPT doesn't exist"
+  fi
+  if ! /usr/bin/grep -q "${apg_row}" "${ACS_AGENT_SCRIPT}"; then
+    escaped_hook_pattern=$(echo "$hook_pattern"|$CMD_SED -e 's/\"/\\"/g' -e 's/{/\\{/g' -e 's/}/\\}/g' -e 's/\//\\\//g' -e 's/\$/\\\$/g')
+    apos_log "setting-up APOS modifications to $(/usr/bin/basename ${ACS_AGENT_SCRIPT})..."
+    $CMD_SED -r -i "/^${escaped_hook_pattern}$/ a ${apg_row}" $ACS_AGENT_SCRIPT
+    if /usr/bin/grep -q "${apg_row}" "${ACS_AGENT_SCRIPT}"; then
+      apos_log "done"
+    else
+      apos_abort "failure while setting-up APOS modifications to $(/usr/bin/basename ${ACS_AGENT_SCRIPT})"
+    fi
+  else
+    apos_log "File $ACS_AGENT_SCRIPT already configured"
+  fi
+  return $TRUE
+}
+# functions ---------------------------------------------------------------- END
+##
+
+##
+# variables -------------------------------------------------------------- BEGIN
+
+# variables ---------------------------------------------------------------- END
+##
+
+##
+# main ------------------------------------------------------------------- BEGIN
+##
+# LDE config scripts called with the following:
+# param 1: action - start, stop or config
+# param 2: generate phase - init or reload
+# param 3: root path where config should be generated
+
+apos_intro $0
+
+if [ $# -lt 2 ]; then
+        usage
+        apos_abort 'missing parameter'
+fi
+
+if [ $(</etc/cluster/nodes/this/type) != 'control' ]; then
+        apos_abort 'this script must be run ONLY in control nodes'
+fi
+
+ACTION="$1"
+PHASE="$2"
+ETC_ROOT=${3:-"/etc"}
+
+case "$ACTION" in
+        start)
+                do_start
+                ;;
+        stop)
+                do_stop
+                ;;
+        config)
+                do_config
+                ;;
+        *)
+                usage
+                ;;
+esac
+
+apos_outro
+# main --------------------------------------------------------------------- END
+##

@@ -1,0 +1,282 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2015 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       localuserdel
+# Description:
+#       A script to delete local APG user
+#
+##
+# Usage:
+#   localuserdel <username>
+#   localuserdel -h
+##
+# Output:
+#       Command print-out is printed on console.
+#
+##
+# Changelog:
+# - Thu Jun 25 2015 - Stefano Volpe
+#       First version.
+##
+
+# Commands used by this script
+##############################
+ECHO=/bin/echo
+GREP=/usr/bin/grep
+AWK=/usr/bin/awk
+SORT=/usr/bin/sort
+USERDEL="/usr/sbin/userdel"
+SED="/usr/bin/sed"
+RM="/bin/rm"
+CP="/bin/cp"
+MV="/bin/mv"
+CHMOD="/bin/chmod"
+CAT="/bin/cat"
+CMD_NSCD="/usr/sbin/nscd"
+CMD_AMFSTATE="/usr/bin/amf-state"
+
+# Exit codes
+################################
+exit_success=0
+exit_usage=2
+exit_privilege=3
+exit_no_exist=4
+exit_invalid_user=5
+exit_userdel=6
+exit_file_updt_fail=7
+exit_remove_not_allwd=8
+
+# Setting  global variables
+##########################
+login_allw_file=/cluster/etc/login.allow
+login_allw_bkp_file=/cluster/etc/login.allow.bkp
+opasswd_file=/cluster/etc/opasswd
+nodeid_file=/etc/cluster/nodes/this/id
+peer_node_file="/etc/cluster/nodes/peer/hostname"
+root_user="root"
+admin="tsadmin"
+status=0
+local_group="apg-local"
+script_name="localuserdel"
+username=
+TRUE=$(true;echo $?)
+FALSE=$(false; echo $?)
+is_swm_2_0="/cluster/storage/system/config/apos/swm_version"
+
+# Message functions
+####################
+function show_usage() {
+        ${ECHO} -e "Usage: $script_name <username>"
+        ${ECHO} ""
+    }
+
+function usage_error() {
+    ${ECHO} $1
+    show_usage
+    exit $2
+}
+
+function error() {
+    ${ECHO} "$1"
+    ${ECHO} ""
+    exit $2
+}
+
+
+# Other sript related functions
+###############################
+
+function check_node_status() {
+
+	node_number=$(${CAT} $nodeid_file)
+	if [[ ! -z $node_number ]];then
+		#Get Node Status
+                if [ -f $is_swm_2_0 ];then
+			NODE_STATE=$(${CMD_AMFSTATE} siass ha safSISU=safSu=SC-$node_number\\,safSg=2N\\,safApp=ERIC-apg.nbi.aggregation.service,safSi=apg.nbi.aggregation.service-2N-1,safApp=ERIC-apg.nbi.aggregation.service | ${GREP} saAmfSISUHAState | ${AWK} -F'=' '{print $2}'| ${AWK} -F'(' '{print $1}')
+                else
+                	NODE_STATE=$(${CMD_AMFSTATE} siass ha safSISU=safSu=$node_number\\,safSg=2N\\,safApp=ERIC-APG,safSi=AGENT,safApp=ERIC-APG | ${GREP} saAmfSISUHAState | ${AWK} -F'=' '{print $2}'| ${AWK} -F'(' '{print $1}')
+                fi
+		if [ "$NODE_STATE" != "ACTIVE" ]; then
+			error "ERROR: Command can only be executed from active node" $exit_remove_not_allwd
+		fi
+	fi
+}
+
+
+function privilege_check() {
+        userid=`id -u`
+        tsadmin_id=`${GREP} "^$admin:" /cluster/etc/passwd | ${AWK} -F: '{print $3}'`
+        root_id=`${GREP} "^$root_user:" /etc/passwd | ${AWK} -F: '{print $3}'`
+        if [ "$userid" != "$tsadmin_id" ] && [ "$userid" != "$root_id" ];then
+                error "ERROR: Not enough privileges to use this command" $exit_privilege
+        fi
+}
+#--------------------------------------------------
+# reload sshd
+function reload_sshd(){
+
+        # senidng HUP signal to all instances of sshd
+        # to reload the configuration.
+        for PID in $( ps -ef | grep '/usr/sbin/sshd' | grep -v grep | awk '{print $2}')
+        do
+                kill -HUP $PID
+        done
+}
+#--------------------------------------------------
+function parse_args() {
+        if [ $# -eq 0 ] || [ $# -gt 1 ];then
+                usage_error "Incorrect usage" $exit_usage
+        elif [ $# -eq 1 ]; then
+                        case "$1" in
+                        -*)
+                        usage_error "Incorrect usage" $exit_usage
+                        ;;
+                esac
+                username=$1
+        fi
+}
+
+#------------------------------------
+function fetch_system_files() {
+localgroup_id=`${GREP} "^$local_group:" /cluster/etc/group | ${AWK} -F: '{print $3}'` #group id of apg-local
+}
+#-------------------------------------------------------------
+function attempt_to_remove(){
+if [ "$username" == "$admin" ];then
+        error "INFO: [$admin] cannot be removed" $exit_remove_not_allwd
+fi
+
+if [ "$username" == "$root_user" ];then
+        error "INFO: [$root_user] cannot be removed" $exit_remove_not_allwd
+fi
+}
+#-----------------------------------
+function check_user() {
+#Invalidate passwd cache first
+${CMD_NSCD} -i passwd 1>/dev/null
+
+${GREP} "^$username:" /cluster/etc/passwd 1>/dev/null
+
+if [ $? != 0 ];then
+        #Cleanup activity in progress
+        
+        # Take the backup of login.allow file
+        ${CP} $login_allw_file $login_allw_bkp_file
+	
+
+	${SED} -i '/^'$username'\s\+all$/d' $login_allw_file
+	if [ $? != 0 ];then
+		${MV} $login_allw_bkp_file $login_allw_file
+	    	error "ERROR: Failed to update a file related to login" $exit_file_updt_fail
+	fi
+
+        # Remove the backup file
+        ${RM} -f $login_allw_bkp_file
+
+        error "ERROR: User [$username] does not exist in APG" $exit_no_exist
+fi
+}
+
+#---------------------------------------------
+function check_localuser() {
+user_grpid=`${GREP} "^$username:" /cluster/etc/passwd | ${AWK} -F: '{print $4}'`
+if [ "$user_grpid" != "$localgroup_id" ];then
+
+        error "ERROR: User [$username] is not a apg-local user" $exit_invalid_user
+fi
+}
+
+#------------------------------------------------------------------------------
+function delete_pass_history() {
+        remote_node=`$CAT $peer_node_file`
+        HOST_ID=$(gethostip -x $(uname -n))
+        peer_HOSTID=$(gethostip -x $remote_node)
+        line_opswd=`${GREP} -wn "^$username" $opasswd_file | ${AWK} 'BEGIN {FS = "[:]"} {print $1}'`
+        line_opswd_host1=`${GREP} -wn "^$username" $opasswd_file.$HOST_ID | ${AWK} 'BEGIN {FS = "[:]"} {print $1}'`
+        line_opswd_host2=`${GREP} -wn "^$username" $opasswd_file.$peer_HOSTID | ${AWK} 'BEGIN {FS = "[:]"} {print $1}'`
+        [[ ! -z $line_opswd ]] && ${SED} -i ''$line_opswd'd' $opasswd_file && {
+                if [ $? != 0 ];then
+                        error "ERROR: Failed to update a file related to login" $exit_file_updt_fail
+                fi
+        }
+        [[ ! -z $line_opswd_host1 ]] && ${SED} -i ''$line_opswd_host1'd' $opasswd_file.$HOST_ID && {
+                if [ $? != 0 ];then
+                        error "ERROR: Failed to update a file related to login" $exit_file_updt_fail
+                fi
+        }
+        [[ ! -z $line_opswd_host2 ]] && ${SED} -i ''$line_opswd_host2'd' $opasswd_file.$peer_HOSTID && {
+                if [ $? != 0 ];then
+                        error "ERROR: Failed to update a file related to login" $exit_file_updt_fail
+                fi
+        }
+}
+
+#-------------------------------------------------------------------------------
+function del_user() {
+${USERDEL} -P /cluster/etc "$username" 2>/dev/null
+if [ $? != 0 ];then
+        error "ERROR: Failed to delete connected user [$username]" $exit_userdel
+else
+        delete_pass_history
+        # Take the backup of login.allow file
+        ${CP} $login_allw_file $login_allw_bkp_file
+	
+
+	${SED} -i '/^'$username'\s\+all$/d' $login_allw_file
+	if [ $? != 0 ];then
+		${MV} $login_allw_bkp_file $login_allw_file
+	    	error "ERROR: Failed to update a file related to login" $exit_file_updt_fail
+	fi
+
+        # Remove the backup file
+        ${RM} -f $login_allw_bkp_file
+
+        #${RM} -rf "/home/$username"
+        ${ECHO} "INFO: Success in deleting user : [$username]"
+        ${ECHO} ""
+ 
+fi
+
+exit $exit_success
+
+}
+# _____________________ _____________________
+#|    _ _   _  .  _    |    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |   | ) ) (_| | | )   |
+#|_____________________|_____________________|
+# Here begins the "main" function...
+
+# Set the interpreter to exit if a non-initialized variable is used.
+set -u
+#set -x
+
+#previlege check to verify if the command is issued by tsadmin or ts user
+#privilege_check
+
+#Check if command is executed on active node
+check_node_status
+
+#Parse command line arguments
+parse_args $*
+
+#To fetch system files
+fetch_system_files
+
+#Check if an attemp is made to remove root or admin
+attempt_to_remove
+
+#check if user exists in APG or not
+check_user
+
+#check if user is local user or not
+check_localuser
+
+#deleting troubleshooting user
+del_user
+
+exit $exit_success
+

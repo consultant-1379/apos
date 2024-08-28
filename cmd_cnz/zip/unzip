@@ -1,0 +1,849 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2014 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       unzip
+#
+# Description:
+#       unzip command performs the decompression of zip compressed archive files in APG43L, acting as Adjunct Processor Group (APG).
+##
+# Usage:
+#      unzip [-f] [-o] [-s] sourcezip destination
+# 
+##
+# Output:
+#       Command output is directly printed on console (or redirected to /tmp/apos/unzip.output in silent mode).
+##
+# Changelog:
+# - Fri 11 Nov 2016 - Swapnika Baradi (XSWAPBA)
+#       Fix for TR HU79440(Adding ETX character at confirmation)
+# - PA11 - Mon 1 August 2014 - (XFABPAG - Fabrizio Paglia)
+#      Fixed issues with the command rename (segmentation fault)
+# - Tue 29 July 2014 - (XGIACRI - Gianluigi Crispino)
+#      Reworked for the command rename 
+# - Thu 24 July 2014 - (XFABPAG - Fabrizio Paglia)
+#      Reworked after manual page internal review
+# - Wed 23 July 2014 - (XFABPAG - Fabrizio Paglia)
+#      Fixed further problems with single quotes in COM
+# - Tue 22 July 2014 - (XFABPAG - Fabrizio Paglia)
+#      Fixed problems with single quoted parameters in COM
+# - Fri 18 July 2014 - (XFABPAG - Fabrizio Paglia)
+#      Aligned to 26/190 80-CNZ 226 23 PA5
+#      NOTE: description of "Invalid destination folder" must be updated on manual page
+# - Thu 17 July 2014 - (XFABPAG/XTORWIL - Fabrizio Paglia/Torgny Wilhelmsson)
+#      Added check for non-ZIP file, password-protected or multi-archive ZIP file
+#      Fixed problems with whitespaces in filenames
+# - Wed 16 July 2014 - (XFABPAG - Fabrizio Paglia)
+#      Aligned to 26/190 80-CNZ 226 23 PA4
+#      Added check on disk quota/free space
+# - Tue 15 July 2014 - (XFABPAG - Fabrizio Paglia)
+#      Aligned to 26/190 80-CNZ 226 23 PA2
+#      with some extra exit codes to be reviewed (see inline comments)
+# - Tue 15 July 2014 - (XTORWIL - Torgny Wilhelmsson)
+#      First revision
+#
+
+# Debug variables
+_DEBUG="on"
+_unzip_VER="PA11"
+F_INFO="/dev/null" # To be initialized by unzip_init()
+F_OUTPUT="/dev/null" # To be initialized by unzip_init()
+
+# Commands
+CMD_LOGGER="/bin/logger"
+CMD_REPQUOTA="/usr/bin/repquota"
+CMD_UNZIP="/usr/bin/unzip"
+
+# Global variables
+TRUE=$(true; echo $?)
+FALSE=$(false; echo $?)
+LOG_TAG='unzip'
+LOG_DIR="/tmp/apos"
+LOG_FILE="${LOG_TAG}.log"
+LOG_OUTPUT_FILE="${LOG_TAG}.output"
+NBI_ROOT="/data/opt/ap/internal_root"
+SOURCE_DIR="/data/opt/ap/internal_root/sw_package/zip"
+DESTINATIONS=("mmlCommandFile" "swPackageCCF")
+DESTINATION_DIRS=("/data/opt/ap/internal_root/cp/mml" "/data/opt/ap/internal_root/sw_package/CP/CCF")
+DESTINATION_MOUNTPOINTS=("/data" "/data")
+CURRENT_NODE_HOSTNAME="" # To be initialized by unzip_init()
+CURRENT_NODE_IP="" # To be initialized by unzip_init()
+DESTINATION_PATH="" # To be initialized by args_check()
+DESTINATION_MOUNTPOINT="" # To be initialized by args_check()
+OVERWRITE_SIZE=0 # To be initialized by file_check()
+
+# Command options and arguments -- To be initialized by parse_args()
+OPT_FORCE=$FALSE
+OPT_OVERWRITE=$FALSE
+OPT_SILENT=$FALSE
+SOURCE_ZIP_FILE=""
+DESTINATION=""
+
+# Exit codes
+EXIT_SUCCESS=$TRUE # 0
+EXIT_FAILURE=$FALSE # 1
+EXIT_GENERAL_FAULT=2
+EXIT_USAGE_ERROR=3
+EXIT_ABORTED=4
+EXIT_SOURCE_DONT_EXISTS=5
+EXIT_UNSUPPORTED_SOURCE=6
+EXIT_NOT_ALLOWED_DESTINATION=7
+EXIT_INVALID_DESTINATION=8
+EXIT_NOT_ALLOWED_OVERWRITE=9
+EXIT_NO_SPACE_LEFT=10
+
+# Exit messages
+EXIT_GENERAL_FAULT_MSG="Error when executing (general fault)"
+EXIT_USAGE_ERROR_MSG="Incorrect usage" # Followed by the command usage
+EXIT_ABORTED_MSG="Command aborted by user"
+EXIT_SOURCE_DONT_EXISTS_MSG="Unable to find compressed archive file"
+EXIT_UNSUPPORTED_SOURCE_MSG="Invalid source file"
+EXIT_NOT_ALLOWED_DESTINATION_MSG="Unreasonable value" # Followed by <destination>
+EXIT_INVALID_DESTINATION_MSG="Invalid destination folder"
+EXIT_NOT_ALLOWED_OVERWRITE_MSG="Destination files already exist"
+EXIT_NO_SPACE_LEFT_MSG="Unable to start decompression, no space left"
+
+#######################################################################################
+#                           Logging and debugging Functions                           #
+#######################################################################################
+
+#######################################################################################
+# function INFO($message);                                                            #
+#                                                                                     #
+# Appends a message (with the addition of a timestamp) to the application log         #
+# (/tmp/unzip.log)                                                                   #
+# NOTE: message is appended only in debug mode [[ $_DEBUG=="on" ]]                    #
+#                                                                                     #
+# Arguments:                                                                          #
+# $message message to append to the application log                                   #
+#######################################################################################
+function INFO() {
+        echo "[$(date +'%Y-%m-%d %H:%M:%S')] $@" >> ${F_INFO}
+}
+
+#######################################################################################
+# function log($message);                                                             #
+#                                                                                     #
+# Appends a notice message to the system log                                          #
+#                                                                                     #
+# Arguments:                                                                          #
+# $message message to append to the system log                                        #
+#######################################################################################
+function log() {
+        local message="${*:-notice}"
+        local prio="user.notice"
+        
+        INFO "$message"
+        $CMD_LOGGER -p $prio $LOG_TAG "$message"
+}
+
+#######################################################################################
+# function log_error($message);                                                       #
+#                                                                                     #
+# Appends an error message to the system log                                          #
+#                                                                                     #
+# Arguments:                                                                          #
+# $message error message to append to the system log                                  #
+#######################################################################################
+function log_error() {
+        local message="${*:-error}"
+        local prio="user.err"
+        
+        INFO "$message"
+        $CMD_LOGGER -p $prio $LOG_TAG "$message"
+}
+
+#######################################################################################
+# function TRACE_ENTER($message);                                                     #
+#                                                                                     #
+# Appends a message to the application log file followed by "() >>"                   #
+# NOTE: it is useful to log the entry point of a function e.g. TRACE_ENTER $FUNCNAME  #
+#                                                                                     #
+# Arguments:                                                                          #
+# - $message message to append to the application log                                 #
+#######################################################################################
+function TRACE_ENTER() {
+        INFO "$1() >>"
+}
+
+#######################################################################################
+# function TRACE_LEAVE($message);                                                     #
+#                                                                                     #
+# Appends a message to the application log file followed by "() <<"                   #
+# NOTE: it is useful to log the exit point of a function e.g. TRACE_LEAVE $FUNCNAME   #
+#                                                                                     #
+# Arguments:                                                                          #
+# - $message message to append to the application log                                 #
+#######################################################################################
+function TRACE_LEAVE() {
+        INFO "$1() <<"
+}
+
+#######################################################################################
+#                                 Utilities Functions                                 #
+#######################################################################################
+
+#######################################################################################
+# function confirm();                                                                 #
+#                                                                                     #
+# Asks the user for confirmation.                                                     #
+#                                                                                     #
+# Returns:                                                                            #
+# - SUCCESS (0) if user gives confirmation                                            #
+# - FAILURE (1) if user does not give confirmation                                    #
+#######################################################################################
+function confirm() {
+	TRACE_ENTER $FUNCNAME
+	local user_input=''
+	local rCode
+	while [ "$user_input" != "y" ] && [ "$user_input" != "n" ]; do
+		echo -e "Are you sure you want to execute the command:"
+		echo -en "[y=yes, n=no]?\003:"
+		read user_input
+	done
+
+	if [ "$user_input" == "y" ]; then
+		rCode=$EXIT_SUCCESS
+	else
+		rCode=$EXIT_FAILURE
+	fi	
+
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function in_array($needle,$haystack);                                               #
+#                                                                                     #
+# Arguments:                                                                          #
+# $needle string to search for in $haystack                                           #
+# $haystack imploded array to search in (pass the array as "${haystack[@]}"           #
+#                                                                                     #
+# Return value:                                                                       #
+# Index of $needle in $haystack, or -1 if $needle is not in $haystack                 #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function in_array() {
+	TRACE_ENTER $FUNCNAME
+	local needle="$1"
+	shift
+	
+	local hay
+	local counter=0
+	for hay in "$@"; do
+		[[ "$hay" == "$needle" ]] && {
+			INFO "Index of $needle = $counter"
+			echo $counter
+			
+			TRACE_LEAVE $FUNCNAME
+			return $EXIT_SUCCESS
+		}
+		(( counter = $counter + 1 ))
+	done
+	
+	INFO "$needle not found"
+	echo -1
+	
+	TRACE_LEAVE $FUNCNAME
+	return $EXIT_FAILURE
+}
+
+#######################################################################################
+# function mk_dir($path_to_create);                                                   #
+#                                                                                     #
+# Attempts to recursively create a path                                               #
+#                                                                                     #
+# Arguments:                                                                          #
+# $path_to_create path to create                                                      #
+#                                                                                     #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function mk_dir() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_FAILURE
+	
+	local path_to_create="$1"
+	INFO "Trying to create $path_to_create"
+	
+	local first_character=${path_to_create:0:1}
+	local last_character="${path_to_create: -1}"
+	
+	# Remove trailing slash
+	if [ "$last_character" == "/" ] ; then
+		path_to_create="${path_to_create%?}"
+	fi
+	
+	# Convert slashes to stars (in order to explode the path in a compatible way)
+	local path_with_stars="$(echo "$path_to_create" | tr '/' '*')"
+	# Add leading slash if needed
+	if [ "$first_character" == "/" ] ; then
+		path_with_stars="/${path_with_stars:1}"
+	fi
+	
+	local full_path
+	local path_component
+	IFS=$'*'
+	for path_component in $path_with_stars ; do
+		path_component="$path_component"
+		full_path="$full_path$path_component"
+		
+ 		if [ -a "$full_path" ] ; then
+			INFO "$full_path already exists"
+ 			[[ -d "$full_path" ]] || {
+				INFO "$full_path is not a directory"
+				return $rCode
+			}
+ 		else
+			INFO "$full_path does not exist. Try to create it"
+ 			mkdir -p "$full_path" 1>>$F_INFO 2>&1
+ 			[[ $? -ne $EXIT_SUCCESS ]] && {
+				INFO "Failed to create $full_path"
+				TRACE_LEAVE $FUNCNAME
+				return $rCode
+			}
+ 		fi
+		full_path="$full_path/"
+	done
+	unset IFS
+	
+	rCode=$EXIT_SUCCESS
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+#                             Command-specific Functions                              #
+#######################################################################################
+
+#######################################################################################
+# function unzip_init();                                                             #
+#                                                                                     #
+# - Initialize global variables (log file, current node, etc...)                      #
+# - Logs the execution start                                                          #
+#######################################################################################
+function unzip_init() {
+	mkdir -p "$LOG_DIR" &> /dev/null
+	rm -f "$LOG_DIR/$LOG_FILE" &> /dev/null
+	rm -f "$LOG_DIR/$LOG_OUTPUT_FILE" &> /dev/null
+	
+	[[ "$_DEBUG" == "on" ]] && {
+		[[ -d "$LOG_DIR" ]] && F_INFO="$LOG_DIR/$LOG_FILE"
+	}
+	F_OUTPUT="$LOG_DIR/$LOG_OUTPUT_FILE"
+	
+	CURRENT_NODE_HOSTNAME="$(< /etc/cluster/nodes/this/hostname)"
+	CURRENT_NODE_IP="$(< /etc/cluster/nodes/this/networks/public/primary/address)"
+	
+	INFO "$LOG_TAG version $_unzip_VER -- Execution started on node $CURRENT_NODE_HOSTNAME ($CURRENT_NODE_IP)"
+	log "START <$LOG_TAG>"
+	
+	TRACE_LEAVE $FUNCNAME
+}
+
+#######################################################################################
+# function unzip_exit($exit_code = $EXIT_SUCCESS,$exit_message = "");                #
+#                                                                                     #
+# Logs the execution end, and exits with provided exit code                           #
+# and message (if any) or with SUCCESS (0) if called without arguments                #
+# Optionally displays a message                                                       #
+#                                                                                     #
+# Arguments:                                                                          #
+# $exit_code (Optional, default 0) numeric exit code to return to the parent shell    #
+# $exit_message (Optional, default empty) exit message to display                     #
+#                                                                                     #
+# Exits:                                                                              #
+# - SUCCESS (0) if called without arguments                                           #
+# - $exit_code if exit code is passed as first argument                               #
+#######################################################################################
+function unzip_exit() {
+	TRACE_ENTER $FUNCNAME
+	
+	local exit_code=$EXIT_SUCCESS
+	local exit_message=""
+	
+	[[ "$1" != "" ]] && exit_code=$1
+	[[ "$2" != "" ]] && exit_message="$2"
+	
+	[[ "$exit_message" != "" ]] && echo -e "\n$exit_message"
+	
+	INFO "$LOG_TAG version $_unzip_VER -- Execution ended on node $CURRENT_NODE_HOSTNAME ($CURRENT_NODE_IP) with exit code $exit_code"
+	if [ $exit_code != $EXIT_SUCCESS ] ; then
+		log_error "END <$LOG_TAG> - EXIT CODE <$exit_code>"
+	else
+		log "END <$LOG_TAG>"
+	fi
+	
+	exit $exit_code
+}
+
+#######################################################################################
+# function unzip_print($message);                                                    #
+#                                                                                     #
+# Print a message to the stdout or to /tmp/apos/unzip.output when in silent mode     #
+#                                                                                     #
+# Arguments:                                                                          #
+# $message message to print                                                           #
+#######################################################################################
+function unzip_print() {
+	TRACE_ENTER $FUNCNAME
+	
+	local message="$1"
+	
+	INFO "$message"
+	if [ $OPT_SILENT -eq $FALSE ] ; then
+		echo -e "$message"
+	else
+		echo -e "$message" >> ${F_OUTPUT}
+	fi
+
+	TRACE_LEAVE $FUNCNAME	
+}
+
+#######################################################################################
+# function args_check();                                                              #
+#                                                                                     #
+# Validates the command line arguments.                                               #
+#                                                                                     #
+# Checks:                                                                             #
+# - $SOURCE_ZIP_FILE exists                                                           #
+# - $DESTINATION is one of {mmlCommandFile,swPackageCCF} eventually followed by a     #
+#   valid subpath (relative to /cp/mml or /sw_package/CP/CCF)                         #
+#                                                                                     #
+# Arguments:                                                                          #
+# - $args... command line arguments                                                   #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_SOURCE_DONT_EXISTS in case source ZIP file doesn't exist                    #
+# - $EXIT_UNSUPPORTED_SOURCE in case source file is not a valid ZIP file or is        #
+#   password protected/multi-archive                                                  #
+# - $EXIT_NOT_ALLOWED_DESTINATION in case destination is not one of                   #
+#   {mmlCommandFile,swPackageCCF}                                                     #
+# - $EXIT_INVALID_DESTINATION in case destination cannot be created                   #
+#   (already exists and it is a file)                                                 #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function args_check() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	
+	[[ ! -f "$SOURCE_DIR/$SOURCE_ZIP_FILE" ]] && {
+		INFO "$SOURCE_DIR/$SOURCE_ZIP_FILE does not exist"
+		unzip_exit $EXIT_SOURCE_DONT_EXISTS "$EXIT_SOURCE_DONT_EXISTS_MSG"
+	}
+	$CMD_UNZIP -t -P '' "$SOURCE_DIR/$SOURCE_ZIP_FILE" 1>>$F_INFO 2>&1
+	[[ $? -ne $EXIT_SUCCESS ]] && {
+		INFO "$SOURCE_DIR/$SOURCE_ZIP_FILE is not a supported ZIP file"
+		unzip_exit $EXIT_UNSUPPORTED_SOURCE "$EXIT_UNSUPPORTED_SOURCE_MSG"
+	}
+	
+	local destination_dir="$(echo "$DESTINATION" | awk -F'/' '{ print $1 }')"
+	INFO "destination_dir=$destination_dir"
+	
+	local destination_index=$(in_array "$destination_dir" "${DESTINATIONS[@]}")
+	[[ $destination_index -eq -1 ]] && unzip_exit $EXIT_NOT_ALLOWED_DESTINATION "$EXIT_NOT_ALLOWED_DESTINATION_MSG <$DESTINATION>"
+	
+	local destination_path="${DESTINATION_DIRS[$destination_index]}"
+	INFO "destination_path=$destination_path"
+	local destination_subpath="${DESTINATION:${#destination_dir}}"
+	INFO "destination_subpath=$destination_subpath"
+	
+	DESTINATION_PATH="$destination_path$destination_subpath"
+	INFO "DESTINATION_PATH=$DESTINATION_PATH"
+	
+	if [ -a "$DESTINATION_PATH" ] ; then
+		INFO "$DESTINATION_PATH exists"
+		[[ -d "$DESTINATION_PATH" ]] || {
+			INFO "$DESTINATION_PATH is not a directory"
+			unzip_exit $EXIT_INVALID_DESTINATION "$EXIT_INVALID_DESTINATION_MSG"
+		}
+	else
+		INFO "$DESTINATION_PATH does not exist. Try to create it recursively"
+		mk_dir "$DESTINATION_PATH" || {
+			INFO "Unable to create $DESTINATION_PATH"
+			unzip_exit $EXIT_INVALID_DESTINATION "$EXIT_INVALID_DESTINATION_MSG"
+		}
+	fi
+	
+	DESTINATION_MOUNTPOINT="${DESTINATION_MOUNTPOINTS[$destination_index]}"
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function file_check();                                                              #
+#                                                                                     #
+# Checks if destination file(s) already exist(s), and updates $OVERWRITE_SIZE with    #
+# the size (in byte) of files and folder to overwrite.                                #
+# If command is called without -o option, exits on the first already existing file or #
+# folder found.                                                                       #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT in case of issues during listing of source ZIP file content   #
+# - $EXIT_NOT_ALLOWED_OVERWRITE in case destination file(s) already exist(s)          #
+#   (only when command is called without -o option)                                   #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function file_check() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	
+	local exit_on_already_exists=$1
+	
+	local file_list="$($CMD_UNZIP -Z -l -1 "$SOURCE_DIR/$SOURCE_ZIP_FILE" | tr '\n' '*')"
+	[[ "$file_list" == "" ]] && {
+		INFO "Failed to list source ZIP file content"
+		unzip_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	local destination_file
+	local destination_file_size
+	IFS=$'*'
+	for destination_file in $file_list ; do
+		[ -e "$DESTINATION_PATH/$destination_file" ] && {
+			destination_file_size=$(ls -ld "$DESTINATION_PATH/$destination_file" | awk '{ print $5 }')
+			INFO "File/folder $DESTINATION_PATH/$destination_file already exists. Size = $destination_file_size byte(s)"
+			[[ $OPT_OVERWRITE -eq $FALSE ]] && unzip_exit $EXIT_NOT_ALLOWED_OVERWRITE "$EXIT_NOT_ALLOWED_OVERWRITE_MSG"
+			(( OVERWRITE_SIZE = $OVERWRITE_SIZE + $destination_file_size ))
+		}
+	done
+	unset IFS
+	
+	INFO "Size of files/folders to overwrite = $OVERWRITE_SIZE byte(s)"
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function invoke();                                                                  #
+#                                                                                     #
+# If needed, asks the user for confirmation.                                          #
+# Then, execute unzip() (see function description)                                   #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_ABORTED if user does not give confirmation                                  #
+# - unzip() exit codes                                                               #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function invoke() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+
+	[ $OPT_FORCE -eq $FALSE ] &&
+	if ! confirm; then
+		unzip_exit $EXIT_ABORTED "$EXIT_ABORTED_MSG"
+	fi
+	
+	ap_unzip
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function parse_args($args...);                                                      #
+#                                                                                     #
+# Parses the command line arguments and fill the global variables.                    #
+#                                                                                     #
+# Allowed formats:                                                                    #
+#  unzip sourcezipfile destination                                                   #
+#  unzip -f sourcezipfile destination                                                #
+#  unzip -o sourcezipfile destination                                                #
+#  unzip -f -o sourcezipfile destination                                             #
+#  unzip -s sourcezipfile destination                                                #
+#  unzip -f -s sourcezipfile destination                                             #
+#  unzip -o -s sourcezipfile destination                                             #
+#  unzip -f -o -s sourcezipfile destination                                          #
+#                                                                                     #
+# Arguments:                                                                          #
+# - $args... command line arguments                                                   #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_USAGE_ERROR in case of incorrect usage                                      #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function parse_args() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	
+	local original_parameters=("$@")
+	local num_original_parameters=${#original_parameters[@]}
+	
+	# Original parameters have to be manipulated, because COM doesn't correctly handle
+	# the single quoted parameters.
+	# E.g. A single parameter passed as 'test archive.zip' is treated in COM as two separated strings
+	# "'test" and "archive.zip'"
+	# while in common Bash/Linux shell this is treated (correctly) as a single string
+	# "test archive.zip"
+	local parameters=()
+	
+	local original_parameter
+	local first_character
+	local last_character
+	local next_parameter
+	
+	local original_counter=0
+	local counter=0
+	while [ $original_counter -lt $num_original_parameters ] ; do
+		original_parameter="${original_parameters[$original_counter]}"
+		
+		first_character=${original_parameter:0:1}
+		last_character="${original_parameter: -1}"
+		
+		if [ "$first_character" == "'" ] ; then
+			while [ $original_counter -lt $num_original_parameters ] && [ "$last_character" != "'" ] ; do
+				(( original_counter = $original_counter + 1 ))
+				next_parameter="${original_parameters[$original_counter]}"
+				original_parameter="$original_parameter $next_parameter"
+				last_character="${original_parameter: -1}"
+			done
+			if [ "$last_character" == "'" ] ; then
+				original_parameter="${original_parameter:1:${#original_parameter} - 2}"
+			fi
+		fi
+		
+		parameters[$counter]="$original_parameter"
+		(( original_counter = $original_counter + 1 ))
+		
+		(( counter = $counter + 1 ))
+	done
+	# At this point, parameters are fixed also if executed from COM
+	
+	local num_parameters=${#parameters[@]}
+	
+	[ $num_parameters -lt 2 ] && usage_error
+	[ $num_parameters -gt 5 ] && usage_error
+	
+	# Check that last two parameters are not options
+	if [[ "${parameters[$num_parameters - 1]}" =~ ^-.*$ ]] || [[ "${parameters[$num_parameters - 2]}" =~ ^-.*$ ]] ; then
+		usage_error
+	fi
+	
+	# Save the command arguments
+	SOURCE_ZIP_FILE="${parameters[$num_parameters - 2]}"
+	DESTINATION="${parameters[$num_parameters - 1]}"
+	
+	INFO "SOURCE_ZIP_FILE=$SOURCE_ZIP_FILE"
+	INFO "DESTINATION=$DESTINATION"
+	
+	# Check for options
+	parameters=("${parameters[@]:0:(($num_parameters - 2))}")
+	
+	local options='f o s'
+	getopt --quiet --quiet-output --options="$options" -- "${parameters[@]}"
+	[ $? -ne $TRUE ] && usage_error
+
+	local args="${parameters[@]}"
+	eval set -- $args 1>>$F_INFO 2>&1
+
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			'-f')
+				INFO "Option -f given"
+				OPT_FORCE=$TRUE
+			;;			
+			'-o')
+				INFO "Option -o given"
+				OPT_OVERWRITE=$TRUE
+			;;
+			'-s')
+				INFO "Option -s given"
+				OPT_SILENT=$TRUE
+			;;
+		esac
+		shift
+	done
+	
+	# Check for extra unwanted parameters
+	local expected_parameters_number=2
+	if [ $OPT_FORCE -eq $TRUE ] ; then
+		(( expected_parameters_number = $expected_parameters_number + 1 ))
+	fi
+	if [ $OPT_OVERWRITE -eq $TRUE ] ; then
+		(( expected_parameters_number = $expected_parameters_number + 1 ))
+	fi
+	if [ $OPT_SILENT -eq $TRUE ] ; then
+		(( expected_parameters_number = $expected_parameters_number + 1 ))
+	fi
+
+	if [ $expected_parameters_number -ne $num_parameters ] ; then
+		usage_error
+	fi
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function quota_check();                                                             #
+#                                                                                     #
+# Checks if there is enough space left on data disk to extract the ZIP file           #
+# Check is done relying on the disk quota usable by the group that is owner of the    #
+# destination path.                                                                   #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT in case of errors during quota retrieving                     #
+# - $EXIT_NO_SPACE_LEFT in case there isn't enough space left to extract the ZIP file #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function quota_check() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	
+	local overwrite_size=$1
+	
+	local total_extimated_size
+	local extimated_extracted_size=$($CMD_UNZIP -Z -t "$SOURCE_DIR/$SOURCE_ZIP_FILE" | awk '{ print $3 }')
+	[[ "$extimated_extracted_size" == "" ]] && {
+		INFO "Failed to retrieve uncompressed size of source ZIP file"
+		unzip_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	INFO "Extimated extracted size = $extimated_extracted_size bytes"
+	(( total_extimated_size = $extimated_extracted_size - $OVERWRITE_SIZE ))
+	INFO "Total extimated size = $total_extimated_size bytes"
+	
+	local group=$(ls -ld "$DESTINATION_PATH" | awk '{ print $4 }')
+	INFO "Group = $group"
+	
+	local quota="$($CMD_REPQUOTA -vgi "$DESTINATION_MOUNTPOINT" | grep $group)"
+	[[ "$quota" == "" ]] && {
+		INFO "Error retrieving quota for group $group"
+		unzip_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	local used_quota=$(echo "$quota" | awk '{ print $3 }')
+	INFO "Used quota = $used_quota kibibytes (1 kibibyte = 1024 bytes)"
+	local soft_limit=$(echo "$quota" | awk '{ print $4 }')
+	INFO "Soft limit = $soft_limit kibibytes (1 kibibyte = 1024 bytes)"
+	
+	local used_quota_bytes
+	local soft_limit_bytes
+	(( used_quota_bytes = $used_quota * 1024 ))
+	INFO "Used quota = $used_quota_bytes bytes"
+	(( soft_limit_bytes = $soft_limit * 1024 ))
+	INFO "Soft limit = $soft_limit_bytes bytes"
+	
+	local left_quota
+	(( left_quota = $soft_limit_bytes - $used_quota_bytes ))
+	INFO "Left quota = $left_quota bytes"
+	
+	[[ $total_extimated_size -ge $left_quota ]] && unzip_exit $EXIT_NO_SPACE_LEFT "$EXIT_NO_SPACE_LEFT_MSG"
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function ap_unzip();                                                                  #
+#                                                                                     #
+# Validates the command arguments and extracts the source ZIP file to the destination.#
+#                                                                                     #
+# Returns:                                                                            #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT if an error occurs during ZIP file extraction                 #
+# - args_check() exit codes                                                           #
+# - file_check() exit codes                                                           #
+#######################################################################################
+function ap_unzip() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_FAILURE
+	
+	args_check
+	file_check
+	quota_check
+	
+	unzip_print "\nExtracting zip compressed archive\n"
+	unzip_print "Source archive: $SOURCE_ZIP_FILE"
+	unzip_print "NBI destination folder: ${DESTINATION_PATH:${#NBI_ROOT}}"
+	
+	INFO "Start extracting source ZIP file"
+	$CMD_UNZIP -o "$SOURCE_DIR/$SOURCE_ZIP_FILE" -d "$DESTINATION_PATH" 1>>$F_INFO 2>&1
+	[[ $? -ne $EXIT_SUCCESS ]] && {
+		INFO "Failed to extract source ZIP file"
+		unzip_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	INFO "Finished extracting source ZIP file"
+	
+	unzip_print "\nExtraction successfully completed"
+	
+	rCode=$EXIT_SUCCESS
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function usage();                                                                   #
+#                                                                                     #
+# Displays the command usage                                                          #
+#######################################################################################
+function usage() {
+	TRACE_ENTER $FUNCNAME
+	
+	cat << EOF
+Usage: unzip [-f] [-o] [-s] sourcezip destination
+
+EOF
+	
+	TRACE_LEAVE $FUNCNAME
+}
+
+#######################################################################################
+# function usage_error();                                                             #
+#                                                                                     #
+# Displays the command usage and exits with $EXIT_USAGE_ERROR (3)                     #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_USAGE_ERROR                                                                 #
+#######################################################################################
+function usage_error() {
+	TRACE_ENTER $FUNCNAME
+	
+	unzip_exit $EXIT_USAGE_ERROR "$EXIT_USAGE_ERROR_MSG\n$(usage)"
+}
+
+#######################################################################################
+#                                        MAIN                                         #
+#######################################################################################
+
+# Initialize
+unzip_init
+
+# Parse the command line arguments
+parse_args "$@"
+
+# Invoke the validation and execution
+invoke
+
+# Exit!
+unzip_exit
+

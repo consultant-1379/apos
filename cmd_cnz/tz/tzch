@@ -1,0 +1,163 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       tzch
+# Description:
+#       A script is used to change the timezone
+##
+# Usage: tzch tz_new
+#	where tz_new is the new timezone
+##
+# Output:
+#	tzch Europe/Rome
+#	Rule timezone Asia/Dubai modified as timezone Europe/Rome
+#	Configuration is OK!
+#	Configuration is OK!
+#	Reloading configuration on all nodes
+#	Reloading configuration on node 1 (SC-2-1)
+#	OK
+#	Reloading configuration on node 2 (SC-2-2)
+#	OK
+##
+# Changelog:
+# - Fri Dec 26 2014 - Nazeema Begum (xnazbeg)
+#       Fix Provided for the TR HT35659 
+# - Fri May  03 2013 - Furquan Ullah (xfurull)
+#       Minor Changes
+# - Wed Jun 28 2012 - Pratap Reddy (xpraupp)
+#       Modify Script to supprort all the timezone formats in LOTC
+# - Wed Mar 10 2011 - Satya Deepthi (xsatdee)
+#       First version.
+##
+
+# Golbal parameters
+tz_file="/usr/share/zoneinfo/"
+clu_file="/opt/ap/apos/bin/clusterconf/clusterconf"
+
+# exit codes
+exit_success=0
+exit_failure=1
+exit_incorrect_usage=2
+exit_invalid_timezone=3
+
+function usage(){
+	echo 
+	echo -e "Usage:  tzch tz_new"
+	echo -e "\twhere tz_new is the new timezone"
+}
+
+function console_print(){
+	echo -e
+	echo -e "$1"
+	echo -e 
+}
+
+function validate_zone(){
+	local zone="$1"
+        for i in $(ls -ltr /usr/share/zoneinfo/ | grep ^d)
+        do
+                        if [ "$zone" == $i ];then
+                		echo "Invalid timezone: $1"
+                		usage
+                		exit $exit_invalid_timezone
+        		fi
+        done  
+}
+
+
+function validate_args(){
+	if [ $# -gt 1 ] || [ $# -lt 1 ];then 
+		echo "Incorrect Usage"
+		usage
+		exit $exit_incorrect_usage
+	fi
+	}
+
+function change_timezone(){
+	new_tz=$1;flg=0
+	var=$(echo "$new_tz" | awk -F"/" '{print $1}')
+	opt=$(echo "$new_tz" | awk -F"/" '{print $2}')
+	opt_last=$(echo "$new_tz" | awk -F"/" '{print $3}')
+
+		
+	if [ "$opt" == "" ];then
+		for i in $(ls $tz_file)
+		do
+			if [ "$var" == $i ];then
+				validate_zone "$var"
+				flg=1
+			fi
+		done
+		if [ $flg == 1 ];then
+	                $clu_file timezone -m 1:timezone $new_tz &> /dev/null 
+			if [ $? == 0 ];then
+#				console_print "Command executed successfully"
+         	       		exit $exit_success
+			else
+				console_print "Command execution failed"
+				exit $exit_failure
+			fi
+	        else
+	                echo "Invalid timezone: $1"
+	                usage
+	                exit $exit_invalid_timezone
+		fi
+	fi
+
+	if [ "$opt_last" == "" ];then
+                ls $tz_file/$var > /dev/null 2>&1
+                if [ $? -ne 0 ];then
+                        echo "Invalid timezone: $1"
+                        usage
+                        exit $exit_invalid_timezone
+                fi
+                for i in $(ls -F $tz_file/$var)
+                do
+                        if [ "$opt" == $i ];then
+                                flg=1
+                        fi
+                done
+	else
+		var=$var/$opt
+		for i in $(ls -FR $tz_file/$var)
+		do	
+			if [ "$opt_last" == $i ];then
+				flg=1
+			fi
+		done
+	fi
+		
+	if [ $flg == 1 ];then
+		$clu_file timezone -m 1:timezone $new_tz &> /dev/null
+		if [ $? == 0 ];then
+#			console_print "Command executed successfully"
+			exit $exit_success
+		else
+			console_print "Command execution failed"
+			exit $exit_failure
+		fi
+
+	else
+		echo "Invalid timezone: $1"
+		usage
+		exit $exit_invalid_timezone
+	fi
+}
+
+
+# M A I N
+
+# To validate the arguments
+validate_args "$@"
+
+# To change the timezone to required timezone
+change_timezone "$*"
+
+exit $exit_success
+
+#END
+

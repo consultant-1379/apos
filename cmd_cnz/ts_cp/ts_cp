@@ -1,0 +1,139 @@
+#!/bin/bash -u
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       ts_cp
+# Description:
+#       Utility for troubleshooting users (ts_* users) to copy files.
+##
+# Usage:
+#	ts_cp <source_file>
+##
+# Changelog:
+# - Tue Feb 05 2013 - Francesco Rainone (efrarai)
+#	First version.
+##
+
+##
+# GENERAL-PURPOSE VARIABLES
+TRUE=$(true; echo $?)
+FALSE=$(false; echo $?)
+APPNAME=$(basename $0)
+##
+
+##
+# COMMAND-SPECIFIC VARIABLES
+DEST_DIR='/cluster/apg/ts_storage'
+TSGROUP='tsgroup'
+DEST_PERMS='666'
+SOURCE_FILE=''
+##
+
+##
+# SUPPORT FUNCTIONS
+function log(){
+	/bin/logger -t "$APPNAME" -p user.info "$@"
+}
+function log_error(){
+	/bin/logger -t "$APPNAME" -p user.crit "$@"
+	echo -e "$@" >&2
+}
+function abort(){
+	log_error "$@"
+	exit $FALSE
+}
+function usage(){
+	cat << HEREDOC
+Usage: $APPNAME <source_file>
+
+The command will make available <source_file> into FileM for (s)ftp transfer.
+The destination directory will be:
+	from bash:	$DEST_DIR
+	from (s)ftp:	/support_data/ts_storage
+
+NOTES:
+	In the case the destination directory contains a file with the same name
+	as <source_file>, the target file will be named as follows:
+		<source_file>_<date>
+		where <date> represents the system date and time when the
+		$APPNAME command has been issued.
+		
+		For example:
+			$APPNAME /var/log/messages
+		could produce:
+			messages_2013-02-08_19:49:55
+
+HEREDOC
+	
+}
+function cmdline_parsing(){
+	if [ ! $# -eq 1 ]; then
+		usage
+		abort "wrong number of parameters"
+	fi
+	SOURCE_FILE="$1"
+}
+function sanity_checks(){
+	# Checks for primary group to be 'tsgroup'
+	local GROUP_LIST=$(/opt/ap/apos/bin/usermgmt/usermgmt group list)	
+	if [[ "${GROUP_LIST}" =~ ^${TSGROUP}[[:space:]]|[[:space:]]${TSGROUP}[[:space:]]|[[:space:]]${TSGROUP}$ ]]; then
+		log "user successfully identified being a member of ${TSGROUP} group"
+	else
+		abort "this command can only be run by users belonging to ${TSGROUP} group"
+	fi
+	
+	# Checks for destination directory to exist and to have right permissions
+	if [ ! -d "${DEST_DIR}" ]; then
+		abort "the destination directory ${DEST_DIR} does NOT exist"
+	fi	
+	if [ ! -w "${DEST_DIR}" ]; then
+		abort "current user has no write permissions on ${DEST_DIR}"
+	fi
+	
+	# Checks for <source_file> being a valid and readable file.
+	if [ ! -f "${SOURCE_FILE}" ]; then
+		abort "the source file ${SOURCE_FILE} does NOT exist"
+	fi	
+	if [ ! -r "${SOURCE_FILE}" ]; then
+		abort "current user has no read permissions on ${SOURCE_FILE}"
+	fi
+
+	
+}
+function do_copy(){
+	if [[ -n "$DEST_PERMS" && -n "$SOURCE_FILE" && -n "$DEST_DIR" ]]; then
+		local DATE=''
+		local OLD_NAME=''
+		local NEW_NAME=''
+		
+		OLD_NAME="$(basename ${SOURCE_FILE})"
+		NEW_NAME="${OLD_NAME}"
+		while [ -e "${DEST_DIR}/${NEW_NAME}" ]; do
+			sleep 1
+			DATE="$(date +%F_%T)"
+			NEW_NAME="${OLD_NAME}_${DATE}"			
+		done
+		/usr/bin/install -m "${DEST_PERMS}" "${SOURCE_FILE}" "${DEST_DIR}/${NEW_NAME}" || \
+		abort "failure while copying ${SOURCE_FILE} in ${DEST_DIR}/${NEW_NAME}"
+	else
+		abort "internal variables not correctly set"
+	fi
+}
+##
+
+#                                              __    __   _______   _   __    _
+#                                             |  \  /  | |  ___  | | | |  \  | |
+#                                             |   \/   | | |___| | | | |   \ | |
+#                                             | |\  /| | |  ___  | | | | |\ \| |
+#                                             | | \/ | | | |   | | | | | | \   |
+#                                             |_|    |_| |_|   |_| |_| |_|  \__|
+#
+
+cmdline_parsing "$@"
+sanity_checks
+do_copy
+
+exit $TRUE

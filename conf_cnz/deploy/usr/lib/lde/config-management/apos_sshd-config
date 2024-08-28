@@ -1,0 +1,304 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2015 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       apos_sshd-config
+# Description:
+#       A script to maintain cbc cipher related information in ssh server files.
+# Note:
+#	This script is intended to be deployed to the
+#	/usr/lib/lde/config-management/ directory.
+#
+#	It relies on the /opt/ap/apos/conf/apos_common.sh library.
+##
+# Changelog:
+# - Thu Oct 31 2019 - Pravalika P(zprapxx)/Paolo Palmieri(epaopal)
+#   SSH/TLS feature:Added the functionality to update the SSH server configuration
+#   files based on the operator request
+# - Mon Feb 02 2017 - Avinash Gundlapally (xavigun)
+#   Added impacts for ssh subsystem support in APG
+# - Thu Feb 04 2016 - Antonio Nicoletti(eantnic)
+#   Handling of mssd service for SLES 12
+# - Thu Mar 26 2015 - Uppada Pratapreddy(XPRAUPP)
+#   Code alignment
+# - Tue Mar 04 2015 - Furquan Ullah (XFURULL)
+#		Code opimization
+# - Wed Feb 11 2015 - Dharma Teja (Xdhatej)
+##	First Version
+# LDE_deployment:
+#  type:    config  start
+#  priority:  550     510
+##
+
+##
+# libraries -------------------------------------------------------------- BEGIN
+if [ -r /opt/ap/apos/conf/apos_common.sh ]; then
+	. /opt/ap/apos/conf/apos_common.sh
+else
+	echo '/opt/ap/apos/conf/apos_common.sh not found or not readable!' >&2
+	exit 1
+fi
+# libraries ---------------------------------------------------------------- END
+##
+
+# common functions -------------------------------------------------------------- BEGIN
+
+# This function is used to insert the algorithms(ciphers,kex,macs) in sshd
+# configuration files
+function insert_after_tag() {
+    local filename="$1"
+    local tag_base="$2"
+    local str_to_append="$3"
+    local str_to_append_escaped=""
+    local start_tag=""
+
+    start_tag="@@START_${tag_base}@@"
+
+    if [ ! -w "$filename" ]; then
+        apos_abort "File \"$filename\" not found or not readable/writable!"
+    fi
+
+    # Escape all newlines with backslashes
+    str_to_append_escaped=$(echo "$str_to_append" | sed 's/$/\\/')
+
+    # Append after the tag, leaving the tag in place
+    if grep -q "$start_tag" "$filename"; then
+        sed -i '/'"$start_tag"'/ a\'"$str_to_append_escaped"' ' "$filename"
+    else
+        apos_abort "Failure while appending attributes in \"$filename\""
+    fi
+}
+
+# This function is used to remove the algorithms(ciphers,kex,macs) from the sshd 
+# configuration files
+function clean_between_tags() {
+    local filename="$1"
+    local tag_base="$2"
+    local start_tag=""
+    local end_tag=""
+
+    start_tag="@@START_${tag_base}@@"
+    end_tag="@@END_${tag_base}@@"
+
+    if [ ! -w "$filename" ]; then
+        apos_abort "File \"$filename\" not found or not readable/writable!"
+    fi
+
+    sed -i '/'"$start_tag"'/,/'"$end_tag"'/ {
+            /'"$start_tag"'/ p
+            /'"$end_tag"'/ p
+            d
+            }
+            ' "$filename"
+}
+
+# This function is used to fetch the algorithms(ciphers,kex,macs) from the Ssh MO
+# under SecM 
+function fetch_ciphers_macs_kexs_from_ssh_mo() {
+    local dn="sshId=1,SecSecMsecMId=1"
+    local attrs="selectedCiphers selectedMacs selectedKeyExchanges"
+    local is_failed=$TRUE
+
+    apos_log 'Fetching the algorithms from sshId=1,SecSecMsecMId=1'
+
+    # Fetch the algorithms from the SEC Ssh MO using a retry mechanism
+    for (( i=0; i<5; i++ )); do
+        if output=$(/usr/sbin/lde-config dn $dn $attrs) && [ -n "$output" ]; then
+        # Convert format so that SSH can understand
+            echo "$output" | sed -e 's/selectedCiphers:/Ciphers/g' \
+            -e 's/selectedMacs:/MACs/g' \
+            -e 's/selectedKeyExchanges:/KexAlgorithms/g'
+            is_failed=$FALSE; break
+        else
+            sleep 2
+        fi
+    done
+    [ $is_failed == $TRUE ] && apos_abort 'Unable to fetch the algorithms from the SEC Ssh MO'
+}
+
+# This function is used to update the sshd configuration files 
+function update_sshd_config() {
+    local tag="APG_SSH_CONFIG"
+    local ciphers_macs_kexs=""
+
+    ciphers_macs_kexs="$(fetch_ciphers_macs_kexs_from_ssh_mo)"
+
+    for FILE in $CONFIG_FILE_LIST; do
+        apos_log "Updating $CONFIG_FILE_LIST file"
+        [ ! -w $FILE ] && apos_abort "File \"$FILE\" not found or not readable/writable!"
+        clean_between_tags "$FILE" "$tag"
+        insert_after_tag "$FILE" "$tag" "$ciphers_macs_kexs"
+    done
+}
+
+
+
+# functions -------------------------------------------------------------- BEGIN
+function usage(){
+	cat << HEREDOC
+Usage: $0 <action> <phase> [<etc_root>]
+where:
+	<action> can be "start" or "stop" or "config"
+	<phase> can be "init" or "reload"
+	<etc_root> (optional) specifies the base folder where the configuration
+	           will be generated (/etc by default)
+HEREDOC
+}
+
+function do_start(){
+   
+    # Calling this function to stop and disable sshd on sshd_config
+    stop_disable_sshdconfig
+	
+    apos_log 'Restarting the APG sshd server'
+    # Restart all sshd daemons handled by APG
+    for SERVICE in $SSHD_SERVICES_LIST; do
+        if systemctl -q is-active $SERVICE;then
+            systemctl restart $SERVICE || apos_abort "Failure while restarting \"$SERVICE\""
+        else
+            systemctl start --no-block $SERVICE
+        fi 
+    done	
+}
+
+
+function do_stop(){
+	# TO-DO: implement the stop phase if needed.
+	return
+}
+
+function do_config(){
+	
+    apos_log 'Updating the sshd configuration files '	
+    # Update configuration files for all APG sshd servers
+    update_sshd_config
+
+    for ITEM in $CONFIG_FILE_LIST; do 
+        if grep -Eq '^X11Forwarding yes' $FILE; then
+            sed -i 's@X11Forwarding yes@X11Forwarding no@g' $FILE
+            [ $? -ne 0 ] && apos_abort "failure while modifying file $FILE"
+        fi
+    done
+ 
+    SSH_CONFIG_INTERNAL='/etc/ssh/sshd_config_internal'
+    [ ! -w $SSH_CONFIG_INTERNAL ] && apos_abort "File \"$SSH_CONFIG_INTERNAL\" not found or not readable/writable!"
+    if grep -Eq '^X11Forwarding yes' $SSH_CONFIG_INTERNAL; then
+        sed -i 's@X11Forwarding yes@X11Forwarding no@g' $SSH_CONFIG_INTERNAL
+        [ $? -ne 0 ] && apos_abort "failure while modifying file $SSH_CONFIG_INTERNAL"
+    fi
+
+    SSH_SERVICE_FILE="/usr/lib/systemd/system/lde-sshd@.service"
+    [ ! -w $SSH_SERVICE_FILE ] && apos_abort "File \"$SSH_SERVICE_FILE\" not found or not readable/writable!"
+    if ! grep -Eq '^KillMode=process' $SSH_SERVICE_FILE; then
+        sed -i 's@\[Service\]@\[Service\]\nKillMode=process@g' $SSH_SERVICE_FILE
+        [ $? -ne 0 ] && apos_abort "failure while modifying file $SSH_SERVICE_FILE"
+        apos_servicemgmt reload APOS --type=service &>/dev/null || apos_abort 'failure while reloading system services'
+    fi
+
+}
+
+function do_initialize() {
+    # Get the AP type
+    local AP_TYPE=$(apos_get_ap_type)
+
+    [ -z "$AP_TYPE" ] && apos_abort "AP_TYPE not found"
+    
+    # Initialize CONFIG_FILE_LIST
+    [ "$AP_TYPE" == $AP2 ] && CONFIG_FILE_LIST=$CONFIG_FILE_LIST_AP2
+
+    # Initialize SSHD_SERVICES_LIST
+    [ "$AP_TYPE" == $AP2 ] && SSHD_SERVICES_LIST=$SSHD_SERVICES_LIST_AP2
+
+}
+
+# functions ---------------------------------------------------------------- END
+##
+
+##
+# variables -------------------------------------------------------------- BEGIN
+# Configuration file containing current value for CBC mode of operation
+# used by csadm command
+SSHCBC_CONF_FILE="/opt/ap/acs/conf/acs_asec_sshcbc.conf"
+
+# APOS tool for services handling
+SERVICEMGMT="/opt/ap/apos/bin/servicemgmt/servicemgmt"
+
+# CONFIG_FILE_LIST_AP[12] shall be in the form <file>\n
+# where:
+# <file> represents the absolute path of the file to be handled,
+
+CONFIG_FILE_LIST_AP1='/etc/ssh/sshd_config_830
+		      /etc/ssh/sshd_config_22
+                      /etc/ssh/sshd_config_4422
+                      /etc/ssh/sshd_config_mssd
+'
+CONFIG_FILE_LIST_AP2='/etc/ssh/sshd_config_830
+		      /etc/ssh/sshd_config_22
+                      /etc/ssh/sshd_config_4422
+'
+# CONFIG_FILE_LIST global variable: by default AP1 is considered
+CONFIG_FILE_LIST=$CONFIG_FILE_LIST_AP1
+# SSHD_SERVICES_LIST_AP[12] shall be in the form <service>\n
+# where:
+# <service> represents the reference of the service to be handled
+SSHD_SERVICES_LIST_AP1='lde-sshd@sshd_config_830.service
+                        lde-sshd@sshd_config_22.service
+                        lde-sshd@sshd_config_4422.service
+                        lde-sshd@sshd_config_mssd.service'
+SSHD_SERVICES_LIST_AP2='lde-sshd@sshd_config_830.service
+                        lde-sshd@sshd_config_22.service
+                        lde-sshd@sshd_config_4422.service'
+# SSHD_SERVICES_LIST global variable: by default AP1 is considered
+SSHD_SERVICES_LIST=$SSHD_SERVICES_LIST_AP1
+
+
+# variables ---------------------------------------------------------------- END
+##
+
+##
+# main ------------------------------------------------------------------- BEGIN
+##
+# LDE config scripts called with the following:
+# param 1: action - start, stop or config
+# param 2: generate phase - init or reload
+# param 3: root path where config should be generated
+
+apos_intro $0
+
+if [ $# -lt 2 ]; then
+	usage
+	apos_abort 'missing parameter'
+fi
+
+if [ $(</etc/cluster/nodes/this/type) != 'control' ]; then
+	apos_abort 'this script must be run ONLY in control nodes'
+fi
+
+# Initialize CONFIG_FILE_LIST and SSHD_SERVICES_LIST
+do_initialize
+
+ACTION="$1"
+PHASE="$2"
+
+case "$ACTION" in
+        start)
+                do_start
+                ;;
+        stop)
+                do_stop
+                ;;
+        config)
+                do_config
+                ;;
+        *)
+                usage
+                ;;
+esac
+
+apos_outro
+exit $TRUE
+# main --------------------------------------------------------------------- END
+##

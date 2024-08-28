@@ -1,0 +1,43 @@
+#!/bin/bash
+#
+# Copyright (C) 2015 by Ericsson AB
+#
+##
+# Name:
+#       node2_vm_preinstall 
+# Description:
+#       A script to configure APG configurations on Node SC-2-2 of vAPG.
+# Note:
+#       Invoked by preinstall.sh script
+##
+# Usage:
+#       Used during vAPG maiden installation.
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Mon Nov 30 2015 - Nikhila Sattala (XNIKSAT)
+#   First version.
+
+. ${PLUGIN_SCRIPTS_ROOT}/non_exec-common_functions
+
+# common variables
+CMD_ECHO='/bin/echo'
+
+### M A I N ###
+main() {
+  $CMD_ECHO "--- main() begin"
+
+  # Create status file for vAPG
+  create_stage
+
+  $CMD_ECHO "--- main() end"
+}
+
+$CMD_ECHO "## node2_vm_preinstall ##"
+main "@"
+
+exit $TRUE
+
+# End of file

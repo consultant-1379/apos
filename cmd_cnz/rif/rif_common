@@ -1,0 +1,2045 @@
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2014 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       apos_rif_common
+# Description:
+#       This is a loadable data file. It contains variables, functions, etc.
+#       relevant to apos_rif.conf file handling.
+#       It can be loaded from a shell script with 'source' or '.
+##
+# Usage:
+#       source apos_rif_common OR . apos_rif_common 
+#
+## Changelog:
+# - Fri 11 Nov 2016 - Swapnika Baradi (XSWAPBA)
+#       Fix for TR HU79440(Adding ETX character at confirmation)
+#    PE1 27 Nov 2015 - Antonio Buonocunto (EANBUON)
+#        apos servicemgmt adaptation
+#    PD1 226 Feb 2015 - by Swapnika Baradi (xswapba)
+#        Enabled logging by setting _DEBUG variable to on, TR39650
+#    PC10 06 Nov 2014 - by Fabio Imperato (xfabimp)
+#	 Added cluster_conf_commit function and called in script_exit function
+#    PC9 16 May 2014 by Fabrizio Paglia (xfabpag)
+#        Changed LOG_DIR to /data/apos/logs/rif
+#    PC8 16 May 2014 by Fabrizio Paglia (xfabpag)
+#        Removed unused functions, variables and commented old code
+#        Changed LOG_DIR and LOCK_FILE
+#    PC7 9 May 2014 by Torgny Wilhelmsson (xtorwil)
+#        Reduce printout strings for command prcboot to 32 characters.
+#    PC6 7 May 2014 by Fabrizio Paglia (xfabpag)
+#	 Changed "grep -r" in "grep -w" in VerifyPassiveAfterReboot and Eth0InterfaceCheck1
+#	 Changed "grep -i" in "grep -w" in Eth0InterfaceCheck2
+#	 Changed exit_clus_bond_string from "Reliable Public Interface support partly removed"
+#	 to "Unable to define Reliable Public Interface support"
+#    PC5 29 Apr 2014 by Gianluigi Crispino (xgiacri)
+#	 Support of "apos_common.sh" 
+#    PC4 29 Apr 2014 by Fabio Imperato (xfabimp)
+#	 Changed "exit_CableLessDefined_string" string
+#    PC3 28 Apr 2014   by Torgny Wilhelmsson (xtorwil)
+#        Changed 'echo -n' to 'echo -e' in CheckCableLess & rif_imm_status
+#    PC1 23 Apr 2014   by Torgny Wilhelmsson (xtorwil)
+#        Introduction of CheckCableLess
+#    PB6 27 Mar 2014   by Torgny Wilhelmsson (xtorwil)
+#        Modified rollback due to update with Public VLAN compatibility 
+#    PB5 27 Mar 2014   by Torgny Wilhelmsson (xtorwil)
+#        Update with Public VLAN compatibility 
+#    PB4 17th of Mar - by Gianluigi Crispino/Torgny Wilhelmsson (XGIACRI/XTORWIL)
+#         Added handling in ModifyIPV6Tables
+#    PB3 6th of Mar - by Fabrizio Paglia/Torgny Wilhelmsson (XFABPAG/XTORWIL)
+#         Added VLAN handling in ModifyIPTABLES
+#         Changed $rollback_string
+#    PB2 28th of Feb - by Fabrizio Paglia (XFABPAG)
+#         Modified VLAN handling to change also the config file /cluster/etc/ap/apos/vlan_adapter_maping.conf
+#         Improved robustness of ModifyVLAN
+#         Removed unused constants and functions
+#    PB1 27th of Feb - by Fabrizio Paglia (XFABPAG)
+#         Added functions to modify VLAN settings
+#    PA15 13th of Dec - by Marco Zambonelli (XMARZAM)
+#         function ping_peer implemented with VerifyPassivePing function to increase answer 
+#         time without get fault
+#         changed VerifyPsssivePing to be more robust
+#         rifrm_rollback: changed logic for aposrifconf_update_both $recteaminStatusValue
+#         rifrm_rollback and rifdef_rollback, new control on flag ReloadNeeded
+#    PA14 9th of Dec - by Marco Zambonelli (XMARZAM)
+#         Control of state solved rifdef_VerifyPassivePing_status on rifdef_rollback added
+#    PA13 3rd of December - by Marco Zambonelli (XMARZAM)
+#         Changed PassiveNodeReboot to control passive node status
+#         from restart to passivenodeisupandworking
+#         status0: != passivenodeisupandworking
+#         start timing measurement
+#         status1: passivenodeisupandworking
+#         status2: passivenodeisupbutnotallresourcesarerunning
+#         status3: passivenodeisup(OSonly)
+#         status4: passivenodeisrebooting
+#         status5: passivenodeisup(OSonly)
+#         status6: passivenodeisupbutnotallresourcesarerunning
+#         Max Timeout = $PASSIVE_REBOOT_TO_SECS (300 secs)
+#         function  StartSupervisingPeriod removed (implemented into new PassiveNodeReboot fn.
+#         function  SupervisingPeriod removed (implemented into new PassiveNodeReboot fn.
+#         aposconf updated into PassiveNodeReboot fn.
+#         added ModifyIPTABLES_RB function
+#    PA12 2nd of December - by Luca Ruffini (XLUCRUF)
+#         remove LOCAL_CLUSTER_CONF
+#    PA11 28st of November - by Marco Zambonelli (XMARZAM)
+#         update messages implementation according to 
+#         1/190 80-CNZ 226 23 Uen PA7
+#         3/190 80-CNZ 226 23 Uen PA7
+#    PA10 21th of November - by Marco Zambonelli (XMARZAM)
+#        rolling back and messages implementation according to 
+#        1/190 80-CNZ 226 23 Uen PA7
+#        3/190 80-CNZ 226 23 Uen PA6
+#    PA9 18th of November - by Marco Zambonelli (XMARZAM)
+#        rif_imm_status added (shared between rifrm and rifdef)
+#    PA8 2013-11-14 - by Marco Zambonelli (XMARZAM)
+#        Reload_Network_Conf
+#        DeleteBond1changes -m to --m_delete
+#        ChangeMIP2Alias use --m_modify only
+#    PA7 2013-11-13 
+#        bug fixing  and some cleanup
+#    PA6 2013-11-13    
+#        added code return to PassiveNodeReboot function
+#        added abort functions rifdef_abort and rifrm_abort
+#        added functions rifdef_rollback and rifrm_rollback
+#    PA5 2013-11-06    
+#        changed to return all the exit statments of ClusterConf_eth0_bond_check_Passive function
+#        RebootActive here from rifdef as it's shared with rifrm
+#    PA4 2013-10-28    by Luca Ruffini (xlucruf)
+#        Moved here common functions and variables from rifls, plus other
+#        improvements
+#    PA3 2013-10-21    by marco zambonelli (xmarzam)
+#        Moved here common functions and variables from rifdef and rifrm
+#    PA2 2013-09-30    by Luca Ruffini (xlucruf)
+#        Added get_apos_rif_timestamp function 
+#    PA1 2013-09-24    by Luca Ruffini (xlucruf)
+#        First draft 
+####
+APOS_RIF_CONF="/cluster/storage/system/config/apos/apos_rif.conf"
+
+APOS_COMMON="${AP_HOME:-/opt/ap}/apos/conf/apos_common.sh"
+source $APOS_COMMON
+
+
+
+# Commands
+CMD_CP=/bin/cp
+CMD_GREP=/usr/bin/grep
+CMD_AWK=/usr/bin/awk
+CMD_LOGGER=/bin/logger
+CMD_RM=/bin/rm
+CMD_GETOPT=/usr/bin/getopt
+CMD_SED=/usr/bin/sed
+CMD_HEAD=/usr/bin/head
+CMD_EGREP=/usr/bin/egrep
+CMD_CLUSTER_CONF=/opt/ap/apos/bin/clusterconf/clusterconf
+CMD_CLU_MGMT=/opt/ap/apos/bin/clusterconf/clu_mgmt
+CMD_SSH=/usr/bin/ssh
+CMD_LS=/bin/ls
+CMD_HEADH=/usr/bin/head
+CMD_CAT=/bin/cat
+CMD_CUT=/usr/bin/cut
+CMD_WC=/usr/bin/wc
+CMD_TOUCH=/usr/bin/touch
+CMD_PING=/bin/ping
+CMD_ARPING=/sbin/arping
+CMD_IFCONFIG=/sbin/ifconfig
+CMD_PRCSTATE=/opt/ap/acs/bin/prcstate
+CMD_PRCBOOT=/opt/ap/acs/bin/prcboot
+CMD_IMMFIND=/usr/bin/immfind
+CMD_IMMLIST=/usr/bin/immlist
+
+# Global Parameters
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+BOND_NAME="bond1"
+ETH1_NAME="eth1"
+BOND_ALIAS_NAME="bond1:1"
+ETH1_ALIAS_NAME="eth1:1"
+
+LOG_TAG=$(basename $0)
+if [ -z $0 ]; then
+    LOG_TAG=bash
+else
+    LOG_TAG=$(basename $0)
+fi
+
+LOG_DIR="/data/apos/logs/rif"
+LOG_FILE="${LOG_TAG}.log"
+CLUSTER_CONF=/cluster/etc/cluster.conf
+GLOBAL_CLUSTER_CONF="/boot/.cluster.conf"
+VLAN_MAPPING_CONF="/cluster/etc/ap/apos/vlan_adapter_maping.conf"
+LOCK_FILE="/var/run/ap/.rif.lock"
+LOCK_TIME=5 # 5 seconds
+MAX_LOCK_FILE_LATENCY_TIME=900 # 15 minutes
+MAX_LATENCY_TIME=300 # 5 minutes
+PASSIVE_REBOOT_TO_SECS=300 # 5 minutes
+# Global variables
+LHOST=$(</etc/cluster/nodes/this/hostname)
+LNODE=$(</etc/cluster/nodes/this/id)
+RHOST=$(</etc/cluster/nodes/peer/hostname)
+RNODE=$(</etc/cluster/nodes/peer/id)
+THIS_NODE_NAME=$(cat /etc/cluster/nodes/this/hostname)
+PEER_NODE_NAME=$(cat /etc/cluster/nodes/peer/hostname)
+THIS_NODE_PUBLIC_INTERFACE=$(cat /etc/cluster/nodes/this/networks/public/primary/interface/name)
+PEER_NODE_PUBLIC_INTERFACE=$(cat /etc/cluster/nodes/peer/networks/public/primary/interface/name)
+THIS_NODE_INTERNAL_INTERFACE=$(cat /etc/cluster/nodes/this/networks/internal/primary/interface/name)
+PEER_NODE_INTERNAL_INTERFACE=$(cat /etc/cluster/nodes/peer/networks/internal/primary/interface/name)
+NETWORK='public'
+LextIP=$(</etc/cluster/nodes/this/networks/public/primary/address)
+RextIP=$(</etc/cluster/nodes/peer/networks/public/primary/address)
+Cextip=$(</etc/cluster/nodes/this/mip/nbi/address)
+PassiveNODE=''
+ActiveNODE=''
+this_prcstate=''
+F_INFO=''
+INTERFACE=''
+PEER_NODE_UP=''
+rif_status=99
+eth0_interface="eth0"
+eth1_interface="eth1"
+FORCED_MODE=0
+cnt=$#
+PARAMETERS=($@)
+
+
+# Function Printout strings, error-codes & Exit flags
+OK="Ok"
+NOK="Not ok"
+Done="Done"
+exit_success=0
+exit_failure=1
+exit_usage=2
+if [ $LOG_TAG == "rifls" ] ; then
+	exit_invalid_state=3
+else
+	exit_ping_peer=3
+fi
+if [ $LOG_TAG == "rifdef" ] ; then
+    exit_AlreadyDefined=4
+elif [ $LOG_TAG == "rifls" ] ; then
+	exit_operation_ongoing=4
+else    
+    exit_NotDefined=4
+fi
+exit_check_fail=5
+exit_ifconfig_fail=6
+exit_rifupdate_fail=6
+exit_PeerNodeNotPassive=7
+exit_clus_bond=8
+exit_NodeNotActive=10
+exit_noConfirm=42
+exit_CableLessDefined=43
+
+exit_success_string="$LOG_TAG command successfully completed"
+exit_failure_string="Error when executing (general fault)"
+exit_usage_string="Incorrect usage"
+exit_invalid_state_string="Invalid Reliable Public Interface state"
+exit_ping_peer_string="Unable to contact passive node"
+if [ $LOG_TAG == "rifrm" ] ; then
+    exit_check_fail_string="\nUnable to remove Reliable Public Interface support"
+else    
+    exit_check_fail_string="\nUnable to define Reliable Public Interface support"
+fi
+exit_NotDefined_string="Reliable Public Interface support already removed"
+exit_AlreadyDefined_string="Reliable Public Interface suport already defined"
+exit_PeerNodeNotPassive_string="\nUnexpected state of the passive node"
+if [ $LOG_TAG == "rifrm" ] ; then
+    exit_rifupdate_fail_string="\nFailed to remove Reliable Public Interface support"
+else
+    exit_ifconfig_fail_string="\nFailed to define Reliable Public Interface support"
+    exit_clus_bond_string="\nUnable to define Reliable Public Interface support"
+fi
+exit_NodeNotActive_String="\nIncorrect node state, you must execute the command on the active node"
+exit_noConfirm_string="Command aborted by user"
+exit_CableLessDefined_string="Illegal command in this system configuration"
+
+# Values for function ping_peer
+print_CheckPeerNode_string_check="Checking communication with passive node"
+print_CheckPeerNode_string_ok="Communication with other passive verified"
+
+# Values for function ClusterConfigCheck
+print_ClusterConfigCheck_string_check="Checking cluster configuration"
+print_ClusterConfigCheck_string_ok="Cluster configuration verified"
+
+# Values for function rif_imm_status
+print_rif_imm_status_string_check="Checking reliable public interface function state"
+print_rif_imm_status_string_ok1="reliable public interface function state is"
+Conf="DEFINED"
+notConf="NOT DEFINED"
+partlyConf="PARTLY DEFINED"
+
+###----This check is valid only for TS session hence it will not be included in the man page it must be skipped if on COM session----####
+
+
+# Printout strings
+if [ $LOG_TAG == "rifrm" ] ; then
+    print_rifrmstart="Executing rifrm..."                             # for log files
+    print_rifrmstart1="Updating cluster network configuration"        # for operator
+    print_DeleteBondInterface="Deleting $BOND_NAME interface"
+    print_DeleteBond1="Deleting $BOND_NAME interface"
+    print_DeleteBond1alias="Deleting $BOND_ALIAS_NAME alias  interface"
+    print_modMovableIP="Adapting cluster movable ip address on eth1 interface"
+else
+    print_rifdefstart="Executing rifdef..."                             # for log files
+    print_rifdefstart1="Updating cluster network configuration"         # for operator
+    print_createBondInterface="Creating $BOND_NAME interface"
+    print_createBond1="Creating $BOND_NAME interface"
+    print_createBond1alias="Creating $BOND_ALIAS_NAME alias  interface"
+    print_modMovableIP="Adapting cluster movable ip address on bond1 interface"
+fi
+
+print_operation_ongoing_string="Reliable public interface support update ongoing"
+
+SSpPer_MaxAllowedTime=8
+SSpPer_SleepTime=4
+
+print_StartSupervisingPeriod="START SUPERVISION PERIOD"
+print_SupervisingPeriod="."
+
+print_UpdatingPassive="Updating network configuration on passive node"
+print_UpdatingActive="Updating network configuration on active node"
+print_RebootingPassive="Rebooting passive node to apply configuration"
+print_WaitRebootingPassive="Wait for passive node restart..."
+print_RebootingActive="Rebooting active node to apply configuration"
+print_RebootingPassive_broadcastmessage="Command $LOG_TAG rebooting node"
+print_RebootingActive_broadcastmessage="Active node reboot due to $LOG_TAG"
+rollback_both_string="Rolling back network configuration on both nodes"
+rollback_string="Rolling back due to failure in network configuration"
+rebooting_rollback_passive_string="Rebooting passive node to roll back configuration"
+rif_not_defined_string="Reliable public interface not defined"
+rif_defined_string="Reliable public interface defined"
+
+
+if [ $LOG_TAG == "rifrm" ] ; then
+    print_VerifyPassiveAfterReboot="Finalising reliable public interface function removal"
+else
+    print_VerifyPassiveAfterReboot="Finalising reliable public interface function activation"
+fi
+
+equal="="
+separator=";"
+RIFSTATE_STRING=(RIFSTATE1 RIFSTATE2)
+TIMESTAMP_STRING="TS"
+
+
+##########################################################
+# rifdef rollback state machine
+rifdef_idle_status=0
+rifdef_createBond_status=1
+rifdef_createBondAlias_status=2
+rifdef_ChangeNetwork2intfRNODE_status=3
+rifdef_ChangeNetwork2intfLNODE_status=4
+rifdef_ModifyIPTABLES_status=5
+rifdef_ChangeMIP2Alias_status=6
+rifdef_ModifyVLAN_status=7
+rifdef_Reload_Network_Conf_status=8
+rifdef_PassiveNodeReboot_status=9
+rifdef_VerifyPassiveAfterReboot_status=10
+rifdef_VerifyPassivePing_status=11
+rifdef_RebootActive_status=12
+rifdef_latest_status=$rifdef_RebootActive_status
+rifdef_status=$rifdef_idle_status
+
+##########################################################
+# rifrm rollback state machine
+rifrm_idle_status=0
+rifrm_ModifyVLAN_status=1
+rifrm_ChangeNetwork2intfRNODE_status=2
+rifrm_ChangeNetwork2intfLNODE_status=3
+rifrm_ChangeMIP2Alias_status=4
+rifrm_ModifyIPTABLES_status=5
+rifrm_DeleteBond1Alias_status=6
+rifrm_DeleteBond1_status=7
+rifrm_Reload_Network_Conf_status=8
+rifrm_PassiveNodeReboot_status=9
+rifrm_VerifyPassiveAfterReboot_status=10
+rifrm_RebootActive_status=11
+rifrm_latest_status=$rifrm_RebootActive_status
+rifrm_status=$rifrm_idle_status
+
+
+##########################################################
+
+
+_DEBUG="on"
+_RIF_COMMON_VER="PD1"
+
+##########################################################
+# Function rifdef_rollback
+#
+function rifdef_rollback () {
+    TRACE_ENTER $FUNCNAME
+    INFO "$LINENO: entering $FUNCNAME with rifdef_status $rifdef_status"    
+    PassiveRebootNeeded=0
+    ActiveRebootNeeded=0
+    ReloadNeeded=0
+    recteaminStatusValue=0
+
+    if [ $rifdef_status != $rifdef_idle_status ]; then
+        echo -e "\n$rollback_string"
+    fi
+
+    if [ $rifdef_status == $rifdef_RebootActive_status ]; then
+        ActiveRebootNeeded=1
+        rifdef_status=$rifdef_PassiveNodeReboot_status
+    fi
+
+    if [ $rifdef_status == $rifdef_PassiveNodeReboot_status ] ||
+       [ $rifdef_status == $rifdef_VerifyPassiveAfterReboot_status ] ||
+       [ $rifdef_status == $rifdef_VerifyPassivePing_status ]; then
+        PassiveRebootNeeded=1
+        ReloadNeeded=1 
+        rifdef_status=$rifdef_Reload_Network_Conf_status
+    fi
+
+    if [ $rifdef_status == $rifdef_Reload_Network_Conf_status ]; then
+        ReloadNeeded=1 
+        rifdef_status=$rifdef_ModifyVLAN_status
+    fi
+    
+    if [ $rifdef_status == $rifdef_ModifyVLAN_status ]; then
+	ModifyVLAN $BOND_NAME $ETH1_NAME
+        rifdef_status=$rifdef_ModifyIPTABLES_status
+    fi
+
+    if [ $rifdef_status == $rifdef_ModifyIPTABLES_status ]; then
+        ModifyIPTABLES $BOND_NAME $ETH1_NAME
+        rifdef_status=$rifdef_ChangeMIP2Alias_status
+    fi
+
+	## Check if public interface has a VLAN tag set.
+    PublicEth_VLAN_NO=''
+	NETWORK='public'
+	PublicEth_VLAN_NO=$(${CMD_GREP} ^ip $CLUSTER_CONF | ${CMD_GREP} -w $NETWORK | ${CMD_HEAD} -1 | ${CMD_AWK} '{ print $3}' | ${CMD_AWK} -F'.' '{ print $2 }')
+
+	if [ $rifdef_status == $rifdef_ChangeMIP2Alias_status ] && [ -z $PublicEth_VLAN_NO ] ; then
+		ChangeMIP2Alias $BOND_ALIAS_NAME $ETH1_ALIAS_NAME
+		rifdef_status=$rifdef_ChangeNetwork2intfLNODE_status
+	else
+		rifdef_status=$rifdef_ChangeNetwork2intfLNODE_status
+	fi
+
+	if [ $rifdef_status == $rifdef_ChangeNetwork2intfLNODE_status ] && [ -z $PublicEth_VLAN_NO ] ; then
+		ChangeNetwork2intf $LNODE $ETH1_NAME
+		rifdef_status=$rifdef_ChangeNetwork2intfRNODE_status
+	else
+		rifdef_status=$rifdef_ChangeNetwork2intfRNODE_status
+	fi
+
+	if [ $rifdef_status == $rifdef_ChangeNetwork2intfRNODE_status ] && [ -z $PublicEth_VLAN_NO ] ; then
+		ChangeNetwork2intf $RNODE $ETH1_NAME
+		rifdef_status=$rifdef_createBondAlias_status
+	else
+		rifdef_status=$rifdef_createBondAlias_status
+	fi
+	
+	
+    if [ $rifdef_status == $rifdef_createBondAlias_status ]; then
+        DeleteBond1Alias
+        rifdef_status=$rifdef_createBond_status
+
+    fi
+    if [ $rifdef_status == $rifdef_createBond_status ]; then
+        DeleteBond1
+        rifdef_status=$rifdef_idle_status
+    fi
+
+    if [ $ReloadNeeded -eq 1 ]; then
+        Reload_Network_Conf
+    fi
+
+    if [ $PassiveRebootNeeded -eq 1 ]; then
+        #Reload_Network_Conf
+        echo -e "\n$rebooting_rollback_passive_string"
+        PassiveNodeReboot $PASSIVE_REBOOT_TO_SECS
+        VerifyPassiveAfterReboot remove
+    fi
+
+
+    if [ $ActiveRebootNeeded -eq 1 ]; then
+        rif_imm_set $recteaminStatusValue
+        RebootActive
+    fi
+
+    #restore recovered  aposconf value
+    aposrifconf_update_both $recteaminStatusValue
+
+    INFO "Exit from $FUNCNAME with rifdef_status=$rifdef_status"    
+    TRACE_LEAVE $FUNCNAME
+    return 0
+}
+
+##########################################################
+# Function rifrm_rollback
+#
+function rifrm_rollback () {
+    TRACE_ENTER $FUNCNAME
+    INFO "$LINENO: entering $FUNCNAME with rifrm_status $rifrm_status"    
+    ActiveRebootNeeded=0
+    PassiveRebootNeeded=0
+    ReloadNeeded=0
+    recteaminStatusValue=1
+
+    if [ $rifrm_status != $rifrm_idle_status ]; then
+        echo -e "\n$rollback_string"
+    fi
+
+    if [ $rifrm_status == $rifrm_RebootActive_status ]; then
+        ActiveRebootNeeded=1
+        rifrm_status=$rifdef_VerifyPassiveAfterReboot_status
+    fi
+
+    if [ $rifrm_status == $rifrm_PassiveNodeReboot_status ] ||
+       [ $rifrm_status == $rifrm_VerifyPassiveAfterReboot_status ] ||
+       [ $rifrm_status == $rifrm_RebootActive_status ]; then
+        PassiveRebootNeeded=1
+        ReloadNeeded=1 
+        rifrm_status=$rifrm_Reload_Network_Conf_status
+    fi
+
+    if [ $rifrm_status == $rifrm_Reload_Network_Conf_status ]; then
+        ReloadNeeded=1 
+        rifrm_status=$rifrm_DeleteBond1_status
+    fi
+
+    if [ $rifrm_status == $rifrm_DeleteBond1_status ]; then
+        createBond 
+        rifrm_status=$rifrm_DeleteBond1Alias_status
+    fi
+
+    if [ $rifrm_status == $rifrm_DeleteBond1Alias_status ] ; then
+        createBondAlias 
+        rifrm_status=$rifrm_ModifyIPTABLES_status
+    fi
+
+    if [ $rifrm_status == $rifrm_ModifyIPTABLES_status ] ; then
+        ModifyIPTABLES $ETH1_NAME $BOND_NAME 
+        rifrm_status=$rifrm_ChangeMIP2Alias_status
+    fi
+
+	## Check if public interface has a VLAN tag set.
+    PublicEth_VLAN_NO=''
+	NETWORK='public'
+	PublicEth_VLAN_NO=$(${CMD_GREP} ^ip $CLUSTER_CONF | ${CMD_GREP} -w $NETWORK | ${CMD_HEAD} -1 | ${CMD_AWK} '{ print $3}' | ${CMD_AWK} -F'.' '{ print $2 }')
+
+	if [ $rifrm_status == $rifrm_ChangeMIP2Alias_status ] && [ -z $PublicEth_VLAN_NO ] ; then
+		ChangeMIP2Alias $ETH1_ALIAS_NAME $BOND_ALIAS_NAME
+		rifrm_status=$rifrm_ChangeNetwork2intfLNODE_status
+	else
+		rifrm_status=$rifrm_ChangeNetwork2intfLNODE_status
+	fi
+
+	if [ $rifrm_status == $rifrm_ChangeNetwork2intfLNODE_status ] && [ -z $PublicEth_VLAN_NO ] ; then
+		ChangeNetwork2intf $LNODE $BOND_NAME
+		rifrm_status=$rifrm_ChangeNetwork2intfRNODE_status
+	else
+		rifrm_status=$rifrm_ChangeNetwork2intfRNODE_status
+	fi
+
+	if [ $rifrm_status == $rifrm_ChangeNetwork2intfRNODE_status ] && [ -z $PublicEth_VLAN_NO ] ; then
+			ChangeNetwork2intf $RNODE $BOND_NAME
+			rifrm_status=$rifrm_ModifyVLAN_status
+	else 	
+			rifrm_status=$rifrm_ModifyVLAN_status
+	fi
+    
+	
+    if [ $rifrm_status == $rifrm_ModifyVLAN_status ] ; then
+        ModifyVLAN $ETH1_NAME $BOND_NAME
+        rifrm_status=$rifrm_idle_status
+    fi
+
+    if [ $ReloadNeeded -eq 1 ]; then
+        Reload_Network_Conf
+    fi
+
+    if [ $PassiveRebootNeeded -eq 1 ]; then
+        #Reload_Network_Conf
+        echo -e "\n$rebooting_rollback_passive_string"
+        PassiveNodeReboot $PASSIVE_REBOOT_TO_SECS
+        VerifyPassiveAfterReboot define
+    fi
+
+    if [ $ActiveRebootNeeded -eq 1 ]; then
+        rif_imm_set $recteaminStatusValue
+        RebootActive
+    fi
+
+    #restore recovered  aposconf value
+    aposrifconf_update_both $recteaminStatusValue
+    
+    INFO "Exit from $FUNCNAME with rifrm_status=$rifrm_status"
+    TRACE_LEAVE $FUNCNAME
+    return 0
+}
+
+##########################################################
+# Function INFO
+function INFO(){
+        echo "[$(date +'%Y-%m-%d %H:%M:%S')] $@" >> ${F_INFO}
+}
+
+##########################################################
+# Function CheckLogPath
+function CheckLogPath () {
+LISTELM=$(echo $1 | tr '/' ' ')
+CURRDIR=""
+for ELM in ${LISTELM}
+    do
+        if [ ! -z "$ELM" ] ; then
+            CURRDIR=$CURRDIR"/$ELM"
+            if [ ! -d "$CURRDIR" ] ; then
+               mkdir $CURRDIR
+            fi
+        fi
+    done
+}
+
+##########################################################
+# Function TRACE_ENTER
+function TRACE_ENTER(){
+        INFO "$1() >>"
+}
+
+##########################################################
+# Function TRACE_LEAVE
+function TRACE_LEAVE(){
+        INFO "$1() <<"
+}
+
+##########################################################
+# Function GetFileDeltaTimeSec
+# get secs from latest access of passed file
+function GetFileDeltaTimeSec(){
+    TRACE_ENTER $FUNCNAME
+    modsecs=$(date --utc --reference=$1 +%s)
+    nowsecs=$(date +%s)
+    delta=$(($nowsecs-$modsecs))
+    echo "$delta"
+    TRACE_LEAVE $FUNCNAME
+}
+
+##########################################################
+# Function trylock
+function trylock(){
+    # check if the lock file exist first
+    [ ! -f $LOCK_FILE ] && return $exit_success
+    CurrDelta=$(GetFileDeltaTimeSec $LOCK_FILE)
+    if [ $CurrDelta -gt  $MAX_LOCK_FILE_LATENCY_TIME ]; then
+        unlock
+    else
+        [ -f $LOCK_FILE ] && return $exit_failure
+    fi
+    return $exit_success
+}
+
+##########################################################
+# Function unlock
+function unlock(){
+        $CMD_RM -f $LOCK_FILE
+}
+
+##########################################################
+# Function rif_imm_status
+### checks value of teamingStatus in IMM, returns rif_status #################
+function rif_imm_status(){
+    TRACE_ENTER $FUNCNAME
+    imm_class_name=$(immfind -c NorthBound)
+    if [ ! -z $imm_class_name ] ; then
+        rif_status=$(immlist  -a teamingStatus $imm_class_name| awk ' BEGIN { FS = "=" } ; { print $2 }')
+        if [ ! -z $rif_status ] ; then
+            INFO "$LINENO:  rif status is $rif_status"
+            if [ $rif_status -ne 0 ] && [ $rif_status -ne 1 ] ; then
+                INFO "$LINENO: Error when executing (immlist unreasonable value of teamingStatus: $rif_status )"
+                echo -e "$exit_failure_string"
+                exit $exit_failure
+            fi
+        else
+            INFO "$LINENO: Error executig immlist $imm_class_name | grep teamingStatus | awk '{ print $3}'"
+            echo -e "$exit_failure_string"
+            exit $exit_failure
+        fi
+    else
+        INFO "$LINENO: Cmd 'immfind -c NorthBound' failed"
+        echo -e "$exit_failure_string"
+        exit $exit_failure
+    fi
+    TRACE_LEAVE $FUNCNAME
+}
+
+##########################################################
+# Function BunchOfChecks
+function BunchOfChecks () {
+    TRACE_ENTER $FUNCNAME
+
+	## New function for cable less APG
+			
+    if [ $(get_oam_access_attr) -eq 1 ]; then
+        console_abort "$exit_CableLessDefined_string" $exit_CableLessDefined
+    fi
+	
+    CheckCommandLineParameters
+
+    # Get current Public network values  (no exit)
+    # done in initvar or placed up top
+    # GetSiteValues
+
+    # Check that node is active
+    CheckOwnActive
+
+    ## write confirm message and ask for yes/no reply
+    if ! confirm; then
+        console_abort "$exit_noConfirm_string" $exit_noConfirm
+    fi
+
+    ## Check if we can connect to other node and the status of it
+    INFO "$print_CheckPeerNode_string_check"
+    CheckPeerNode
+        
+    ## Check status of RE and set the value in rif_status
+    rif_imm_status
+    
+    # Checking cluster configuration
+    ## movedo further
+    # ClusterConfigCheck
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+
+
+##########################################################
+# Function CheckCommandLineParameters
+# check command line parameters, only -f parameter allowed
+function CheckCommandLineParameters(){
+    if [ $cnt -gt 0 ] ; then
+        if [ $cnt -ne 1 ] ; then
+            echo "Incorrect usage"
+            help
+            exit $exit_usage
+        elif [ ${PARAMETERS[0]} != "-f" ] ; then
+            echo "$exit_usage_string"
+            help
+            exit $exit_usage
+        else
+            FORCED_MODE=1
+        fi
+    fi
+}
+
+##########################################################
+# Function console_abort
+function console_abort(){
+    INFO "$1"
+        console_print "$1"
+    unlock
+        exit $2
+}
+
+##########################################################
+# Function console_print
+function console_print() {
+    echo -e "$1"
+    echo -e
+}
+
+
+##########################################################
+function logtrace() {
+    INFO "[$( caller )] $*" 
+    INFO "BASH_SOURCE: ${BASH_SOURCE[*]}"
+    INFO "BASH_LINENO: ${BASH_LINENO[*]}"
+    INFO "FUNCNAME: ${FUNCNAME[*]}"
+}
+
+function abort(){
+        log_error "ABORTING: <"$1">"
+        unlock
+        console_print "$exit_failure_string"
+        exit $exit_failure
+}
+function rifdef_abort(){
+	logtrace "c1trl-c:" "$@"
+        log_error "ABORTING: <"$1">"
+        rifdef_rollback
+        echo -e "\n$rif_not_defined_string"
+        unlock
+        exit $exit_failure
+}
+function rifrm_abort(){
+        log_error "ABORTING: <"$1">"
+        rifrm_rollback
+        echo -e "\n$rif_defined_string"
+        unlock
+        exit $exit_failure
+}
+
+##########################################################
+# Function help
+function help() {
+        echo -e "Usage: $LOG_TAG [-f]"
+}
+
+##########################################################
+# Function lock
+function lock(){
+
+    # check if we can lock the adapter-mapping configuration file.
+    if ! trylock; then
+        abort "Unable to lock the $LOG_TAG status file"
+    fi
+
+    # Ok. we can proceed with locking now.
+    $CMD_TOUCH $LOCK_FILE > /dev/null 2>&1
+}
+
+##########################################################
+# Function log
+function log(){
+        local PRIO='-p user.notice'
+        local MESSAGE="${*:-notice}"
+        ${CMD_LOGGER} $PRIO $LOG_TAG "$MESSAGE"
+}
+
+##########################################################
+# Function log_error
+function log_error(){
+        local PRIO='-p user.err'
+        local MESSAGE="${*:-error}"
+        ${CMD_LOGGER} $PRIO $LOG_TAG "$MESSAGE"
+        INFO "$MESSAGE"
+}
+
+##########################################################
+# Function initvar
+function initvar() {
+   if [ "$_DEBUG" == "on" ] ; then 
+   	CheckLogPath $LOG_DIR
+        F_INFO="$LOG_DIR/$LOG_FILE"
+	echo "" > $F_INFO
+   else     
+        F_INFO="/dev/null"
+   fi
+   
+#   	INFO "[$(date +'%Y-%m-%d %H:%M:%S')] $LOG_TAG -- Execution started on node "$LHOST" ($LextIP)" &> ${F_INFO}
+   	INFO "[$(date +'%Y-%m-%d %H:%M:%S')] $LOG_TAG -- Execution started on node "$LHOST" ($LextIP)" >> ${F_INFO}
+
+
+ }
+
+##########################################################
+# Function script_exit
+# Exit the script, logging error and remove lock file
+function script_exit(){
+        log_error "Script ${LOG_TAG} exit : exit code <"$1">"
+		cluster_conf_commit
+        unlock
+        exit $1
+}
+
+##########################################################
+# Function confirm
+# asks user to confirm command execution
+function confirm(){
+    TRACE_ENTER $FUNCNAME
+
+    if [ $FORCED_MODE -eq 1 ] ; then
+        rCode=0
+    else
+	while :
+        do
+        echo -en "Are you sure you want to do these changes?\n[y=yes, n=no]?\003:"
+        read ch
+    		case "${ch}" in
+                    [yY]|[yY][eE][sS])  rCode=0; break ;;
+                        [nN]|[nN][oO])  rCode=1; break ;;
+                esac
+	done
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+    return $rCode
+}
+
+##########################################################
+# Function ifconfig_alias_status
+function ifconfig_alias_status() {
+    TRACE_ENTER $FUNCNAME
+
+    alias_conf_line=$($IFCONFIG $1 | head -1)
+    if [ ! -z $(echo $alias_conf_line | tr -d ' ') ] ; then
+        echo 1
+    else
+        echo 0
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+##########################################################
+# Function ifconfig_check_intf_configuration
+# Checks that eth1 in ifconfig has same address as external ip should be
+#ifconfig_check_intf_configuration this/peer $ETH1_NAME
+#ifconfig_check_intf_configuration this/peer $BOND_NAME
+function ifconfig_check_intf_configuration() {
+    TRACE_ENTER $FUNCNAME
+
+    if [ $1 == "this" ] ; then
+        expected_ip=$LextIP
+    else
+        expected_ip=$RextIP
+    fi
+
+    conf_lines=$($IFCONFIG $2 | head -2)
+    conf_line=$(echo -e "$conf_lines" | tail -n -1)
+
+    conf_line_components=($conf_line)
+    intf_ip=${conf_line_components[1]:5}
+    if [ $intf_ip == $expected_ip ] ; then
+        echo 1
+    else
+        echo 0
+    fi
+    INFO "$LINENO: $intf_ip == $expected_ip , d1 $1, d2 $2"
+    
+	TRACE_LEAVE $FUNCNAME
+}
+
+##########################################################
+# Function ifconfig_intf_status
+# ifconfig_intf_status $ETH1_NAME: Checks that eth1 exist in ifconfig
+# ifconfig_intf_status $BOND_NAME: Checks that bond1 exist in ifconfig
+function ifconfig_intf_status() {
+    TRACE_ENTER $FUNCNAME
+
+    conf_lines=$($IFCONFIG $1 | head -2)
+    if [ $(echo -e "$conf_lines" | wc -l) -eq 2 ] ; then
+        echo 1
+    else
+        echo 0
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+##########################################################
+# Function local_global_cluster_config_consistency_check
+### check local/global cluster.conf differences #####################
+function local_global_cluster_config_consistency_check() {
+    if [ $1 == "this" ] ; then
+        diff $CLUSTER_CONF $GLOBAL_CLUSTER_CONF &> /dev/null
+    else
+        ssh $RHOST diff $CLUSTER_CONF $GLOBAL_CLUSTER_CONF &> /dev/null
+    fi
+    
+    if [ $? -eq 0 ] ; then
+        echo 1
+    else
+        echo 0
+    fi
+}
+
+##########################################################
+# Function ifconfig_status
+#ifconfig_status define this/peer $ETH1_NAME $ETH1_ALIAS_NAME
+#ifconfig_status remove this/peer $BOND_NAME $BOND_ALIAS_NAME
+# Checks that ifconfig is okay
+function ifconfig_status() {
+    TRACE_ENTER $FUNCNAME
+    if [ $1 == "this" ] ; then
+        IFCONFIG=$CMD_IFCONFIG
+    else
+        IFCONFIG="ssh $RHOST $CMD_IFCONFIG"
+    fi
+
+    intf_interface_up=0
+    interface_properly_configured=0
+    alias_interface_up=0
+    alias_interface_properly_configured=0
+
+    intf_interface_up=$(ifconfig_intf_status $2)
+    if [ $intf_interface_up -eq 1 ] ; then
+        # ifconfig has shown up correctly
+        interface_properly_configured=$(ifconfig_check_intf_configuration $1 $2)
+        alias_interface_up=$(ifconfig_alias_status $3)
+        alias_interface_properly_configured=$(ifconfig_check_configuration $1 $3)
+    else
+        INFO "$LINENO: intf_interface_up is $intf_interface_up in $1 node "
+    fi
+    INFO "$LINENO: Dollar1 is $1, d2 -$2-, d3 -$3-, intf_interface_up is $intf_interface_up, interface_properly_configured $interface_properly_configured"
+
+    if [ $1 == "this" ] ; then
+        (( checksum = $intf_interface_up + $interface_properly_configured + $alias_interface_up + $alias_interface_properly_configured ))
+    else
+        # command always executed on Active node, therfore alias is never up on peer node
+        (( checksum = $intf_interface_up + $interface_properly_configured + 1 + 1 ))
+    fi
+
+    if [ $checksum -eq 0 ] ; then
+        echo 0
+    elif [ $checksum -eq 4 ] ; then # What it should be    
+        echo 1
+    else
+        echo 2
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+##########################################################
+# Function createBond
+# Create Bond
+function createBond () {
+    TRACE_ENTER $FUNCNAME
+    createBondresult=0
+    CMD_CLUSTER_CONF_PARAMETER="interface --m_add control $BOND_NAME bonding eth0 eth1"
+    $CMD_CLUSTER_CONF $CMD_CLUSTER_CONF_PARAMETER >>${F_INFO}
+    result=$?
+    if [ $result == 0 ] ; then
+        test_line=$($CMD_CLUSTER_CONF interface -D | grep -i "$BOND_NAME bonding")
+        if [ -z $(echo $test_line | tr -d ' ') ] ; then
+            INFO "$LINENO: Cmd clusterconfig to add $BOND_NAME eth0 eth1 failed"
+            createBondresult=1
+        fi
+    else
+        INFO "$LINENO: Cmd clusterconfig to add $BOND_NAME eth0 eth1 failed"
+            createBondresult=1
+    fi
+    TRACE_LEAVE $FUNCNAME
+    return $createBondresult
+}
+
+##########################################################
+# Function DeleteBond1
+# 
+function DeleteBond1 () {
+    TRACE_ENTER $FUNCNAME
+    DeleteBond1result=0
+
+    If_Rule=$($CMD_CLUSTER_CONF interface -D | grep "$BOND_NAME bonding" | awk '{ print $1}')
+    If_Rule_line=$($CMD_CLUSTER_CONF interface -D | awk -v If_Rule=$If_Rule '{ if ($1==If_Rule) print $0}')
+    If_Rule_components=($If_Rule_line)
+
+    if [ ${#If_Rule_components[@]} -eq 7 ] ; then
+        CMD_CLUSTER_CONF_PARAMETER="interface --m_delete $If_Rule"
+    else
+        INFO "$LINENO: Cmd clusterconfig to find rule id for the old alias failed"
+        DeleteBond1result=1
+        return $DeleteBond1result
+    fi
+
+    $CMD_CLUSTER_CONF $CMD_CLUSTER_CONF_PARAMETER >> ${F_INFO}
+    if [ $? == 0 ] ; then
+        test_line=$($CMD_CLUSTER_CONF interface -D | grep -i "$BOND_NAME bonding")
+        if [ ! -z $(echo $test_line | tr -d ' ') ] ; then
+            INFO "$LINENO: Cmd clusterconfig to delete $BOND_NAME eth0 eth1 failed"
+            DeleteBond1result=1
+            return $DeleteBond1result
+        fi
+    else
+        INFO "$LINENO: Cmd clusterconfig to delete $BOND_NAME eth0 eth1 failed"
+        DeleteBond1result=1
+        return $DeleteBond1result
+    fi
+    TRACE_LEAVE $FUNCNAME
+    return $DeleteBond1result
+}
+
+##########################################################
+# Function createBondAlias
+# Create Bond Alias
+function createBondAlias () {
+    TRACE_ENTER $FUNCNAME
+    createBondAliasresult=0
+    CMD_CLUSTER_CONF_PARAMETER="interface --m_add control $BOND_ALIAS_NAME alias"
+    $CMD_CLUSTER_CONF $CMD_CLUSTER_CONF_PARAMETER >>${F_INFO}
+    result=$?
+    if [ $result == 0 ] ; then
+            test_line=$($CMD_CLUSTER_CONF interface -D | grep -i "$BOND_ALIAS_NAME alias")
+            if [ -z $(echo $test_line | tr -d ' ') ] ; then
+                INFO "$LINENO: Cmd clusterconfig to add $BOND_ALIAS_NAME alias failed"
+                createBondAliasresult=1
+            fi
+    else
+        INFO "$LINENO: Cmd clusterconfig to add $BOND_ALIAS_NAME alias"
+        createBondAliasresult=1
+    fi
+    TRACE_LEAVE $FUNCNAME
+    return $createBondAliasresult
+}
+
+##########################################################
+# Function ChangeNetwork2intf
+# Change Public network to Point to Bond/eth1
+#To define: ChangeNetwork2intf NODE $BOND_NAME
+#To remove: ChangeNetwork2intf NODE $ETH1_NAME
+function ChangeNetwork2intf () {
+    TRACE_ENTER $FUNCNAME
+    node_num=$1
+    intf=$2
+    ChangeNetwork2intfresult=0
+
+    IP_Rule=$($CMD_CLUSTER_CONF ip -D | grep "public " | awk -v node=$node_num '{ if ($3==node) print $1}')
+    IP_Rule_line=$($CMD_CLUSTER_CONF ip -D | awk -v IP_Rule=$IP_Rule '{ if ($1==IP_Rule) print $0}')
+    IP_Rule_components=($IP_Rule_line)
+
+    if [ ${#IP_Rule_components[@]} -eq 6 ] ; then
+        CMD_CLUSTER_CONF_PARAMETER="ip --m_modify $IP_Rule:ip $node_num $intf ${IP_Rule_components[4]} ${IP_Rule_components[5]}"
+        searchString="ip $node_num $intf ${IP_Rule_components[4]} ${IP_Rule_components[5]}"
+    else
+        ChangeNetwork2intfresult=1
+        INFO "$LINENO: Cmd clusterconfig to find rule id for the old ip failed for node $node_num"
+        return $ChangeNetwork2intfresult
+    fi
+
+    if [ $node_num == $RNODE ] ; then
+        nodestring="other"
+    else
+        nodestring="local"
+    fi
+    INFO "Adapting $nodestring node's public ip address to $intf interface"
+    $CMD_CLUSTER_CONF $CMD_CLUSTER_CONF_PARAMETER >>${F_INFO}
+    if [ $? == 0 ] ; then
+            test_line=$($CMD_CLUSTER_CONF ip -D | grep -i "$searchString")
+            if [ -z $(echo $test_line | tr -d ' ') ] ; then
+                ChangeNetwork2intfresult=1
+                INFO "$LINENO: Cmd clusterconfig to modify Public network to Point to $intf for $nodestring node failed"
+                return $ChangeNetwork2intfresult
+            else   
+                INFO " ..Done"
+            fi
+    else
+        ChangeNetwork2intfresult=1
+        INFO "$LINENO: Cmd clusterconfig to modify Public network to Point to $intf for $nodestring node failed"
+        return $ChangeNetwork2intfresult
+    fi
+    TRACE_LEAVE $FUNCNAME
+    return $ChangeNetwork2intfresult 
+}
+
+##########################################################
+# Function CheckOwnActive
+# Check if current node is Active or Passive
+function CheckOwnActive () {
+    TRACE_ENTER $FUNCNAME
+    INFO "Checking Status of own node"
+
+     if [ $($CMD_PRCSTATE) != "active" ] ; then
+        INFO "$LINENO: executing $LOG_TAG on node, $LHOST, incorrect status: $($CMD_PRCSTATE)"
+        echo -e "$exit_NodeNotActive_String"
+        exit $exit_NodeNotActive
+    fi
+
+    this_prcstate="active"
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+##########################################################
+# Function VerifyPassivePing
+#
+function VerifyPassivePing () {
+    TRACE_ENTER $FUNCNAME
+    VerifyPassivePingstatus=0
+    local ipaddr=$1
+    
+    count=50   # Maximum number to try.
+    while [[ $count -ne 0 ]] ; do
+    	${CMD_PING} -c 1 -w 10 $ipaddr >>${F_INFO}   # Try once.
+        VerifyPassivePingstatus=$?
+        if [[ $VerifyPassivePingstatus -eq 0 ]] ; then
+            count=1                          # If okay, flag to exit loop.
+        fi
+            count=$(( $count - 1 ))                  # So we don't go forever.
+    done
+
+    if [[ $VerifyPassivePingstatus -eq 0 ]] ; then                  # Make final determination.
+        INFO "Peer node's IP address \"$ipaddr\" is alive"
+    else
+        INFO "Peer node's IP address \"$ipaddr\" is not reachable"
+    fi
+    TRACE_LEAVE $FUNCNAME
+    return $VerifyPassivePingstatus
+}
+
+##########################################################
+# Function ping_peer
+function ping_peer(){
+    TRACE_ENTER $FUNCNAME
+
+    PEER_NODE_UP=$FALSE
+    INFO "Pinging other node's host name \"$RHOST\""
+    
+    VerifyPassivePing $RHOST
+    if [ $? -eq 0 ]; then
+        PEER_NODE_UP=$TRUE
+    else
+        INFO "Peer node \"$RHOST\" is not reachable"
+        echo -e "$exit_ping_peer_string"
+        exit $exit_ping_peer
+    fi
+
+    PEER_NODE_UP=$FALSE
+    INFO "Pinging other node's external IP address \"$RextIP\""
+    
+    VerifyPassivePing $RextIP
+    if [ $? -eq 0 ]; then
+        PEER_NODE_UP=$TRUE
+    else
+        INFO "Peer node's IP address \"$RextIP\" is not reachable"
+        echo -e "$exit_ping_peer_string"
+        exit $exit_ping_peer
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+##########################################################
+# Function CheckPeerNode
+# calls ping_peer and CheckPeerPassive
+function CheckPeerNode () {
+    TRACE_ENTER $FUNCNAME
+
+    ## Check if other node is up, first RHOST internal backplane IP then the Public IP address
+    ping_peer
+
+    # Check that the peer node is in status passive
+    CheckPeerPassive
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+
+##########################################################
+# Function CheckPeerPassive
+# Checks that Peer node is Passive
+function CheckPeerPassive () {
+    TRACE_ENTER $FUNCNAME
+    INFO "$LINENO: Checking Status of peer node"
+
+    ssh $RHOST cd &> /dev/null
+    if [ $? -eq 0 ] ; then
+        PEER_NODE_STATUS=$($CMD_PRCSTATE -l | tail -n -2 | head -1 | tr -d ' ')
+        if [ $PEER_NODE_STATUS != "passivenodeisupandworking" ] && [ $PEER_NODE_STATUS != "passivenodeisupbutnotallresourcesarerunning" ] ; then
+            INFO "$LINENO: executing rifdef on node, $RHOST, incorrect status: not passive -$PEER_NODE_STATUS-"
+            echo -e "$exit_PeerNodeNotPassive_string"
+            exit $exit_PeerNodeNotPassive
+        fi
+    else
+        INFO "$LINENO:  SSH to other node \"$RHOST\" failed"
+        echo -e "$exit_ping_peer_string"
+        exit $exit_ping_peer
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+
+##########################################################
+# Function VerifyPassiveAfterReboot
+#To define: VerifyPassiveAfterReboot define
+#To remove: VerifyPassiveAfterReboot remove
+function VerifyPassiveAfterReboot () {
+    TRACE_ENTER $FUNCNAME
+    VerifyPassiveAfterRebootresult=0
+    INFO "$print_VerifyPassiveAfterReboot"
+    # From ifconfig_bond_check
+    if [ $1 == remove ] ; then
+        if [ "$($CMD_GREP -w $BOND_NAME $CLUSTER_CONF | tr -d ' ')" ] ; then
+              INFO "$LINENO: $BOND_NAME is still in use in $CLUSTER_CONF"
+              return $exit_rifupdate_fail
+        fi
+    fi
+
+	
+	### xtorwil 
+	NETWORK='public'
+	NewPublic_NAME=''
+	NewPublic_ALIAS_NAME=''
+    NewPublic_NAME=$(${CMD_GREP} ^ip $CLUSTER_CONF | ${CMD_GREP} -w $NETWORK | ${CMD_HEAD} -1 | ${CMD_AWK} '{ print $3}' )
+    NewPublic_ALIAS_NAME=$(${CMD_GREP} ^mip $CLUSTER_CONF | ${CMD_GREP} "nbi" | ${CMD_AWK} '{ print $4}')
+ 
+    INFO "Checking ifconfig status on peer node..."
+    IF_OWN_STATUS=$(ifconfig_status "peer" $NewPublic_NAME $NewPublic_ALIAS_NAME)
+    if [ $IF_OWN_STATUS -ne 1 ] ; then
+        INFO "$LINENO: Unexpected ifconfig status on peer node"
+        VerifyPassiveAfterRebootresult=1
+        return $VerifyPassiveAfterRebootresult
+    fi
+
+    # From ClusterConf_eth0_bond_check
+    if [ $1 == define ] ; then
+        ClusterConf_eth0_bond_check_Passive $eth0_interface $NewPublic_ALIAS_NAME $NewPublic_NAME
+        VerifyPassiveAfterRebootresult=$?
+    else
+        ClusterConf_eth0_bond_check_Passive $ETH1_NAME $NewPublic_ALIAS_NAME $NewPublic_NAME       	
+        VerifyPassiveAfterRebootresult=$?
+    fi
+	
+	
+    # END From ClusterConf_eth0_bond_check
+    INFO " ...Done"
+    # update node status needed in apos_rif.conf
+    TRACE_LEAVE $FUNCNAME
+    return $VerifyPassiveAfterRebootresult
+}
+
+##########################################################
+# Function ClusterConf_eth0_bond_check_Passive
+# remove: ClusterConf_eth0_bond_check_Passive $ETH1_NAME $ETH1_ALIAS_NAME $ETH1_NAME
+# define: ClusterConf_eth0_bond_check_Passive $eth0_interface $BOND_ALIAS_NAME $BOND_NAME
+function ClusterConf_eth0_bond_check_Passive () {
+    TRACE_ENTER $FUNCNAME
+    eth_name=$1
+    alias_name=$2
+    eth_name_public=$3
+    ClusterConf_eth0_bond_check_Passiveresult=0
+    if [ $LOG_TAG == "rifrm" ]; then
+       rif_update_fail=$exit_rifupdate_fail
+    else
+       rif_update_fail=$exit_ifconfig_fail
+    fi
+    if [ ! -d /etc/cluster/nodes/control/1/interfaces/$eth_name ] || [ ! -d /etc/cluster/nodes/control/2/interfaces/$eth_name ] ; then
+        INFO "$LINENO: $eth_name interface files not found."
+        return $rif_update_fail
+    fi
+
+    # Check interface eth in node 1 exist in cluster conf
+    if [[ ! $($CMD_CLUSTER_CONF interface -D | grep -i "1 $eth_name ethernet" | tr -d ' ')  ]] ; then
+        INFO "$LINENO: $eth_name not found in $CLUSTER_CONF for node A"
+        return $rif_update_fail
+    fi
+
+    # Check interface eth in node 2 exist in cluster conf
+    if [[ ! $($CMD_CLUSTER_CONF interface -D | grep -i "2 $eth_name ethernet" | tr -d ' ')  ]] ; then
+        INFO "$LINENO: $eth_name not found in $CLUSTER_CONF for node B"
+        return $rif_update_fail
+    fi
+
+    # Check ip node 1 connected to bond in cluster conf
+    if [[ ! $($CMD_CLUSTER_CONF ip -D | grep -i "1 $eth_name_public public" | tr -d ' ')  ]] ; then
+            INFO "$LINENO: public network not connected to $eth_name_public in $CLUSTER_CONF for node 1"
+            return $exit_failure
+    fi
+
+    # Check ip node 2 connected to bond in cluster conf
+    if [[ ! $($CMD_CLUSTER_CONF ip -D | grep -i "2 $eth_name_public public" | tr -d ' ')  ]] ; then
+            INFO "$LINENO: public network not connected to $eth_name_public in $CLUSTER_CONF for node 2, see cmd clusterconf ip -D"
+            return $exit_failure
+    fi
+
+    # Check bond alias exist in cluster conf
+    if [[ ! $($CMD_CLUSTER_CONF interface -D | grep -i "$alias_name alias" | tr -d ' ')  ]] ; then
+            INFO "$LINENO: Bond alias, $alias_name, not found in $CLUSTER_CONF"
+            return $exit_failure
+    fi
+
+    # Check mip for public connected bond/eth alias in cluster conf
+    if [[ ! $($CMD_CLUSTER_CONF mip -D | grep -i "$alias_name public" | tr -d ' ')  ]] ; then
+            INFO "$LINENO: Bond alias, $alias_name, not found in $CLUSTER_CONF"
+            return $exit_failure
+    fi
+
+    if [ $LOG_TAG == "rifdef" ]; then
+				### 
+        if [[ ! $($CMD_CLUSTER_CONF interface -D | grep -i "control $BOND_NAME bonding" | tr -d ' ')  ]] ; then
+                INFO "$LINENO: public network not connected to $BOND_NAME in $CLUSTER_CONF for node B"
+                return $exit_failure
+        fi
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+    return $ClusterConf_eth0_bond_check_Passiveresult
+}
+
+##########################################################
+# Function reload networ configuration
+# 
+function Reload_Network_Conf () {
+    TRACE_ENTER $FUNCNAME
+    Reload_Network_Conf=0
+    CMD_CLU_MGMT_PARAMETER="-r -V"
+    $CMD_CLU_MGMT $CMD_CLU_MGMT_PARAMETER >> ${F_INFO} 2>&1
+    Reload_Network_Conf=$?
+    if [ $Reload_Network_Conf -ne 0 ] ; then
+        INFO "$LINENO: Reload_Network_Conf failed with error $Reload_Network_Conf"
+    fi
+    TRACE_LEAVE $FUNCNAME
+    return $Reload_Network_Conf
+}
+
+##########################################################
+# Function Eth0InterfaceCheck1
+# Check if eth0 is defined in cluster.conf file and
+function Eth0InterfaceCheck1 () {
+    TRACE_ENTER $FUNCNAME
+    grep -w "interface 1 $eth0_interface ethernet" $CLUSTER_CONF >>${F_INFO}
+    if [ ! $? == 0 ] ; then
+            INFO "$LINENO: Invalid Adapter State of eth0 in $CLUSTER_CONF for node A"
+            echo -e "$exit_check_fail_string"
+            exit $exit_check_fail
+    fi
+    grep -w "interface 2 $eth0_interface ethernet" $CLUSTER_CONF >>${F_INFO}
+    if [ ! $? == 0 ] ; then
+            INFO "$LINENO: Invalid Adapter State of eth0 in $CLUSTER_CONF for node B"
+            echo -e "$exit_check_fail_string"
+            exit $exit_check_fail
+    fi
+
+    INTERFACE=$(${CMD_GREP} ^ip $CLUSTER_CONF | ${CMD_GREP} -w $eth0_interface | ${CMD_HEAD} -1 | ${CMD_AWK} '{ print $3}')
+    if [ $INTERFACE ]; then
+            INFO "$LINENO: Eth0 already in use in $CLUSTER_CONF"
+            echo -e "$exit_check_fail_string"
+            exit $exit_check_fail
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+##########################################################
+# Function Eth0InterfaceCheck2
+# Check if eth0 is found in ifconfig printout
+function Eth0InterfaceCheck2 () {
+    TRACE_ENTER $FUNCNAME
+
+    if [ $($CMD_IFCONFIG | grep -w $eth0_interface| tr -d ' \n')  ] ; then
+        INFO "$LINENO: Eth0 already in use on own node, see cmd ifconfig"
+        echo -e "$exit_check_fail_string"
+        exit $exit_check_fail
+    fi
+
+    ssh $RHOST cd &> /dev/null
+    if [ $? -eq 0 ] ; then
+        #echo "ssh successful"
+        if [ $(ssh $RHOST $CMD_IFCONFIG | grep -w $eth0_interface | tr -d ' \n')  ] ; then
+            INFO "$LINENO: Eth0 already in use on peer node, see cmd ifconfig"
+            echo -e "$exit_check_fail_string"
+            exit $exit_check_fail
+        fi
+    else
+        INFO "$LINENO: SSH to other node \"$RHOST\" failed"
+        echo -e "$exit_failure_string"
+        exit $exit_failure
+    fi
+
+    if [ ! -d /etc/cluster/nodes/control/1/interfaces/$eth0_interface ] || [ ! -d /etc/cluster/nodes/control/2/interfaces/$eth0_interface ] ; then
+        echo -e "$exit_check_fail_string"
+        exit $exit_check_fail
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+##########################################################
+# Function ModifyIPTABLES
+# Modify IPTABLES
+#to define: ModifyIPTABLES $ETH1_NAME $BOND_NAME
+#to remove: ModifyIPTABLES $BOND_NAME $ETH1_NAME
+function ModifyIPTABLES() {
+	TRACE_ENTER $FUNCNAME
+	local from="$1"
+	local to="$2"
+	
+	local rules_list=$(cat $CLUSTER_CONF | grep "^iptables " | grep -E "(\s)+($from|$from\.[0-9]+)(\s)+" | tr '\n' '*')
+	if [ $? -ne 0 ] ; then
+		INFO "Failed to retrieve iptables rules"
+		return $exit_failure
+	fi
+	
+	local rule
+	IFS=$'*'
+	for rule in $rules_list ; do
+		local new_rule=$(echo "$rule" | sed "s/\(\s\s*\)$from\(\s\s*\)/\1$to\2/" | sed "s/\(\s\s*\)$from\(.[0-9][0-9]*\)\(\s\s*\)/\1$to\2\3/")
+		local rule_number=$($CMD_CLUSTER_CONF iptables -D | grep "$rule" | awk -F' ' '{ print $1 }')
+		
+		$CMD_CLUSTER_CONF iptables --m_modify $rule_number:$new_rule &> /dev/null
+		if [ $? -ne 0 ] ; then
+			INFO "Failed to modify iptables rule no. $rule_number"
+			return $exit_failure
+		fi
+	done
+	unset IFS
+	ModifyIP6TABLES $from $to
+	if [ $? -ne 0 ] ; then
+			INFO "Failed to modify ip6tables"
+			return $exit_failure
+	fi
+	
+	# iptables restart to make the new rules effective
+	apos_servicemgmt restart lde-iptables.service >> ${F_INFO} 2>&1 
+
+	TRACE_LEAVE $FUNCNAME
+	return $exit_success
+}
+##########################################################
+# Function ModifyIP6TABLES
+# Modify IP6TABLES
+#to define: ModifyIP6TABLES $ETH1_NAME $BOND_NAME
+#to remove: ModifyIP6TABLES $BOND_NAME $ETH1_NAME
+function ModifyIP6TABLES() {
+	TRACE_ENTER $FUNCNAME
+	local from="$1"
+	local to="$2"
+	
+	local rules_list=$(cat $CLUSTER_CONF | grep "^ip6tables " | grep -E "(\s)+($from|$from\.[0-9]+)(\s)+" | tr '\n' '*')
+	if [ $? -ne 0 ] ; then
+		INFO "Failed to retrieve ip6tables rules"
+		return $exit_failure
+	fi
+	
+	local rule
+	IFS=$'*'
+	for rule in $rules_list ; do
+		local new_rule=$(echo "$rule" | sed "s/\(\s\s*\)$from\(\s\s*\)/\1$to\2/" | sed "s/\(\s\s*\)$from\(.[0-9][0-9]*\)\(\s\s*\)/\1$to\2\3/")
+		local rule_number=$($CMD_CLUSTER_CONF ip6tables -D | grep "$rule" | awk -F' ' '{ print $1 }')
+		
+		$CMD_CLUSTER_CONF ip6tables --m_modify $rule_number:$new_rule &> /dev/null
+		if [ $? -ne 0 ] ; then
+			INFO "Failed to modify ip6tables rule no. $rule_number"
+			return $exit_failure
+		fi
+	done
+	unset IFS
+	
+	TRACE_LEAVE $FUNCNAME
+	return $exit_success
+}
+
+##########################################################
+# Function ChangeMIP2Alias
+# Change MIP to Point to Bond/eth1 Alias
+# To remove: ChangeMIP2Alias $BOND_ALIAS_NAME $ETH1_ALIAS_NAME
+# To define: ChangeMIP2Alias $ETH1_ALIAS_NAME $BOND_ALIAS_NAME
+function ChangeMIP2Alias () {
+    TRACE_ENTER $FUNCNAME
+    intfFrom=$1
+    intfto=$2
+    ChangeMIP2Aliasresult=0
+    mip_prm="--m_modify"
+    SearchString="nbi $intfFrom public"
+    mip_conf_line=$($CMD_CLUSTER_CONF mip -D | grep -i "$SearchString")
+    mip_conf_components=($mip_conf_line)
+    if [ ${#mip_conf_components[@]} -eq 7 ] ; then
+        alias_name=${mip_conf_components[4]}
+        if [ $alias_name == $intfFrom ] ; then
+            MIP_RULE_ID=${mip_conf_components[0]}
+            CMD_CLUSTER_CONF_PARAMETER="mip $mip_prm $MIP_RULE_ID:mip control ${mip_conf_components[3]} $intfto ${mip_conf_components[5]} ${mip_conf_components[6]}"
+            searchString="control ${mip_conf_components[3]} $intfto ${mip_conf_components[5]} ${mip_conf_components[6]}"
+        else
+            INFO "$LINENO: Cmd clusterconfig to find rule id for the old bond alias failed"
+            if [ $intfFrom == $BOND_ALIAS_NAME ]; then
+                ChangeMIP2Aliasresult=$exit_rifupdate_fail
+            else
+                ChangeMIP2Aliasresult=$exit_failure
+            fi
+            return $ChangeMIP2Aliasresult 
+        fi
+    else
+        INFO "$LINENO: Cmd clusterconfig to find rule id for the old bond alias failed"
+        if [ $intfFrom == $BOND_ALIAS_NAME ]; then
+            ChangeMIP2Aliasresult=$exit_rifupdate_fail
+        else
+            ChangeMIP2Aliasresult=$exit_failure
+        fi
+        return $ChangeMIP2Aliasresult 
+    fi
+
+    INFO "$print_modMovableIP"
+    $CMD_CLUSTER_CONF $CMD_CLUSTER_CONF_PARAMETER >>${F_INFO}
+    if [ $? == 0 ] ; then
+        test_line=$($CMD_CLUSTER_CONF mip -D | grep -i "$searchString")
+        if [ -z $(echo $test_line | tr -d ' ') ] ; then
+            INFO "$LINENO: Cmd clusterconfig to modify cluster movable ip address to $intfto interface failed"
+            if [ $intfFrom == $BOND_ALIAS_NAME ]; then
+                return $exit_rifupdate_fail
+                ChangeMIP2Aliasresult=$exit_rifupdate_fail
+            else
+                ChangeMIP2Aliasresult=$exit_failure
+            fi
+            return $ChangeMIP2Aliasresult 
+        fi
+    else
+        INFO "$LINENO: Cmd clusterconfig to modify cluster movable ip address to $intfto interface failed"
+        if [ $intfFrom == $BOND_ALIAS_NAME ]; then
+            ChangeMIP2Aliasresult=$exit_rifupdate_fail
+        else
+            ChangeMIP2Aliasresult=$exit_failure
+        fi
+        return $ChangeMIP2Aliasresult 
+    fi
+    TRACE_LEAVE $FUNCNAME
+    return $ChangeMIP2Aliasresult 
+}
+
+##########################################################
+# Function DeleteBond1Alias
+# Delete Bond Alias
+function DeleteBond1Alias () {
+    TRACE_ENTER $FUNCNAME
+    DeleteBond1Aliasresult=0
+
+    IfAlias_Rule=$($CMD_CLUSTER_CONF interface -D | grep "$BOND_ALIAS_NAME alias" | awk '{ print $1}')
+    IfAlias_Rule_line=$($CMD_CLUSTER_CONF interface -D | awk -v IfAlias_Rule=$IfAlias_Rule '{ if ($1==IfAlias_Rule) print $0}')
+    IfAlias_Rule_components=($IfAlias_Rule_line)
+
+    if [ ${#IfAlias_Rule_components[@]} -eq 5 ] ; then
+        CMD_CLUSTER_CONF_PARAMETER="interface --m_delete $IfAlias_Rule"
+    else
+        INFO "$LINENO: Cmd clusterconfig to find rule id for the old alias failed"
+        DeleteBond1Aliasresult=1
+        return $DeleteBond1Aliasresult
+    fi
+
+    $CMD_CLUSTER_CONF $CMD_CLUSTER_CONF_PARAMETER >> ${F_INFO}
+    if [ $? == 0 ] ; then
+            test_line=$($CMD_CLUSTER_CONF interface -D | grep -i "$BOND_ALIAS_NAME alias")
+            if [ -z $(echo $test_line | tr -d ' ') ] ; then
+                :
+            else
+                INFO "$LINENO: Cmd clusterconfig to delete $BOND_ALIAS_NAME alias failed"
+                DeleteBond1Aliasresult=1
+                return $DeleteBond1Aliasresult
+            fi
+    else
+        INFO "$LINENO: Cmd clusterconfig to delete $BOND_ALIAS_NAME alias failed"
+        DeleteBond1Aliasresult=1
+        return $DeleteBond1Aliasresult
+    fi
+    TRACE_LEAVE $FUNCNAME
+    return $DeleteBond1Aliasresult
+}
+
+##########################################################
+# Function PassiveNodeReboot
+function PassiveNodeReboot () {
+    TRACE_ENTER $FUNCNAME
+    TimeOutSecs=$1
+    PassiveRebootresult=0
+    SleepTime=5;
+
+    get_apos_rif_state $RNODE
+    remoteNodeStatus=${?:0:1}
+    INFO "$LINENO: Current remote node status ${PEER_NODE_STATUS}: ${remoteNodeStatus}"     
+    DateStart=$(date +%s)
+    DateRunning=$(date +%s)
+    delta=$(($DateRunning-$DateStart))
+    # first check is passive is going to be "passivenodeisupandworking"
+    while [ $delta -lt $TimeOutSecs ] ; do
+        PEER_NODE_STATUS=$($CMD_PRCSTATE -l | tail -n -2 | head -1 | tr -d ' ')
+        if [ $PEER_NODE_STATUS == "passivenodeisupandworking" ] ; then
+            INFO "$LINENO: Passive status is $PEER_NODE_STATUS"
+            break
+        fi
+        sleep $SleepTime
+        DateRunning=$(date +%s)
+        delta=$(($DateRunning-$DateStart))
+        INFO "$LINENO: Current node status $PEER_NODE_STATUS after $delta seconds"
+    done
+    
+    # now that the node is upa nd working, we can eprform a pcreboot
+    DateStart=$(date +%s)
+    DateRunning=$(date +%s)
+    delta=$(($DateRunning-$DateStart))
+    aposrifconf_update_single $RNODE ${remoteNodeStatus}1
+    INFO "aposrifconf_update_single $RNODE ${remoteNodeStatus}1"
+    ssh $RHOST $CMD_PRCBOOT -f "$print_RebootingPassive_broadcastmessage" >> ${F_INFO} 2>&1
+    PassiveRebootresult=$?
+    if [ $PassiveRebootresult -eq 0 ] ; then
+        INFO "$LINENO: $print_RebootingPassive"
+    else
+        PassiveRebootresult=$exit_failure
+        INFO "$LINENO: Error rebooting Passive node with error $PassiveRebootresult"
+        exit $PassiveRebootresult
+    fi
+    echo -e "\n$print_WaitRebootingPassive"
+    DateRunning=$(date +%s)
+    delta=$(($DateRunning-$DateStart))
+    
+    while [ $delta -lt $TimeOutSecs ] ; do
+        PEER_NODE_STATUS=$($CMD_PRCSTATE -l | tail -n -2 | head -1 | tr -d ' ')
+        if [ $PEER_NODE_STATUS != "passivenodeisupandworking" ] ; then
+            INFO "$LINENO: changed status to $PEER_NODE_STATUS"
+            break
+        fi
+        sleep $SleepTime
+        DateRunning=$(date +%s)
+        delta=$(($DateRunning-$DateStart))
+    done
+    aposrifconf_update_single $RNODE ${remoteNodeStatus}2
+    INFO "aposrifconf_update_single $RNODE ${remoteNodeStatus}2"
+    # now wait status coming back to "passivenodeisupandworking"
+    while [ $delta -lt $TimeOutSecs ] ; do
+        PEER_NODE_STATUS=$($CMD_PRCSTATE -l | tail -n -2 | head -1 | tr -d ' ')
+        if [ $PEER_NODE_STATUS == "passivenodeisupandworking" ] ; then
+            INFO "$LINENO: changed status to $PEER_NODE_STATUS"
+            break
+        fi
+        sleep $SleepTime
+        DateRunning=$(date +%s)
+        delta=$(($DateRunning-$DateStart))
+        INFO "$LINENO: Current node status $PEER_NODE_STATUS after $delta seconds"
+    done
+    if [ $delta -ge $TimeOutSecs ]; then
+        INFO "$LINENO: Error Passive node didn't rebooted afeter TO ($TimeOutSecs seconds, measured tiem=$delta)"
+        PassiveRebootresult=$exit_failure 
+    fi
+    aposrifconf_update_single $RNODE ${remoteNodeStatus}3
+    INFO "aposrifconf_update_single $RNODE ${remoteNodeStatus}3"
+    TRACE_LEAVE $FUNCNAME
+    return $PassiveRebootresult
+}
+
+
+##########################################################
+# Function RebootActive
+function RebootActive () {
+    TRACE_ENTER $FUNCNAME
+    RebootActiveresult=0
+    INFO "$print_RebootingActive_broadcastmessage"
+    echo -e "\n$print_RebootingActive"
+    $CMD_PRCBOOT -f "$print_RebootingActive_broadcastmessage" >>${F_INFO} 2>&1
+    RebootActiveresult=$?
+    if [ $RebootActiveresult -eq 0 ] ; then
+        INFO "$LINENO: $print_RebootingActive"
+    else
+        RebootActiveresult=$exit_failure
+        INFO "$LINENO: RebootActive exit error:$?. Error rebooting Active node"
+    fi
+    TRACE_LEAVE $FUNCNAME
+    return $RebootActiveresult
+}
+
+
+##########################################################
+# Function alias_interface_properly_configured
+#define ifconfig_check_configuration this/peer $BOND_NAME
+#remove ifconfig_check_configuration this/peer $ETH1_NAME
+function ifconfig_check_configuration () {
+    TRACE_ENTER $FUNCNAME
+
+    if [ $1 == "this" ] ; then
+        expected_ip=$Cextip
+        conf_lines=$($IFCONFIG $2 | head -2)
+        conf_line=$(echo -e "$conf_lines" | tail -n -1)
+        conf_line_components=($conf_line)
+        intf_ip=${conf_line_components[1]:5}
+        if [ $intf_ip == $expected_ip ] ; then
+            echo 1
+        else
+            echo 0
+        fi
+    else
+        echo 1
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+##########################################################
+# Function rif_imm_set
+function rif_imm_set(){
+        TRACE_ENTER $FUNCNAME
+        imm_num=$1
+        imm_class_name=$(immfind -c NorthBound)
+        if [ ! -z $imm_class_name ] ; then
+                immcfg -a teamingStatus=$imm_num $imm_class_name
+        else
+                INFO "$LINENO:  cmd immfind failed"
+                echo -n "\n$exit_failure_string"
+                script_exit $exit_failure
+        fi
+        rif_status=$(immlist $imm_class_name | grep teamingStatus | awk '{ print $3}')
+        if [ ! -z $rif_status ] ; then
+                if [ $rif_status -eq $imm_num ] ; then
+                        INFO "$LINENO: immcfg successfully verified, rif_status is $rif_status "
+                else
+                        INFO "$LINENO: rif_status -$rif_status- is not equal to  imm_num -$imm_num- after setting it"
+                        echo -n "\n$exit_failure_string"
+                        script_exit $exit_failure
+                fi
+        else
+                INFO "$LINENO: Cmd 'immfind -c NorthBound' failed"
+                echo -n "\n$exit_failure_string"
+                script_exit $exit_failure
+        fi
+        TRACE_LEAVE $FUNCNAME
+}
+
+
+
+
+
+##############################################################################
+################### API functions ############################################
+##############################################################################
+
+##
+# Name:
+#	aposrifconf_exist
+# Description:
+#	check if apos_rif.conf file exists
+# Output:
+#	0 if file exists
+#	1 if file doesn't exist
+#
+function aposrifconf_exist(){
+	return_code=$exit_success
+	if [ ! -e $APOS_RIF_CONF ] ; then
+		return_code=1
+	fi
+
+	return $return_code
+}
+
+##
+# Name:
+#	aposrifconf_create
+# Description:
+#	creates apos_rif.conf file
+# 
+function aposrifconf_create(){
+	touch $APOS_RIF_CONF
+	chmod 644 $APOS_RIF_CONF
+	aposrifconf_init
+}
+
+##
+# Name:
+#	aposrifconf_init
+# Description:
+#	init apos_rif.conf file
+# 
+function aposrifconf_init(){
+	return $(aposrifconf_update_both 0)
+}
+
+##
+# Name:
+#	aposrifconf_update_both
+# Description:
+#	updates both lines of apos_rif.conf file
+# Input:
+#	state of both nodes
+#
+function aposrifconf_update_both(){
+	aposrifconf_exist
+	if [ $? -gt 0  ] ; then
+		return 1
+	fi
+	timestamp=$(date +%s)
+	firstline=${RIFSTATE_STRING[0]}$equal$1$separator$TIMESTAMP_STRING$equal$timestamp
+	echo $firstline > $APOS_RIF_CONF
+	secondline=${RIFSTATE_STRING[1]}$equal$1$separator$TIMESTAMP_STRING$equal$timestamp
+	echo $secondline >> $APOS_RIF_CONF
+	return 0
+}
+
+##
+# Name:
+#	aposrifconf_update_single
+# Description:
+#	updates only one line of apos_rif.conf file
+# Input:
+#	ID of the node (1 or 2) and its state
+#
+function aposrifconf_update_single(){
+	aposrifconf_exist
+	if [ $? -gt 0  ] ; then
+		return 1
+	fi
+	if [ $1 -gt 2 ] ; then
+	echo FATAL ERROR
+	return 1
+	fi
+	timestamp=$(date +%s)
+	lineToReplace=$1
+	index=$(($1-1))
+	newLine=${RIFSTATE_STRING[$index]}$equal$2$separator$TIMESTAMP_STRING$equal$timestamp
+	sed -e "$1s/.*/$newLine/" $APOS_RIF_CONF > ${APOS_RIF_CONF}.tmp && mv ${APOS_RIF_CONF}.tmp $APOS_RIF_CONF
+	return 0
+}
+ 
+##
+# Name:
+#	get_apos_rif_state
+# Description:
+#	Returns the state of the given node
+# Input:
+#	ID of the node
+#
+# Output:
+#	State of the node given in input
+#
+function get_apos_rif_state(){
+	aposrifconf_exist
+	if [ $? -gt 0  ] ; then
+		aposrifconf_create
+		if [ $rif_status -eq 0 ] || [ $rif_status -eq 1 ] ; then
+			aposrifconf_update_both $rif_status
+		fi
+	fi
+	if [ $1 -gt 2 ] ; then
+	echo FATAL ERROR
+	return -1
+	fi
+	line=$(sed -n "$1p" $APOS_RIF_CONF)
+	stateBegin=$(expr index "$line" '=')
+	stateEnd=$(($(expr index "$line" ';')-1))
+	stateToReturn=${line:$stateBegin:$(($stateEnd-$stateBegin))}	
+ 
+	return $stateToReturn
+}
+
+
+##
+# Name:
+#	get_apos_rif_timestamp
+# Description:
+#	Returns the timestamp of the 
+#   last state change on the given node
+# Input:
+#	ID of the node
+#
+# Output:
+#	Timestamp of the last state change of the node given in input
+#
+function get_apos_rif_timestamp(){
+	aposrifconf_exist
+	if [ $? -gt 0  ] ; then
+		aposrifconf_create
+	fi
+	if [ $1 -gt 2 ] ; then
+	echo FATAL ERROR
+	return -1
+	fi
+	line=$(sed -n "$1p" $APOS_RIF_CONF)
+	timestampBegin=$(($(expr index "$line" ';')+3))
+	timestampEnd=${#line}
+	ReturnTimestampValue=${line:$timestampBegin:$(($timestampEnd-$timestampBegin))}
+}
+
+##
+# Name:
+#	cluster_conf_commit
+# Description:
+#	invoke  
+#   /opt/ap/apos/bin/clusterconf/clu_mgmt --commit
+# 
+# Input:
+#   -
+# Output:
+#	-
+#
+function cluster_conf_commit(){
+	$CMD_CLU_MGMT --commit &>/dev/null
+}
+
+##
+# Name:
+#	ModifyVLAN
+# Description:
+#	Update the VLAN related rules in cluster.conf
+#	and the VLAN information in vlan_adapter_maping.conf
+# Input:
+#	$1 starting value (eth1 or bond1)
+#	$2 ending value (eth1 or bond1)
+#
+# Returns:
+#	0 in case of successful
+#	1 in case of error
+#
+function ModifyVLAN() {
+	TRACE_ENTER $FUNCNAME
+	local from="$1"
+	local to="$2"
+	
+	cat $CLUSTER_CONF | grep -E "$from\.[0-9]+" &> /dev/null
+	if [ $? -eq 0 ] ; then
+		ModifyVLANRules "interface" "$from" "$to"
+		if [ $? -ne 0 ] ; then
+			INFO "ModifyVLANRules interface failed"
+			return $exit_failure
+		fi
+
+		ModifyVLANRules "ip" "$from" "$to"
+		if [ $? -ne 0 ] ; then
+			INFO "ModifyVLANRules ip failed"
+			return $exit_failure
+		fi
+
+		ModifyVLANRules "mip" "$from" "$to"
+		if [ $? -ne 0 ] ; then
+			INFO "ModifyVLANRules mip failed"
+			return $exit_failure
+		fi
+		
+		cat $CLUSTER_CONF | grep -E "$from\.[0-9]+" | grep -v "^iptables " &> /dev/null
+		if [ $? -eq 0 ] ; then
+			INFO "ERROR during VLAN rules update"
+			return $exit_failure
+		fi
+		
+		sed -i "s/\(\s\s*\)$from.\([0-9][0-9]*\)$/\1$to.\2/" $VLAN_MAPPING_CONF &> /dev/null
+		if [ $? -ne 0 ] ; then
+			INFO "ERROR during VLAN rules update"
+			return $exit_failure
+		fi
+		
+		cat $VLAN_MAPPING_CONF | grep -E "$from\.[0-9]+" &> /dev/null
+		if [ $? -eq 0 ] ; then
+			INFO "ERROR during VLAN rules update"
+			return $exit_failure
+		fi
+	else
+		INFO "No VLAN rules found"
+	fi
+	
+	TRACE_LEAVE $FUNCNAME
+	return $exit_success
+}
+
+##
+# Name:
+#	ModifyVLANRules
+# Description:
+#	Update the single VLAN related rules in cluster.conf
+# Input:
+#	$1 rule type (interface or ip or mip)
+#	$1 starting value (eth1 or bond1)
+#	$2 ending value (eth1 or bond1)
+#
+# Returns:
+#	0 in case of successful
+#	1 in case of error
+#
+function ModifyVLANRules() {
+	TRACE_ENTER $FUNCNAME
+	local rule_type="$1"
+	local from="$2"
+	local to="$3"
+	
+	local rules_list=$(cat $CLUSTER_CONF | grep -E "$from\.[0-9]+" | grep "^$rule_type " | tr '\n' '*')
+	if [ $? -ne 0 ] ; then
+		INFO "Failed to retrieve VLAN $rule_type rules"
+		return $exit_failure
+	fi
+	
+	local rule
+	IFS=$'*'
+	for rule in $rules_list ; do
+		local new_rule=${rule//"$from."/"$to."}
+		local rule_number=$($CMD_CLUSTER_CONF "$rule_type" -D | grep "$rule" | awk -F' ' '{ print $1 }')
+		
+		$CMD_CLUSTER_CONF $rule_type --m_modify $rule_number:$new_rule &> /dev/null
+		if [ $? -ne 0 ] ; then
+			INFO "Failed to modify $rule_type rule no. $rule_number"
+			return $exit_failure
+		fi
+	done
+	unset IFS
+	
+	TRACE_LEAVE $FUNCNAME
+	return $exit_success
+}

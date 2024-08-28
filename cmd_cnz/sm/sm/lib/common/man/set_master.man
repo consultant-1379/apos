@@ -1,0 +1,19 @@
+Usage:  shelfmngr set master [--verbose] [--help] <board>
+
+Set the specified sc board (or no-board) to be the "master" one.
+
+<board>                 represents the board the command will operate on. It
+                        can assume one of the following values:				                
+		                <board_name>
+		                <slot_number>
+				none
+				
+<board_name>            can assume one of the following values (the supported
+                        logical names are found in lib/common/slot_by_name.dat
+                        under the shelfmngr root directory):
+	                        sc_a, sca
+		                sc_b, scb		                
+
+<slot_number>           must be an unsigned integer mapped to one of the sc 
+                        boards in the slot_by_name.dat file.
+

@@ -1,0 +1,43 @@
+omapi-port 7911;
+
+# Untagged DHCP software upgrade
+# ------------------------------------------------------------------------------
+log-facility local7;
+ddns-update-style none;
+ddns-updates off;
+default-lease-time infinite;
+
+# Ericsson proprietary
+# ------------------------------------------------------------------------------
+option tz-database-string code 101 = text;
+option startup-mode code 209 = text;
+option nfs-server code 224 = text;
+option snmp-trap-receiver code 225 = array of ip-address;
+option bgci-address code 226 = ip-address;
+option environment code 229 = text;
+option iplb-role code 230 = text;
+option nfs-client code 231 = text;
+option bootfile-sw-version code 232 = text;
+option startup-switch-mode code 233 = text;
+option shelfmgr-operating-mode code 236 = unsigned integer 8;
+option wrap-core-config code 254 = unsigned integer 8;
+
+# Boot and OaM subnet 169
+# ------------------------------------------------------------------------------
+subnet 192.168.169.0 netmask 255.255.255.0 {
+        server-identifier 192.168.169.33;
+        supersede server.always-broadcast = 01;
+        range 192.168.169.100 192.168.169.253;
+        allow unknown-clients;
+        max-lease-time 180;
+}
+
+# Boot and OaM subnet 170
+# ------------------------------------------------------------------------------
+subnet 192.168.170.0 netmask 255.255.255.0 {
+        server-identifier 192.168.170.33;
+        supersede server.always-broadcast = 01;
+        range 192.168.170.100 192.168.170.253;
+        allow unknown-clients;
+        max-lease-time 180;
+}

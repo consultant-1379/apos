@@ -1,0 +1,103 @@
+#!/bin/bash -u
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       bspmngr
+# Description:
+#       A script to manage the boards in an Ericsson EGEM magazine.
+##
+# Usage:
+#	call "bspmngr --help"
+##
+# Changelog:
+# Wed Feb 05 2014 - Rajeswari P
+#	First Version
+##
+
+. ${AP_HOME:-/opt/ap}/apos/bin/bspm/lib/common/bspmngr_common.sh
+##. /opt/ap/apos/bin/bspmanager/lib/common/bspmngr_common.sh
+
+# Dynamic OID list handling
+#if [[ ! -L "${SHELFMNGR_DIR}/${LIB_COMMON_DIR}/oid_list.sh" || ! -L "${SHELFMNGR_DIR}/${LIB_COMMON_DIR}/snmp_queries.sh" ]]; then
+#	identify_magazine
+#fi
+
+
+# Variables -------------------------------------------------------------- BEGIN
+COMMAND=''
+SUB_COMMAND=''
+export OPT_DEBUG=$FALSE
+# Variables ---------------------------------------------------------------- END
+
+function usage(){
+	cat $MAN_DIR/bspmngr.man
+}
+
+# The function reads the command line argument list and parses it flagging the
+#  right variables in a case/esac switch.
+# Syntax: parse_cmdline $@
+function parse_cmdline(){	
+	local ARGS="$@"	
+	eval set -- "$ARGS"
+	if [ $# -le 0 ]; then
+		usage
+		abort 'you must specify at least one option/command'
+	fi
+
+	while [ $# -gt 0 ]; do
+		case $1 in		
+			--debug)
+				set -x
+				OPT_DEBUG=$TRUE
+			;;
+			--help)
+				usage
+				exit $TRUE
+			;;
+			$(command_is_valid $1 && echo $1))
+				COMMAND=$1			
+				shift
+				if [ $# -le 0 ]; then
+					usage
+					abort 'you must specify at least one sub-command'
+				fi
+				case "$1" in
+					$(sub_command_is_valid $COMMAND $1 && echo $1))
+						SUB_COMMAND=$1
+						shift
+						./$CMD_DIR/$COMMAND/$SUB_COMMAND $*
+						EXIT_CODE=$?
+						popd >/dev/null 2>&1
+						[ $EXIT_CODE -ne $TRUE ] && abort "the command \"$COMMAND $SUB_COMMAND\" ended with errors"
+						return $EXIT_CODE
+					;;
+					*)
+						abort "sub-command \"$1\" not valid"
+					;;
+				esac			
+			;;		
+			*)			
+				abort "command/option \"$1\" not valid"
+			;;
+		esac
+		shift
+	done
+	return $?
+}
+
+#                                              __    __   _______   _   __    _
+#                                             |  \  /  | |  ___  | | | |  \  | |
+#                                             |   \/   | | |___| | | | |   \ | |
+#                                             | |\  /| | |  ___  | | | | |\ \| |
+#                                             | | \/ | | | |   | | | | | | \   |
+#                                             |_|    |_| |_|   |_| |_| |_|  \__|
+#
+pushd $BSPMNGR_DIR >/dev/null 2>&1
+
+parse_cmdline $@
+clean_xml
+
+exit $TRUE

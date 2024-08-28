@@ -1,0 +1,72 @@
+#!/bin/bash
+
+## This script powers up the specified board. 
+## Note that only CPUBs and APUBs can be powered up like that. 
+## It uses Shelf Management Function 11, querying both SCBs. 
+##
+## Usage:
+##   smgrPwrOff <slot>
+##   smgrPwrOff APUB|CPUB A|B
+## It prints
+##	 Failed : (reason for failure) - if execution fails. 
+##   OK                            - if execution succeeded. 
+
+
+usage () {
+	echo "Powers up the specified board. "
+	echo "Usage: $0 <slot>"
+	echo "Usage: $0 APUB|CPUB A|B"
+	exit 1
+}
+
+source `dirname $0`/constants    # include to set constants common for all smgr scripts
+
+if [ $# -eq 0 -o $# -gt 2 ]; then usage; fi;
+
+usageOK=0
+
+if [ $# -eq 2 ]; 
+then
+	if [ $2 != "A" -a $2 != "B" ]; then usage; fi;
+	for boardType in "${boardTypes[@]}" 
+	do
+		if [ $1 == $boardType ]; then let usageOK++; fi;
+	done
+	mode=indirect
+else if [ $# -eq 1 ];
+then
+	arglen=$(expr length "$1")
+	if [[ $1 =~ [0-9]{$arglen} ]]; 
+	then 
+		let usageOK++;
+	fi;
+	mode=direct
+fi;
+fi;
+
+if [ $usageOK -eq 0 ]; then usage; fi;
+
+ipSCBA=$(`dirname $0`/hwcwrap SCB A IP 169)
+ipSCBB=$(`dirname $0`/hwcwrap SCB B IP 169)
+
+if [ $mode == direct ]; then slot=$1; fi;
+if [ $mode == indirect ]; then slot=$(`dirname $0`/hwcwrap $1 $2 SLOT); fi;
+
+snmpres=$(snmpset -L n -M $mibspath -v 2c -c public $ipSCBA .1.3.6.1.4.1.193.154.2.1.2.1.1.1.11.$slot i 0 2>/tmp/snmperror | grep $intGrep)
+
+if [[ $snmpres =~ $intRegExp ]]; 
+then
+	echo "OK"
+	exit 0
+fi;
+
+snmpres=$(snmpset -L n -M $mibspath -v 2c -c public $ipSCBB .1.3.6.1.4.1.193.154.2.1.2.1.1.1.11.$slot i 0 2>/tmp/snmperror | grep $intGrep)
+
+if [[ $snmpres =~ $intRegExp ]]; 
+then
+	echo "OK"
+	exit 0
+fi;
+
+echo "Failed: snmpset via both SCBs did not succeed."
+exit 1

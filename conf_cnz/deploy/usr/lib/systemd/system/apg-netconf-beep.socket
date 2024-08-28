@@ -1,0 +1,10 @@
+[Unit]
+Description=NETCONF-beep Activation Socket
+DefaultDependencies=no
+
+[Socket]
+ListenStream=<node_primarysca_network_ip_address>:831
+Accept=yes
+
+[Install]
+WantedBy=lde-servicestart.target

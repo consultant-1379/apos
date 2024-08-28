@@ -1,0 +1,33 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2011 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       ver
+# Description:
+#       Showing linux version.
+# Note:
+#	None.
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Mon Mar 11 2013 - Francesco Rainone (efrarai)
+#	Updated the output string.
+# - Tue Sep 28 2011 - Paolo Palmieri (epaopal)
+#	First version.
+##
+
+# _____________________ _____________________ _____________________ _____________________
+#|    _ _   _  .  _    |    _ _   _  .  _    |    _ _   _  .  _    |    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |   | ) ) (_| | | )   |   | ) ) (_| | | )   |   | ) ) (_| | | )   |
+#|_____________________|_____________________|_____________________|_____________________|
+# Here begins the "main" function...
+
+# Set the interpreter to exit if a non-initialized variable is used.
+set -u
+
+echo "APG43L"

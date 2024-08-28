@@ -1,0 +1,457 @@
+#!/bin/bash
+#
+# This script performs stop & start
+# operations on Applications
+# integrated with CoreMW
+# Author: Satish Jaiswal
+
+
+#setting  global variables
+
+
+exit_success=0
+exit_failure=1
+true=1
+false=0
+RED_MOD=
+slot_id=
+admin_unlock=1
+admin_lock=2
+admin_lock_instantiation=3
+admin_unlock_instantiation=4
+out_of_service=1
+fully_assigned=2
+locked=2
+unlocked=1
+timeout=5
+SU_START=
+SU_STOP=
+SI_START=
+SI_STOP=
+SU_OPER=
+INPUT_OPTINS=
+
+## The usual usage information
+##
+function usage_error() {
+
+	echo
+	echo -e "\t apos_ha_srvcntl - start and stop AP 2N and NoRed applications and 2N and NoRed SU"
+	echo
+        echo "SYNOPSIS:"
+     	echo -e "\t apos_ha_srvcntl [options]..."
+	echo
+        echo "DESCRIPTION:"
+	echo
+        echo "2N:"
+        echo -e "\t -s|--start-si   <service-name>"
+        echo -e "\t -t|--stop-si    <service-name>"
+        echo -e "\t -S|--start-su   <SU-name>"
+        echo -e "\t -T|--stop-su    <SU-name>"
+	echo
+	echo "NoRed:"
+        echo -e "\t -s|--start-si   <service-name> <node-id>"
+        echo -e "\t -t|--stop-si    <service-name> <node-id>"
+        echo -e "\t -S|--start-su   <service-name> <node-id>"
+        echo -e "\t -T|--stop-su    <service-name> <node-id>"
+	echo
+        echo "Example:"
+	echo
+        echo "2N:"
+        echo -e "\t apos_ha_srvcntl --start-si SSU"
+        echo -e "\t apos_ha_srvcntl --stop-si  SSU"
+        echo -e "\t apos_ha_srvcntl --start-su SU1/SU2"
+        echo -e "\t apos_ha_srvcntl --stop-su  SU1/SU2"
+	echo
+        echo "NoRed:"
+        echo -e "\t apos_ha_srvcntl --start-si EMF 1"
+        echo -e "\t apos_ha_srvcntl --start-si EMF 2"
+        echo -e "\t apos_ha_srvcntl --start-su EMF 1"
+        echo -e "\t apos_ha_srvcntl --start-su EMF 2"
+        echo >&2
+	
+	exit $exit_failure
+}
+
+[[ $# < 1 ]] && {
+        usage_error
+        exit $exit_failure
+}
+
+#parsing command line arguments
+#
+arg=`echo "$1"`
+arg_char_1=`echo ${arg:0:1}`
+arg_char_2=`echo ${arg:1:1}`
+
+if [[ $arg_char_1 != '-'  || -z $arg_char_2   ]]; then
+	usage_error;
+fi
+
+die(){
+        echo -e "$@"
+        exit $exit_failure
+}
+
+function get_redundancy_model() {
+
+	if [ "$SU_OPER" == "$true" ]; then	
+	        if [[ "$SERVICE_NAME" == "SU1" || "$SERVICE_NAME" == "SU2" ]]; then
+        	       	RED_MOD=2N
+			return $true
+		fi
+	fi
+
+
+	#check whether component exist in the system or not
+        #
+        if ! immfind -c SaAmfComp 2>/dev/null | grep "safComp=$SERVICE_NAME,safSu=$slot_id"  >/dev/null 2>&1; then
+                echo "$SERVICE_NAME does not exist"
+                exit $exit_failure
+        fi
+
+	#check service group of the service to be act upon
+        #
+        if immfind -c SaAmfComp 2>/dev/null | grep $SERVICE_NAME | cut -d , -f3 | cut -d = -f2 | grep 2N >/dev/null 2>&1; then
+                RED_MOD=2N
+        elif immfind -c SaAmfComp 2>/dev/null | grep $SERVICE_NAME | cut -d , -f3 | cut -d = -f2 | grep  NoRed >/dev/null 2>&1; then
+                RED_MOD=NoRed
+        else
+                echo "Invalid configured Redundancy : "$RED_MOD
+                exit $exit_failure
+        fi
+
+}
+
+function get_dn() {
+
+	#For SU
+	if [ "$SU_OPER" == "$true" ]; then
+		#For 2N apps
+		if [[ "$RED_MOD" == "2N" ]]; then
+			dn=`amf-state su | grep 2N | grep APG | grep safSu=$slot_id`
+		fi
+		
+		#For NoRed apps
+                if [[ "$RED_MOD" == "NoRed" ]]; then
+                        dn=`amf-state su | grep NoRed | grep $SERVICE_NAME | grep safSu=$slot_id`
+                fi
+	fi
+
+
+	#For SI
+	if [ "$SI_OPER" == "$true" ]; then
+                #For 2N apps
+                if [[ "$RED_MOD" == "2N" ]]; then
+                        dn=`amf-state si | grep $SERVICE_NAME,`
+                fi
+
+        	if [[ "$RED_MOD" == "NoRed" ]]; then
+	                dn=`amf-state si | grep $SERVICE_NAME | grep $slot_id,`
+		fi
+        fi	
+
+}
+
+#Checks the locked and readiness state of a su
+function is_locked(){
+
+        admin_state=
+        assignment_state=
+	readiness_state=
+        
+        dn=$1
+	
+        #For SU
+	if [ "$SU_OPER" == "$true" ]; then
+		admin_state=`immlist -a saAmfSUAdminState $dn | cut -d = -f2 | cut -d = -f2`
+		readiness_state=`immlist -a saAmfSUReadinessState $dn | cut -d = -f2 | cut -d = -f2`
+
+                if [[ "$admin_state" == "$locked" || "$admin_state" == "$admin_lock_instantiation" ]]; then
+                        return $true
+                fi	
+
+		if [[ "$readiness_state" == "$out_of_service" && "$admin_state" == "$unlocked" ]]; then
+			die "$SERVICE_NAME is Out-Of-Service. Can not started."
+                fi	
+	
+	fi
+
+        #For SI
+	if [ "$SI_OPER" == "$true" ]; then	
+        	admin_state=`immlist -a saAmfSIAdminState $dn | cut -d = -f2 | cut -d = -f2`
+		assignment_state=`immlist -a saAmfSIAssignmentState $dn | cut -d = -f2 | cut -d = -f2`
+
+	        if [ "$admin_state" == "$locked" ]; then
+                	return $true
+        	fi
+
+		if [[ "$assignment_state" != "$fully_assigned" && "$admin_state" == "$unlocked" ]]; then
+                        die "$SERVICE_NAME is Out-Of-Service. Can not started."
+                fi	
+
+	fi
+
+        return $false
+}
+
+
+function wait_for_adminstate() {
+
+        local dn=$1
+        local state=$2
+        local start=$(date +"%s")
+        local now=$start
+
+        while test $((now-start)) -le $timeout; do
+
+		if [ "$SI_OPER" == "$true" ]; then
+                	eval $(immlist -a saAmfSIAdminState $dn)
+                	test "$saAmfSIAdminState" = "$state" && return $exit_success
+		fi
+
+		if [ "$SU_OPER" == "$true" ]; then
+	                eval $(immlist -a saAmfSUAdminState $dn)
+        	        test "$saAmfSUAdminState" = "$state" && return $exit_success
+		fi	
+	
+                sleep 1
+                echo .
+                now=$(date +"%s")
+        done
+        die "Timeout wait_for_adminstate ($state) [$dn]"
+}
+
+
+function service_stop() {
+
+        dn=$1
+        retval=
+
+	get_dn
+	is_locked $dn
+
+        retval=$?
+        if [ "$retval" == "$true" ]; then
+                echo "Service not running."
+                return $exit_failure
+        fi
+
+	echo -n "Stopping $SERVICE_NAME..."	
+        immadm -o $admin_lock $dn || die "Failed [immadm -o $admin_lock $dn]"
+        retval=`wait_for_adminstate $dn $admin_lock`
+        if [ "$retval" == "$exit_failure" ]; then
+                return $exit_failure
+        fi
+
+	if [ "$SU_OPER" == "$true" ]; then
+		immadm -o $admin_lock_instantiation $dn || die "Failed [immadm -o $admin_lock_instantiation $dn]"
+		retval=`wait_for_adminstate $dn $admin_lock_instantiation`
+		if [ "$retval" == "$exit_failure" ]; then
+                	return $exit_failure
+        	fi
+	 fi
+	echo "Success!"
+}
+
+function service_start() {
+        dn=$1
+        retval=
+
+	get_dn
+	is_locked $dn
+
+	retval=$?
+        if [ "$retval" == "$false" ]; then
+                echo "Service already running."
+                return $exit_failure
+        fi
+
+	 echo -n "Starting $SERVICE_NAME..."	
+	if [ "$admin_state" == "$admin_lock_instantiation" ]; then
+		immadm -o $admin_unlock_instantiation $dn || die "Failed [immadm -o $admin_unlock_instantiation $dn]"
+		retval=`wait_for_adminstate $dn $admin_unlock_instantiation`
+	        if [ "$retval" == "$exit_failure" ]; then
+	                return $exit_failure
+		fi
+       fi
+
+
+        immadm -o $admin_unlock $dn || die "Failed [immadm -o $admin_unlock $dn]"
+        retval=`wait_for_adminstate $dn $admin_unlock`
+        if [ "$retval" == "$exit_failure" ]; then
+                return $exit_failure
+        fi
+	echo "Success!"
+        return `wait_for_adminstate $dn $admin_unlock`
+}
+
+
+# The function reads the command line argument list and parses it flagging the
+# right variables in a case/esac switch.
+# Input: the function must be invoked with the $@ parameter:
+# parse_cmdline $*
+# Required: please make attention to handle the cases in the right way.
+#
+function parse_cmdline(){
+
+        local OPTIONS='s: t: S: T:'
+
+        local LONG_OPTIONS='start-si: stop-si: start-su: stop-su:'
+
+        ARGS=`getopt --longoptions "$LONG_OPTIONS" --options "$OPTIONS" -- "$@"`
+        RETURN_CODE=$?
+        if [ $RETURN_CODE -ne 0 ]; then
+                usage_error
+        fi
+
+        eval set -- "$ARGS"
+
+        # Make sure to handle the cases for all the options listed in OPTIONS
+        #  and LONG_OPTIONS and to fill up the right script-wide variables.
+        while [ $# -gt 0 ]; do
+                case "$1" in
+                        -s|--start-si)
+                                SI_START=$true
+				SI_OPER=$true
+				SERVICE_NAME=`echo $2 | tr [:lower:] [:upper:]`
+				if [ ! -z $4 ]; then
+					slot_id=$4
+				fi
+
+				if [ ! -z $5 ]; then
+					usage_error
+				fi
+				shift
+                        ;;
+                        -t|--stop-si)
+
+                                SI_STOP=$true
+				SI_OPER=$true
+				SERVICE_NAME=`echo $2 | tr [:lower:] [:upper:]`
+                                if [ ! -z $4 ]; then
+                                        slot_id=$4
+                                fi
+
+                                if [ ! -z $5 ]; then
+                                        usage_error
+                                fi
+
+				shift
+                        ;;
+                        -S|--start-su)
+                                SU_START=$true
+				SU_OPER=$true
+
+				SERVICE_NAME=`echo $2 | tr [:lower:] [:upper:]`
+                                if [ ! -z $4 ]; then
+                                        slot_id=$4
+                                fi
+
+                                if [ ! -z $5 ]; then
+                                        usage_error
+                                fi
+
+				shift
+                        ;;
+                        -T|--stop-su)
+                                SU_STOP=$true
+				SU_OPER=$true
+				SERVICE_NAME=`echo $2 | tr [:lower:] [:upper:]`
+                                if [ ! -z $4 ]; then
+                                        slot_id=$4
+                                fi
+
+                                if [ ! -z $5 ]; then
+                                        usage_error
+                                fi
+
+				shift
+                        ;;
+                        --)
+                                shift
+                                break
+                        ;;
+                        *)
+                                usage_error
+                        ;;
+                esac
+                shift
+        done
+}
+
+
+
+function ap_service_conrol(){
+
+	get_redundancy_model
+
+
+	if [ "$RED_MOD" == "NoRed"  ]; then
+		if [ -z $slot_id ]; then
+        		usage_error
+        	fi
+	fi
+
+        if [ "$SU_STOP" == "$true" ]; then
+
+        	if [ "$RED_MOD" == "2N" ]; then
+			if [ "$SERVICE_NAME" == "SU1" ]; then
+				slot_id=1
+			elif [ "$SERVICE_NAME" == "SU2" ]; then
+        	               	slot_id=2
+			else
+				usage_error
+			fi
+        	fi
+
+
+                service_stop
+                retval=$?
+	fi
+
+	if [ "$SU_START" == "$true" ]; then
+
+	        if [ "$RED_MOD" == "2N" ]; then
+			if [ "$SERVICE_NAME" == "SU1" ]; then
+				slot_id=1
+			elif [ "$SERVICE_NAME" == "SU2" ]; then
+        	               	slot_id=2
+			else
+				usage_error
+			fi
+	        fi
+
+                service_start
+                retval=$?
+        fi
+
+        if [ "$SI_STOP" == "$true" ]; then
+                service_stop
+                retval=$?
+        fi
+
+        if [ "$SI_START" == "$true" ]; then
+	        service_start
+                retval=$?
+        fi
+
+}
+
+
+#            ______
+#           |      |\
+#           | MAIN | |
+#           |______| |
+#            \______\|
+#
+
+
+#Parsing command-line arguments
+parse_cmdline $*
+
+# start/stop service or su
+ap_service_conrol
+
+exit $exit_success
+

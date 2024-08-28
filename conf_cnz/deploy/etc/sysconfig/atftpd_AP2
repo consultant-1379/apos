@@ -1,0 +1,33 @@
+## Path:    Network/FTP/Atftpd
+## Description: ATFTP Configuration
+## Type:    string
+## Default: "--daemon "
+#
+# atftpd options
+#
+ATFTPD_OPTIONS="--verbose --daemon --no-fork"
+
+## Type:    yesno
+## Default: no
+#
+# Use inetd instead of daemon
+#
+ATFTPD_USE_INETD="no"
+
+## Type:    string
+## Default: "/tftpboot"
+#
+#  TFTP directory must be a world readable/writable directory.
+#  By default /tftpboot is assumed.
+#
+ATFTPD_DIRECTORY="/data/apz/data"
+
+## Type:    string
+## Default: ""
+#
+#  Whitespace seperated list of IP addresses which ATFTPD binds to.
+#  One instance of the service is started on each IP address.
+#  By default atftpd will listen on all available IP addresses/interfaces.
+#
+ATFTPD_BIND_ADDRESSES_SC1="192.168.169.3 192.168.169.34 192.168.170.3 192.168.170.34"
+ATFTPD_BIND_ADDRESSES_SC2="192.168.169.4 192.168.169.34 192.168.170.4 192.168.170.34"

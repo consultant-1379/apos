@@ -1,0 +1,39 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       sg_mapx
+# Description:
+#       A script to wrap the invocation of sg_map with '-x' option by TS user.
+# Note:
+#       None.
+##
+# Usage:
+#       None.
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Thu Nov 08 2013  - Madhu Muthyala (xmadmut)
+#       First version.
+##
+
+function help()
+{
+	echo -e "\nUsage: sg_mapx\n"
+}
+
+if [ $# -gt 0 ] ; then
+	echo -n "Incorrect usage"
+	help
+	exit 2
+else 
+	/usr/bin/sudo /usr/bin/sg_map -x
+fi
+
+exit $?
+

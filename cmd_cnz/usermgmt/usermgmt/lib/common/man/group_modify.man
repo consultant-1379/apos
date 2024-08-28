@@ -1,0 +1,9 @@
+Usage:  usermgmt group modify [--help] [--gid=group_id] <--gname=group_name>
+
+Modify the group account using the values specified.
+ 
+<--gname=>              Specify the Group name.
+
+<--gid=>                Specify GroupID for the new group.
+
+<--help>                This help.

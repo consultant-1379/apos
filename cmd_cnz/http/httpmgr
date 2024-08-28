@@ -1,0 +1,3442 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2014 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       httpmgr
+#
+# Description:
+#       This command is used to configure (Apache) HTTP Server on APG43L
+##
+# Usage:
+#       httpmgr [-c|--cfg config_file] [-s|--security on|off] [-d|--daemon start|stop|restart]
+#       httpmgr [-q|--query daemon|conf|all]
+#       httpmgr [--cert <NodeCredentialId>] (hidden)
+#       httpmgr [--tcert <TrustedCertificateId>] (hidden)
+#       httpmgr [-q| --query status] (hidden)
+##
+# Output:
+#       Command output is directly printed on console.
+##
+# Changelog:
+# - Jan 10 2022 - Akhila Giramoni (ZGIRAKH)
+#    - GSNH Secuirity Enhancements
+# - Dec 20 2021 - Rajendra Prasad (ZRJAAPR)
+#    - GSNH Secuirity Enhancements
+# - Jan 25 2022 - Ganoz Siva Kunar (XSIGANO)
+#    - APG43L 4.3, GSNH security enhancements - MMF3 port hardening
+#    - Addition of IP tables rules at web server start
+# - Apr 23 2020 - Roshini Chilukoti (ZCHIROS)
+#    - Added fix for TR HY32331 APG43L 3.8.0 R9B, Web server security configuration
+# - May 6 2019 - Naveen G (ZGXXNAV)
+#    - GSNH security enhancments
+# - Jun 10 2019 - Gnaneswara Seshu (ZBHEGNA)
+#    - Added workaround for SEC 2.11
+# - AUG 02 2018 - Prabhakaran Dayalan (XPRADAY)
+#    - Apache new directives included
+# - May 18 2018 - Malangsha Shaik(xmalsha)
+#    - Added workaround for GSNH certificates issue
+# - Jan 22 2018 - Swetha Rambathini (xsweram)
+#    - Adaptations for SEC 2.5 NBC
+# - Sep 5 2017 - Pravalika P (ZPRAPXX)
+#	C - Fix provided for TR HW25251
+# - Jun 7 2017 - Pravalika P (ZPRAPXX)
+#	B - Fix provided for TR HV94956
+# - May 12 2017 - Pravalika P (ZPRAPXX)
+#	A - Added IP validation in Virtual environment
+# - Sep 8 2015 - Nazeema Begum (XNAZBEG)
+#	E - Fix provided for the TR HU11036
+# - Jul 2 2015 - Nazeema Begum (XNAZBEG)
+#	D - Extending the web server listening functionality.
+#           Allowing any valid cluster/MIP IPV4 address as listening IP.
+# - Nov 3 2014 - Fabrizio Paglia (XFABPAG)
+#       C - Solution cleanup
+# - Oct 20 2014 - Fabrizio Paglia (XFABPAG)
+#       B - Reworked in order to copy all configuration files under /cluster/...
+# - Oct 18 2014 - Fabrizio Paglia (XFABPAG)
+#       A - Introduced --skipnodestatecheck option
+# - Oct 15 2014 - Fabio Imperato/Fabrizio Paglia (XFABIMP/XFABPAG)
+#       CC16 - Avoided usage of hardcoded paths
+# - Oct 13 2014 - Fabio Imperato/Fabrizio Paglia (XFABIMP/XFABPAG)
+#       CC15 - Changed printouts of httpmgr -q daemon (for PRC Integration)
+#              Added log string in case of restart (by PRC or manual)
+# - Oct 8 2014 - Fabrizio Paglia (XFABPAG)
+#       CC13 - Clean stop/start handling (dead PIDs check)
+#              Security settings allowed, even if server is not yet configured
+# - Oct 6 2014 - Fabrizio Paglia (XFABPAG)
+#       CC12 - Added keep_alive, max_keep_alive_requests and keep_alive_timeout
+#              to the configuration file
+# - Oct 6 2014 - Fabrizio Paglia (XFABPAG)
+#       CC11 - Integration with ACS_ASECBIN wssadm CC4
+#              Reworked exit codes and printouts
+#              Added support for DSA private keys
+# - Oct 3 2014 - Fabrizio Paglia (XFABPAG)
+#       CC10 - Integration with ACS_ASECBIN wssadm
+#              Allowed certificate settings before main HTTP Server configuration
+#              Reworked exit codes
+# - Oct 1 2014 - Torgny Wilhelmsson/Fabrizio Paglia (XTORWIL/XFABPAG)
+#       CC9 - Bugs fixed
+# - Sep 30 2014 - Torgny Wilhelmsson/Fabrizio Paglia (XTORWIL/XFABPAG)
+#       CC8 - Bugs fixed
+#             New certificate handling - new (hidden) option --cert
+# - Sep 26 2014 - Fabrizio Paglia (XFABPAG)
+#       CC7 - --query all option
+#             Adjust of logging settings in Apache configuration files
+#             Bugs fixed
+# - Thu Sep 25 2014 - Torgny Wilhelmsson (xtorwil)
+#       Improvement of http server handling
+# - Sep 24 2014 - Torgny Wilhelmsson/Fabrizio Paglia (XTORWIL/XFABPAG)
+#       ClearCase 5 Command handling
+#                 allow -c -s -d together
+#                 moved restart of service 
+#                 introduced HTTP_STATUS file 
+# - Sep 23 2014 - Torgny Wilhelmsson/Fabrizio Paglia (XTORWIL/XFABPAG)
+#       PA9 - added missing rcapache2 restart
+# - Sep 22 2014 - Torgny Wilhelmsson/Fabrizio Paglia (XTORWIL/XFABPAG)
+#       PA8 - Robustness improvements
+#             SSL handling changed
+#             Command can be executed only by root user (or sudoers)
+# - Sep 19 2014 - Fabrizio Paglia (XFABPAG)
+#       PA7 - "Hidden" option -r|--reload (can be used in apos_operations)
+#             Printout added/changed
+# - Sep 19 2014 - Torgny Wilhelmsson (XTORWIL)
+#       pa6 minor bug fixes
+# - Sep 18 2014 - Fabrizio Paglia (XFABPAG)
+#       PA5 - Reworked according to "httpmgr Implementation Proposal PA5"
+# - Sep 16-18 2014 - Torgny Wilhelmsson (XTORWIL)
+#       First version
+#       Skeleton taken from VLANDEF
+##
+
+# Loading files
+. /opt/ap/apos/conf/apos_common.sh
+
+# Debug variables
+_DEBUG="off"
+_httpmgr_VER="E"
+F_INFO="/dev/null" # To be initialized by _httpmgr_init()
+
+# Commands
+CMD_LOGGER="/bin/logger"
+CMD_LOGGER_ESCAPED="\/bin\/logger"
+CMD_RCAPACHE2="/usr/sbin/rcapache2"
+CMD_APACHE2_CTL="/usr/sbin/apache2ctl"
+CMD_OPENSSL="/usr/bin/openssl"
+CMD_CLUSTER_CONF="/opt/ap/apos/bin/clusterconf/clusterconf"
+CMD_APACHE2_VALIDATOR="/usr/share/apache2/rc.apache2"
+CMD_GREP='/usr/bin/grep'
+CMD_IMMFIND='/usr/bin/immfind'
+CMD_IMMLIST='/usr/bin/immlist'
+CMD_IMMCFG='/usr/bin/immcfg'
+CMD_AWK='/usr/bin/awk'
+CMD_SED='/usr/bin/sed'
+CMD_WC='/usr/bin/wc'
+CMD_HTTPPROXY='/opt/ap/apos/bin/httpproxy'
+
+# Global variables
+TRUE=$(true; echo $?)
+FALSE=$(false; echo $?)
+LOG_TAG='httpmgr'
+LOG_DIR="/tmp"
+LOG_FILE="${LOG_TAG}.log"
+ALLOWED_OPT_DAEMON_ARGS=("start" "stop" "restart")
+ALLOWED_OPT_SECURITY_ARGS=("on" "off")
+ALLOWED_OPT_QUERY_ARGS=("daemon" "conf" "all" "status")
+STORAGE_CONFIG_PATH="/usr/share/pso/storage-paths/config"
+CONFIG_PATH=$(< "$STORAGE_CONFIG_PATH")
+HTTP_CONFIGURATION_FILE="$CONFIG_PATH/apos/http_config_file"
+HTTP_STATUS="$CONFIG_PATH/apos/http_status"
+HTTP_FILES_DIR="$CONFIG_PATH/apos/http_files/"
+#CERTM_CERTS_PATH="$CONFIG_PATH/sec-apr9010539/var/db/"
+SERVER_PARAMETERS=("server_address" "server_port")
+MPM_MODULE_PARAMETER="mpm_module"
+MPM_COMMON_PARAMETERS=("mpm_startservers" "mpm_maxclients" "mpm_maxrequestworkers" "mpm_maxrequestsperchild" "mpm_maxconnectionsperchild" "mpm_serverlimit")
+MPM_PREFORK_PARAMETERS=("mpm_prefork_minspareservers" "mpm_prefork_maxspareservers" "mpm_prefork_serverlimit")
+MPM_WORKER_PARAMETERS=("mpm_worker_minsparethreads" "mpm_worker_maxsparethreads" "mpm_worker_threadlimit" "mpm_worker_threadsperchild")
+KEEP_ALIVE_PARAMETERS=("keep_alive" "max_keep_alive_requests" "keep_alive_timeout")
+LIMIT_REQUEST_PARAMETER="limit_request_body"
+TRACE_PARAMETER="trace_enable"
+MODULE_INCLUDE_PARAMETER="module_include"
+MANDATORY_CONFIGURATION_PARAMETERS=(${SERVER_PARAMETERS[@]} $MPM_MODULE_PARAMETER)
+UNIQUE_CONFIGURATION_PARAMETERS=(${SERVER_PARAMETERS[@]} $MPM_MODULE_PARAMETER ${MPM_COMMON_PARAMETERS[@]} ${MPM_PREFORK_PARAMETERS[@]} ${MPM_WORKER_PARAMETERS[@]} ${KEEP_ALIVE_PARAMETERS[@]} ${LIMIT_REQUEST_PARAMETER} ${TRACE_PARAMETER})
+ALLOWED_CONFIGURATION_PARAMETERS=(${SERVER_PARAMETERS[@]} $MPM_MODULE_PARAMETER ${MPM_COMMON_PARAMETERS[@]} ${MPM_PREFORK_PARAMETERS[@]} ${MPM_WORKER_PARAMETERS[@]} ${KEEP_ALIVE_PARAMETERS[@]} $MODULE_INCLUDE_PARAMETER ${LIMIT_REQUEST_PARAMETER} ${TRACE_PARAMETER})
+TMP_CONFIGURATION_BACKUP_PATH="/tmp/httpmgr_backup.tgz"
+ETC_APACHE2_HTTPD_CONF_PATH="/etc/apache2/httpd.conf"
+ETC_APACHE2_LISTEN_CONF_PATH="/etc/apache2/listen.conf"
+ETC_APACHE2_SERVER_TUNING_CONF_PATH="/etc/apache2/server-tuning.conf"
+ETC_SYSCONFIG_APACHE2_PATH="/etc/sysconfig/apache2"
+ETC_APACHE2_CONFD_CUSTOM_INCLUDES_CONF_PATH="/etc/apache2/conf.d/custom_includes.conf"
+ALLOWED_SERVER_ADDRESS_VALUES=("nbi")
+ALLOWED_SERVER_PORT_VALUES=("80" "8080" "443" "8081")
+ALLOWED_MPM_MODULE_VALUES=("prefork" "worker")
+ALLOWED_KEEP_ALIVE_VALUES=("On" "Off")
+ALLOWED_TRACE_ENABLE_VALUES=("On" "Off")
+MPM_STARTSERVERS_DEFAULT_PREFORK=5
+MPM_STARTSERVERS_DEFAULT_WORKER=1
+MPM_MAXCLIENTS_DEFAULT_PREFORK=150
+MPM_MAXCLIENTS_DEFAULT_WORKER=24
+MPM_MAXREQUESTSPERCHILD_DEFAULT_PREFORK=1000
+MPM_MAXREQUESTSPERCHILD_DEFAULT_WORKER=0
+MPM_PREFORK_SERVERLIMIT=150
+MPM_WORKER_SERVERLIMIT="none"
+HTTPD_STATUS_RUNNING=0
+HTTPD_STATUS_UNUSED=3
+APACHE_LOG_TAG="apache2"
+WORKER_BINARY="httpd2-worker"
+PREFORK_BINARY="httpd2-prefork"
+APACHE_PID_FILE="/var/run/httpd2.pid"
+TRANSPORTM_DN="AxeTransportMtransportMId=1" 
+is_swm_2_0="/cluster/storage/system/config/apos/swm_version"
+SERVICEMGMT="/opt/ap/apos/bin/servicemgmt/servicemgmt"
+# To be initialized by httpmgr_init()
+CURRENT_NODE_HOSTNAME=""
+CURRENT_NODE_IP=""
+CURRENT_NODE_ID=""
+NBI_IP=""
+
+# To be initialized by httpmgr_cfg_read_and_validate()
+# Default values are already set, where applicable
+SERVER_ADDRESS=""
+SERVER_PORT=""
+MPM_MODULE=""
+MPM_STARTSERVERS=""
+MPM_MAXCLIENTS=""
+MPM_MAXREQUESTSPERCHILD=""
+MPM_PREFORK_MINSPARESERVERS=5
+MPM_PREFORK_MAXSPARESERVERS=10
+MPM_SERVERLIMIT=""
+MPM_WORKER_MINSPARETHREADS=1
+MPM_WORKER_MAXSPARETHREADS=24
+MPM_WORKER_THREADLIMIT=24
+MPM_WORKER_THREADSPERCHILD=24
+KEEP_ALIVE="On"
+MAX_KEEP_ALIVE_REQUESTS=100
+KEEP_ALIVE_TIMEOUT=5
+LIMIT_REQUEST_BODY=1500
+TRACE_ENABLE="Off"
+MODULE_INCLUDES=()
+
+
+# Command options and arguments -- To be initialized by parse_args()
+OPT_DAEMON=$FALSE
+OPT_DAEMON_ARG=""
+OPT_CFG=$FALSE
+OPT_CFG_ARG=""
+OPT_SECURITY=$FALSE
+OPT_SECURITY_ARG=""
+OPT_ENABLED_TLS=""
+OPT_QUERY=$FALSE
+OPT_QUERY_ARG=""
+OPT_CERT=$FALSE
+OPT_CERT_ARG=""
+OPT_TCERT=$FALSE
+OPT_TCERT_ARG=""
+OPT_FORCE_ARG=""
+OPT_TEMP_TLS=""
+OPT_TLS_PROTOCOL_VALUE=$FALSE
+OPT_TLS_PROTOCOL_ARG=""
+OPT_CIPHER_SUITES_ARG=""
+OPT_CIPHER_TEMP=""
+OPT_RELOAD_CIPHER_TEMP=""
+OPT_CIPHER_SUITES_CLEAN_TEMPARAORY=$FALSE
+OPT_CIPHER_SUITES_ADD_TEMPARAORY=$FALSE
+OPT_CIPHER_TEMPARAORY=$FALSE
+OPT_ENABLED_CIPHER_LIST=$FALSE
+OPT_SUPPORTED_CIPHER=$FALSE
+OPT_LIST_TLS_PROTOCOL=$FALSE
+OPT_RELOAD_TEMPLIST=$FALSE;
+OPT_REALOD_TEMPLIST_FORCE=$FALSE
+ALLOWED_OPT_TLS_PROTOCOL_ARGS=("TLSv1.0" "TLSv1.1" "TLSv1.2")
+OPT_LIST_TLS_ENABLED=$FALSE
+OPT_RELOAD_TEMPLIST_FORCE=$FALSE
+OPT_RELOAD_TEMPLIST=$FALSE
+OPT_LIST_RELOAD=$FALSE
+OPT_ENABLED_CIPHER_TEMP=""
+OPT_SUPPORTED_CIPHER_TEMP=""
+# Exit codes
+EXIT_SUCCESS=$TRUE # 0
+EXIT_FAILURE=$FALSE # 1
+EXIT_GENERAL_FAULT=2
+EXIT_USAGE_ERROR=3
+EXIT_NOT_ROOT=4
+EXIT_NOT_ACTIVE_NODE=5
+EXIT_NOT_CONFIGURED=6
+EXIT_INVALID_CONFIGURATION_FILE=7
+EXIT_INVALID_CONFIGURATION=8
+EXIT_NODE_CREDENTIAL_NOT_FOUND=9
+EXIT_SSL_NOT_VALID=10
+EXIT_SSL_NOT_CONFIGURED=11
+EXIT_TRUSTED_CERTIFICATE_NOT_FOUND=12
+EXIT_TRUSTED_CERTIFICATE_NOT_VALID=13
+EXIT_TRUSTED_CERTIFICATE_NOT_CONFIGURED=14
+EXIT_INVALID_IP=15
+EXIT_INVALID_MIP=16
+EXIT_UNREASONABLE_VALUE=17
+EXIT_NODE_CAKEY_NOT_FOUND=18
+EXIT_UNSUPPORTED_TLS_VERSION=19
+EXIT_UNSUPPORTED_CIPHER_SUITE=20
+EXIT_ALREADY_ENABLED_TLS_PROTOCOL_VERSION=21
+EXIT_TLS_UNREASONABLE_VALUE=22
+EXIT_CIPHER_UNREASONABLE_VALUE=23
+EXIT_ALREADY_ENABLED_TLS_CIPHER=24
+EXIT_WEBSERVER_DISABLED=25
+EXIT_NO_VALUE_EXIST_TO_UPDATE=26
+EXIT_GENERAL_FAULT_MSG="Error when executing (general fault)"
+EXIT_USAGE_ERROR_MSG="Incorrect usage" # Followed by the command usage
+EXIT_NOT_ROOT_MSG="You do not have super-user privileges"
+EXIT_NOT_ACTIVE_NODE_MSG="Incorrect node state, you must execute the command on the active node"
+EXIT_NOT_CONFIGURED_MSG="Web server is NOT CONFIGURED"
+EXIT_INVALID_CONFIGURATION_FILE_MSG="Given configuration file does not exist or is not valid"
+EXIT_INVALID_CONFIGURATION_MSG="Invalid configuration" # Followed by reason
+EXIT_NODE_CREDENTIAL_NOT_FOUND_MSG="Node credential not found"
+EXIT_NODE_CAKEY_NOT_FOUND_MSG="Node credential(ca.key) not found"
+EXIT_SSL_NOT_VALID_MSG="Invalid node credential"
+EXIT_SSL_NOT_CONFIGURED_MSG="Node credential not defined"
+EXIT_TRUSTED_CERTIFICATE_NOT_FOUND_MSG="Trust category not found"
+EXIT_TRUSTED_CERTIFICATE_NOT_VALID_MSG="Invalid trusted certificate"
+EXIT_TRUSTED_CERTIFICATE_NOT_CONFIGURED_MSG="Trusted certificate not defined"
+EXIT_INVALID_IP_MSG="Invalid IP address"
+EXIT_INVALID_MIP_MSG="Invalid MIP address"
+EXIT_UNREASONABLE_VALUE_MSG="Unreasonable value"
+EXIT_UNSUPPORTED_TLS_VERSION_MSG="Invalid/Unsupported TLS protocol version"
+EXIT_UNSUPPORTED_CIPHER_SUITE_MSG="Invalid Cipher suite selection"
+EXIT_ALREADY_EXIST_MSG="Already Exists"
+EXIT_ALREADY_ENABLED_TLS_PROTOCOL_STRING_MSG="TLSProtocol Version is already enabled"
+EXIT_TLS_UNREASONABLE_VALUE_MSG="Unreasonable value"
+EXIT_CIPHER_UNREASONABLE_VALUE_MSG="one or more Unreasonable value"
+EXIT_ALREADY_ENABLED_TLS_CIPHER_STRING_MSG="Cipher suite is already exist in to be enabled list"
+EXIT_WEBSERVER_DISABLED_MSG="Webserver security is disabled"
+EXIT_NO_VALUE_TO_EXIST_TO_UPDATE_MSG="Cipher Suites or Protocol Version is not defined"
+GSNHSECDN="asecGsnhConfigDataId=GSNH,acsSecurityMId=1"
+
+export IMMA_SYNCR_TIMEOUT=2000
+#######################################################################################
+#                           Logging and debugging Functions                           #
+#######################################################################################
+
+#######################################################################################
+# function INFO($message);                                                            #
+#                                                                                     #
+# Appends a message (with the addition of a timestamp) to the application log         #
+# (/tmp/unzipc.log)                                                                   #
+# NOTE: message is appended only in debug mode [[ $_DEBUG=="on" ]]                    #
+#                                                                                     #
+# Arguments:                                                                          #
+# $message message to append to the application log                                   #
+#######################################################################################
+function INFO() {
+        echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] $@" >> ${F_INFO}
+}
+
+#######################################################################################
+# function log($message);                                                             #
+#                                                                                     #
+# Appends a notice message to the system log                                          #
+#                                                                                     #
+# Arguments:                                                                          #
+# $message message to append to the system log                                        #
+#######################################################################################
+function log() {
+        local message="${*:-notice}"
+        local prio="user.notice"
+        
+        INFO "$message"
+        $CMD_LOGGER -p $prio -t $LOG_TAG "$message"
+}
+
+#######################################################################################
+# function log_error($message);                                                       #
+#                                                                                     #
+# Appends an error message to the system log                                          #
+#                                                                                     #
+# Arguments:                                                                          #
+# $message error message to append to the system log                                  #
+#######################################################################################
+function log_error() {
+        local message="${*:-error}"
+        local prio="user.err"
+        
+        INFO "$message"
+        $CMD_LOGGER -p $prio -t $LOG_TAG "$message"
+}
+
+#######################################################################################
+# function TRACE_ENTER($message);                                                     #
+#                                                                                     #
+# Appends a message to the application log file followed by "() >>"                   #
+# NOTE: it is useful to log the entry point of a function e.g. TRACE_ENTER $FUNCNAME  #
+#                                                                                     #
+# Arguments:                                                                          #
+# - $message message to append to the application log                                 #
+#######################################################################################
+function TRACE_ENTER() {
+        INFO "$1() >>"
+}
+
+#######################################################################################
+# function TRACE_LEAVE($message);                                                     #
+#                                                                                     #
+# Appends a message to the application log file followed by "() <<"                   #
+# NOTE: it is useful to log the exit point of a function e.g. TRACE_LEAVE $FUNCNAME   #
+#                                                                                     #
+# Arguments:                                                                          #
+# - $message message to append to the application log                                 #
+#######################################################################################
+function TRACE_LEAVE() {
+        INFO "$1() <<"
+}
+
+##############################################################################################
+# function is_valid_IP($ip_address);                                                         #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $ip_address IP address to validate                                                       #
+#                                                                                            #
+# Returns:                                                                                   #
+# - SUCCESS (0) if $ip_address is a valid IP                                                 #
+# - FAILURE (1) if $ip_address is not a valid IP                                             #
+##############################################################################################
+function is_valid_IP() {
+        TRACE_ENTER $FUNCNAME
+        local rCode=$EXIT_FAILURE
+
+        local ip_address="$1"
+        local letters=$(echo $ip_address | tr -dc "([0-9]|\.)")
+        local diff=`echo $(( ${#ip_address} - ${#letters} ))`
+
+        if [ $diff -eq 0 ] ; then
+                local ip_address_components=(${ip_address//./ })
+                if [ ${#ip_address_components[@]} -eq 4 ] ; then
+                        local dots=$(echo $ip_address | tr -dc "(\.)")
+                        if [ ${#dots} -eq 3 ] ; then
+                                local ok=$TRUE
+                                local ip_component
+                                for ip_component in "${ip_address_components[@]}" ; do
+                                	if ( [ ${#ip_component} -gt 3 ] ||  [ $ip_component -lt 0 ] || [ $ip_component -gt 255 ] ) ; then 
+						ok=$FALSE;
+                                                break;
+                                        fi
+                                done
+
+                                [[ $ok -eq $TRUE ]] && rCode=$EXIT_SUCCESS
+                        fi
+                fi
+        fi
+
+        TRACE_LEAVE $FUNCNAME
+        return $rCode
+}
+
+#######################################################################################
+#                                 Utilities Functions                                 #
+#######################################################################################
+
+#######################################################################################
+# function in_array($needle,$haystack);                                               #
+#                                                                                     #
+# Arguments:                                                                          #
+# $needle string to search for in $haystack                                           #
+# $haystack imploded array to search in (pass the array as "${haystack[@]}"           #
+#                                                                                     #
+# Return value:                                                                       #
+# Index of $needle in $haystack, or -1 if $needle is not in $haystack                 #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0) if $needle is contained in $haystack                                  #
+# - FAILURE (1) if $needle is not contained in $haystack                              #
+#######################################################################################
+function in_array() {
+	TRACE_ENTER $FUNCNAME
+	local needle="$1"
+	shift
+	
+	local hay
+	local counter=0
+	for hay in "$@"; do
+		[[ "$hay" == "$needle" ]] && {
+			INFO "Index of $needle = $counter"
+			
+			TRACE_LEAVE $FUNCNAME
+			return $EXIT_SUCCESS
+		}
+		(( counter = $counter + 1 ))
+	done
+	
+	INFO "$needle not found"
+	
+	TRACE_LEAVE $FUNCNAME
+	return $EXIT_FAILURE
+}
+
+#######################################################################################
+# function is_node_active($node_id);                                                  #
+#                                                                                     #
+# Checks if an AP node is active                                                      #
+#                                                                                     #
+# Arguments:                                                                          #
+# $id ID number of the AP node (1 or 2)                                               #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0) if AP node is active                                                  #
+# - FAILURE (1) if AP node is passive                                                 #
+#######################################################################################
+function is_node_active() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_FAILURE
+	
+	local node_id=$1
+	
+	local active_node_id=0
+	local nodeA_HAState=""
+	local nodeB_HAState=""
+	
+	INFO "Checking availability of immlist command..."
+	if which immlist &> /dev/null ; then
+		INFO "immlist command is available... Checking the HA state of AP nodes..."
+		if [ -f $is_swm_2_0 ]; then
+			nodeA_HAState=$(immlist "safCSIComp=safComp=apos.haagent\\,safSu=SC-1\\,safSg=2N\\,safApp=ERIC-apg.nbi.aggregation.service,safCsi=apos.haagent,safSi=apg.nbi.aggregation.service-2N-1,safApp=ERIC-apg.nbi.aggregation.service" 2> /dev/null | grep -w "saAmfCSICompHAState" | awk '{ print $3 }')
+			nodeB_HAState=$(immlist "safCSIComp=safComp=apos.haagent\\,safSu=SC-2\\,safSg=2N\\,safApp=ERIC-apg.nbi.aggregation.service,safCsi=apos.haagent,safSi=apg.nbi.aggregation.service-2N-1,safApp=ERIC-apg.nbi.aggregation.service" 2> /dev/null | grep -w "saAmfCSICompHAState" | awk '{ print $3 }')
+		else
+			nodeA_HAState=$(immlist "safCSIComp=safComp=Agent\\,safSu=1\\,safSg=2N\\,safApp=ERIC-APG,safCsi=AGENT,safSi=AGENT,safApp=ERIC-APG" 2> /dev/null | grep -w "saAmfCSICompHAState" | awk '{ print $3 }')
+			nodeB_HAState=$(immlist "safCSIComp=safComp=Agent\\,safSu=2\\,safSg=2N\\,safApp=ERIC-APG,safCsi=AGENT,safSi=AGENT,safApp=ERIC-APG" 2> /dev/null | grep -w "saAmfCSICompHAState" | awk '{ print $3 }')
+		fi
+	fi
+	
+	if [ "$nodeA_HAState" == "1" ] ; then
+		INFO "Active node is AP node 1"
+		active_node_id=1
+	elif [ "$nodeB_HAState" == "1" ] ; then
+		INFO "Active node is AP node 2"
+		active_node_id=2
+	fi
+	
+	[[ $active_node_id -eq $node_id ]] && rCode=$EXIT_SUCCESS
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+#                             Command-specific Functions                              #
+#######################################################################################
+
+#######################################################################################
+# function httpmgr_cfg($config_file);                                                 #
+#                                                                                     #
+# Takes in input a configuration file, validate it and then configure the (Apache)    #
+# HTTP server according to this file.                                                 #
+# It also creates a copy of the configuration file in the shared filesystem           #
+#                                                                                     #
+# Arguments:                                                                          #
+# $config_file path of the configuration file                                         #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_INVALID_CONFIGURATION_FILE if given HTTP configuration file does not exists #
+#   or is not valid                                                                   #
+# - $EXIT_INVALID_CONFIGURATION in case of invalid configuration parameters           #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_cfg() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	
+	local config_file="$1"
+	
+	# Check existence of configuration file
+	[[ -s "$config_file" ]] || {
+		INFO "Given $config_file does not exist"
+		httpmgr_exit $EXIT_INVALID_CONFIGURATION_FILE "$EXIT_INVALID_CONFIGURATION_FILE_MSG"
+	}
+	
+	# Check that it is a plain text file
+	[[ "$(file --mime-type -b "$config_file" )" == "text/plain" ]] || {
+		INFO "Given $config_file is not a plain text file"
+		httpmgr_exit $EXIT_INVALID_CONFIGURATION_FILE "$EXIT_INVALID_CONFIGURATION_FILE_MSG"
+	}
+	
+	# Check for mandatory configuration parameters
+	httpmgr_cfg_mandatory_parameters_check "$config_file"
+	
+	# Check for unique configuration parameters
+	httpmgr_cfg_unique_parameters_check "$config_file"
+	
+	# Check for extra unwanted parameters
+	httpmgr_cfg_allowed_parameters_check "$config_file"
+	
+	# Validate and read configuration parameters
+	httpmgr_cfg_read_and_validate "$config_file"
+	
+	# Make a backup of all impacted HTTP server configuration files
+	httpmgr_cfg_backup
+	
+	echo -n "Loading web server configuration from $config_file..."
+	
+	# Start updating httpd.conf
+	httpmgr_cfg_update_httpd_conf || {
+		INFO "Unable to update httpd.conf"
+		httpmgr_cfg_restore
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	# Start updating listen.conf
+	httpmgr_cfg_update_listen_conf "$SERVER_ADDRESS" "$SERVER_PORT" || {
+		INFO "Unable to update listen.conf"
+		httpmgr_cfg_restore
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	# Start updating /etc/sysconfig/apache2
+	httpmgr_cfg_update_sysconfig_apache2 "$MPM_MODULE" || {
+		INFO "Unable to update /etc/sysconfig/apache2"
+		httpmgr_cfg_restore
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	# Start updating server-tuning.conf
+	httpmgr_cfg_update_server_tuning_conf "$MPM_STARTSERVERS" "$MPM_MAXCLIENTS" "$MPM_MAXREQUESTSPERCHILD" "$MPM_PREFORK_MINSPARESERVERS" "$MPM_PREFORK_MAXSPARESERVERS" "$MPM_SERVERLIMIT" "$MPM_WORKER_MINSPARETHREADS" "$MPM_WORKER_MAXSPARETHREADS" "$MPM_WORKER_THREADLIMIT" "$MPM_WORKER_THREADSPERCHILD" "$KEEP_ALIVE" "$MAX_KEEP_ALIVE_REQUESTS" "$KEEP_ALIVE_TIMEOUT" "$LIMIT_REQUEST_BODY" "$TRACE_ENABLE" || {
+		INFO "Unable to update server-tuning.conf"
+		httpmgr_cfg_restore
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	# Start creating/updating custom_includes.conf
+	httpmgr_cfg_update_custom_includes_conf "${MODULE_INCLUDES[@]}" || {
+		INFO "Unable to update /etc/apache2/conf.d/custom_includes.conf"
+		httpmgr_cfg_restore
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	$CMD_APACHE2_CTL configtest &> /dev/null
+	if [ $? != 0 ] ; then
+		INFO "Configuration test failed"
+		httpmgr_cfg_restore
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	fi
+	
+	echo "    DONE"
+	
+	if [ "$(readlink -m "$config_file")" != "$(readlink -m $HTTP_CONFIGURATION_FILE)" ] ; then
+		echo -n "Saving current configuration in $HTTP_CONFIGURATION_FILE ..."
+		cp -f "$config_file" "$HTTP_CONFIGURATION_FILE" &> /dev/null
+		[[ $? -ne 0 ]] && {
+			INFO "Unable to copy configuration file on shared filesystem"
+			httpmgr_cfg_restore
+			httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+		}
+		echo "    DONE"
+	fi
+	# Add IPtable rule
+        # If IPtable rule fail function "add_IPtables_rule" itself, throws an error and aborts execution
+        add_IPtables_rule
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function httpmgr_cfg_allowed_parameters_check($config_file);                        #
+#                                                                                     #
+# Takes in input a configuration file, and checks if it contains only allowed         #
+# configuration parameters (comment lines starting with # are allowed)                #
+#                                                                                     #
+# Arguments:                                                                          #
+# $config_file path of the configuration file                                         #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_INVALID_CONFIGURATION in case of unknown configuration parameters           #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_cfg_allowed_parameters_check() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	
+	local config_file="$1"
+	
+	# Let's build a regular expression to match only allowed lines
+	# (configuration parameters, comment lines and blank lines)
+	local regular_expression=""
+	
+	# Allow configuration parameters
+	regular_expression="^\s*("
+	local allowed_parameter
+	local counter=0
+	for allowed_parameter in "${ALLOWED_CONFIGURATION_PARAMETERS[@]}" ; do
+		[[ $counter -ne 0 ]] && regular_expression="$regular_expression|"
+		regular_expression="$regular_expression$allowed_parameter"
+		(( counter = $counter + 1 ))
+	done
+	regular_expression="$regular_expression)\s*="
+	
+	# Allow comment lines and blank lines
+	regular_expression="$regular_expression|^\s*#|^\s*$"
+	
+	local extra_lines=$(grep -vE "$regular_expression" "$config_file")
+	[[ "$extra_lines" == "" ]] || {
+		INFO "Unknown configuration parameter(s)\n$extra_lines"
+		httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnknown configuration parameter(s)\n$extra_lines"
+	}
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function httpmgr_cfg_backup();                                                      #
+#                                                                                     #
+# Create a backup under /tmp/ of all HTTP server configuration files impacted by the  #
+# script                                                                              #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT                                                               #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_cfg_backup() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	
+	# Check existence of all files to backup
+	[[ -s "$ETC_APACHE2_HTTPD_CONF_PATH" ]] || {
+		INFO "Configuration file $ETC_APACHE2_HTTPD_CONF_PATH does not exist"
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	[[ -s "$ETC_APACHE2_LISTEN_CONF_PATH" ]] || {
+		INFO "Configuration file $ETC_APACHE2_LISTEN_CONF_PATH does not exist"
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	[[ -s "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" ]] || {
+		INFO "Configuration file $ETC_APACHE2_SERVER_TUNING_CONF_PATH does not exist"
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	[[ -s "$ETC_SYSCONFIG_APACHE2_PATH" ]] || {
+		INFO "Configuration file $ETC_SYSCONFIG_APACHE2_PATH does not exist"
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	#Create default empty custom_includes.conf if file does not exist
+	[[ -s "$ETC_APACHE2_CONFD_CUSTOM_INCLUDES_CONF_PATH" ]] || {
+		cat /dev/null > "$ETC_APACHE2_CONFD_CUSTOM_INCLUDES_CONF_PATH"
+	}
+	
+	#Create default empty http status if file does not exist
+	[[ -s "$HTTP_STATUS" ]] || {
+		cat /dev/null > "$HTTP_STATUS"
+	}
+	
+	# Create the backup archive
+	tar -czf "$TMP_CONFIGURATION_BACKUP_PATH" "$ETC_APACHE2_HTTPD_CONF_PATH" "$ETC_APACHE2_LISTEN_CONF_PATH" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" "$ETC_SYSCONFIG_APACHE2_PATH" "$ETC_APACHE2_CONFD_CUSTOM_INCLUDES_CONF_PATH" "$HTTP_STATUS"  &> /dev/null
+	[[ $? -ne 0 ]] && {
+		INFO "Unable to create the backup of HTTP server configuration files"
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function httpmgr_cfg_mandatory_parameters_check($config_file);                      #
+#                                                                                     #
+# Takes in input a configuration file, and checks if mandatory parameters are present #
+#                                                                                     #
+# Arguments:                                                                          #
+# $config_file path of the configuration file                                         #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_INVALID_CONFIGURATION in case of missing mandatory parameter(s)             #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_cfg_mandatory_parameters_check() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	
+	local config_file="$1"
+	
+	local mandatory_parameter
+	for mandatory_parameter in "${MANDATORY_CONFIGURATION_PARAMETERS[@]}" ; do
+		grep "^\s*$mandatory_parameter\s*=" "$config_file" &> /dev/null || {
+			INFO "Missing configuration parameter <$mandatory_parameter>"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nMissing configuration parameter <$mandatory_parameter>"
+		}
+	done
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+
+#######################################################################################
+# function vm_ip_validation();                                                        #
+#                                                                                     #
+# Checks whether IP is valid or not. This function is invoked only in virtual env     #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_UNREASONABLE_VALUE                                                          #
+#                                                                                     #
+#######################################################################################
+
+function vm_ip_validation() {
+	TRACE_ENTER $FUNCNAME
+
+	#local variables
+	local mip_interface=""
+	local node_hostname=""
+	local macaddress=""
+	local vnic_interface=""
+	local check=""
+	local validate_macaddress=""
+	local external_network_validation=""
+	local valid_server_address=""
+
+	#count of number of movable ip's(mip) associated with given server address 
+	if [ "$SERVER_ADDRESS" != "" ] && [  $($CMD_CLUSTER_CONF mip -D | $CMD_GREP -E $SERVER_ADDRESS | $CMD_WC -l) -eq 1  ]; then
+		#extract the mip interface associated with server address 
+		mip_interface=$($CMD_CLUSTER_CONF mip -D | $CMD_GREP  -E $SERVER_ADDRESS | $CMD_AWK '{print $5}'| cut -d : -f 1)
+
+		#extract the macaddress of active node using mip interface 
+		if [ $CURRENT_NODE_HOSTNAME == "SC-2-1" ]; then
+			node_hostname="AP1A"						
+			macaddress=$($CMD_CLUSTER_CONF interface -D | $CMD_GREP  -E $mip_interface |$CMD_AWK  '{ if($3==1) {print $6} }' )
+		else
+			node_hostname="AP1B"
+		 	macaddress=$($CMD_CLUSTER_CONF interface -D | $CMD_GREP  -E $mip_interface | $CMD_AWK  '{ if($3==2) {print $6} }')
+		fi
+		if [ "$macaddress" == "" ];then
+			httpmgr_exit  $EXIT_UNREASONABLE_VALUE "$EXIT_UNREASONABLE_VALUE_MSG<No macaddress available for  mip interface>"
+		fi
+							
+		#find vnic interface(s)for associated hostname 						
+		vnic_interface=$($CMD_IMMFIND  | $CMD_GREP -E $node_hostname | $CMD_GREP $TRANSPORTM_DN | $CMD_GREP  "interfaceId" |  $CMD_SED 's/\n/ /' )
+		if [ "$vnic_interface" != "" ]; then
+				# Iterating all interfaces to get the proper interface
+				for iterator in ${vnic_interface[@]}
+				do
+					#Checking the presence of macaddress
+					validate_macaddress=$( $CMD_IMMLIST  $iterator | $CMD_AWK '{ if($3 == "'"$macaddress"'") {print $3 }  }')
+					if [ ! -z $validate_macaddress ]; then
+						check=$iterator
+						break
+					fi
+				done
+
+				if [ -z $validate_macaddress ] && [ -z $check ];then 
+        				httpmgr_exit  $EXIT_UNREASONABLE_VALUE "$EXIT_UNREASONABLE_VALUE_MSG<No vnic interface available for macaddress >"
+				fi
+				#extract all the external networks 					 
+				external_network_validation=$($CMD_IMMFIND  | $CMD_GREP  "externalNetworkId" | $CMD_GREP  $TRANSPORTM_DN )					 
+				if [ "$external_network_validation" != "" ]; then
+			 		for iterator in ${external_network_validation[@]}
+					do
+						#checking  server address/IP is valid	using extracted vnic interface						
+						valid_server_address=$( $CMD_IMMLIST $iterator | $CMD_GREP  -E $check)
+						if [ "$valid_server_address" != "" ]; then
+							break
+						fi 
+					done
+
+					[[ "$valid_server_address" == "" ]]&&httpmgr_exit $EXIT_UNREASONABLE_VALUE "$EXIT_UNREASONABLE_VALUE_MSG<Invalid IP:Server address is not attached to any external networks >"
+					
+				else
+					httpmgr_exit $EXIT_UNREASONABLE_VALUE "$EXIT_UNREASONABLE_VALUE_MSG<No external network(s) available on node>"
+				fi
+
+		else																			
+			httpmgr_exit $EXIT_UNREASONABLE_VALUE "$EXIT_UNREASONABLE_VALUE_MSG<No interface(s) available for specified HOSTNAME>"
+		fi
+	else
+		httpmgr_exit $EXIT_INVALID_IP "$EXIT_INVALID_IP_MSG\nUnreasonable value for server_address <$SERVER_ADDRESS>"
+	fi
+
+	TRACE_LEAVE $FUNCNAME
+}
+
+#######################################################################################
+# function httpmgr_cfg_read_and_validate($config_file);                               #
+#                                                                                     #
+# Takes in input a configuration file and read the configuration parameters           #
+#                                                                                     #
+# Arguments:                                                                          #
+# $config_file path of the configuration file                                         #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_INVALID_CONFIGURATION in case of invalid configuration parameters           #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_cfg_read_and_validate() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+
+	local config_file="$1"
+	local NETWORK='public'
+
+	# Read server_address
+	SERVER_ADDRESS="$(grep "^\s*server_address\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+        if [[ ! -z "$SERVER_ADDRESS"  &&  "$SERVER_ADDRESS" != "nbi" ]] ; then        
+            is_valid_IP $SERVER_ADDRESS || httpmgr_exit $EXIT_INVALID_IP "$EXIT_INVALID_IP_MSG\nUnreasonable value for server_address <$SERVER_ADDRESS>"
+            ALLOWED_SERVER_ADDRESS_VALUES+=("$SERVER_ADDRESS")
+            # Checking node type
+            if is_vAPG ; then
+              vm_ip_validation 
+            else
+              #IP validation against cluster.conf
+              IP=$($CMD_CLUSTER_CONF mip -D | grep -E "$NETWORK.*$SERVER_ADDRESS" | awk '{print $7}')
+              [ -z $IP ] && httpmgr_exit $EXIT_INVALID_MIP "$EXIT_INVALID_MIP_MSG"
+            fi 
+	fi
+
+	in_array "$SERVER_ADDRESS" "${ALLOWED_SERVER_ADDRESS_VALUES[@]}" || {
+		INFO "Unreasonable value for server_address <$SERVER_ADDRESS>\nUse a valid Cluster/MIP address"
+		httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for server_address <$SERVER_ADDRESS>\nUse a valid Cluster/MIP address"
+	}
+	
+	# Read server_port
+	SERVER_PORT="$(grep "^\s*server_port\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+	in_array "$SERVER_PORT" "${ALLOWED_SERVER_PORT_VALUES[@]}" || {
+		INFO "Unreasonable value for server_port <$SERVER_PORT>\nUse one of the following: ${ALLOWED_SERVER_PORT_VALUES[@]}"
+		httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for server_port <$SERVER_PORT>\nUse one of the following: ${ALLOWED_SERVER_PORT_VALUES[@]}"
+	}
+	
+	# Read mpm_module
+	MPM_MODULE="$(grep "^\s*mpm_module\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+	in_array "$MPM_MODULE" "${ALLOWED_MPM_MODULE_VALUES[@]}" || {
+		INFO "Unreasonable value for mpm_module <$MPM_MODULE>\nUse one of the following: ${ALLOWED_MPM_MODULE_VALUES[@]}"
+		httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for mpm_module <$MPM_MODULE>\nUse one of the following: ${ALLOWED_MPM_MODULE_VALUES[@]}"
+	}
+	
+	# Set default values for mpm_module related parameters
+	if [ "$MPM_MODULE" == "prefork" ] ; then
+		MPM_STARTSERVERS=$MPM_STARTSERVERS_DEFAULT_PREFORK
+		MPM_MAXCLIENTS=$MPM_MAXCLIENTS_DEFAULT_PREFORK
+		MPM_MAXREQUESTSPERCHILD=$MPM_MAXREQUESTSPERCHILD_DEFAULT_PREFORK
+		MPM_SERVERLIMIT=$MPM_PREFORK_SERVERLIMIT
+	else
+		MPM_STARTSERVERS=$MPM_STARTSERVERS_DEFAULT_WORKER
+		MPM_MAXCLIENTS=$MPM_MAXCLIENTS_DEFAULT_WORKER
+		MPM_MAXREQUESTSPERCHILD=$MPM_MAXREQUESTSPERCHILD_DEFAULT_WORKER
+		MPM_SERVERLIMIT=$MPM_WORKER_SERVERLIMIT
+	fi
+	
+	# Read mpm_startservers
+	local mpm_startservers="$(grep "^\s*mpm_startservers\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+	if [ "$mpm_startservers" != "" ] ; then
+		[[ "$mpm_startservers" =~ ^[0-9]+$ ]] || {
+			INFO "Unreasonable value for mpm_startservers <$mpm_startservers>"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for mpm_startservers <$mpm_startservers>"
+		}
+		MPM_STARTSERVERS=$mpm_startservers
+	fi
+	
+	# Read mpm_maxclients
+	local mpm_maxclients="$((grep "^\s*mpm_maxclients\s*=" "$config_file" || grep "^\s*mpm_maxrequestworkers\s*=" "$config_file") | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+	if [ "$mpm_maxclients" != "" ] ; then
+		[[ "$mpm_maxclients" =~ ^[0-9]+$ ]] || {
+			INFO "Unreasonable value for mpm_maxclients/mpm_maxrequestworkers <$mpm_maxclients>"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for mpm_maxclients/mpm_maxrequestworkers <$mpm_maxclients>"
+		}
+		MPM_MAXCLIENTS=$mpm_maxclients
+	fi
+	
+	# Read mpm_maxrequestsperchild
+	local mpm_maxrequestsperchild="$((grep "^\s*mpm_maxrequestsperchild\s*=" "$config_file" || grep "^\s*mpm_maxconnectionsperchild\s*=" "$config_file") | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+	if [ "$mpm_maxrequestsperchild" != "" ] ; then
+		[[ "$mpm_maxrequestsperchild" =~ ^[0-9]+$ ]] || {
+			INFO "Unreasonable value for mpm_maxrequestsperchild//mpm_maxconnectionsperchild <$mpm_maxrequestsperchild>"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for mpm_maxrequestsperchild/mpm_maxconnectionsperchild <$mpm_maxrequestsperchild>"
+		}
+		MPM_MAXREQUESTSPERCHILD=$mpm_maxrequestsperchild
+	fi
+	
+	# Read mpm_prefork_minspareservers
+	local mpm_prefork_minspareservers="$(grep "^\s*mpm_prefork_minspareservers\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+	if [ "$mpm_prefork_minspareservers" != "" ] ; then
+		[[ "$mpm_prefork_minspareservers" =~ ^[0-9]+$ ]] || {
+			INFO "Unreasonable value for mpm_prefork_minspareservers <$mpm_prefork_minspareservers>"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for mpm_prefork_minspareservers <$mpm_prefork_minspareservers>"
+		}
+		MPM_PREFORK_MINSPARESERVERS=$mpm_prefork_minspareservers
+	fi
+	
+	# Read mpm_prefork_maxspareservers
+	local mpm_prefork_maxspareservers="$(grep "^\s*mpm_prefork_maxspareservers\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+	if [ "$mpm_prefork_maxspareservers" != "" ] ; then
+		[[ "$mpm_prefork_maxspareservers" =~ ^[0-9]+$ ]] || {
+			INFO "Unreasonable value for mpm_prefork_maxspareservers <$mpm_prefork_maxspareservers>"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for mpm_prefork_maxspareservers <$mpm_prefork_maxspareservers>"
+		}
+		MPM_PREFORK_MAXSPARESERVERS=$mpm_prefork_maxspareservers
+	fi
+
+	# Read mpm_prefork_serverlimit
+        local mpm_prefork_serverlimit="$(grep "^\s*mpm_prefork_serverlimit\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+        if [ "$mpm_prefork_serverlimit" != "" ] ; then
+                [[ "$mpm_prefork_serverlimit" =~ ^[0-9]+$ ]] || {
+                        INFO "Unreasonable value for mpm_prefork_serverlimit <$mpm_prefork_serverlimit>"
+                        httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for mpm_prefork_serverlimit <$mpm_prefork_serverlimit>"
+                }
+		if [ "$MPM_MODULE" == "prefork" ] ; then
+                	MPM_SERVERLIMIT=$mpm_prefork_serverlimit
+		else
+			MPM_SERVERLIMIT=$MPM_WORKER_SERVERLIMIT
+		fi
+        fi
+	
+	# Read mpm_serverlimit
+	local mpm_serverlimit="$(grep "^\s*mpm_serverlimit\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+	if [ "$mpm_serverlimit" != "" ] ; then
+		[[ "$mpm_serverlimit" =~ ^[0-9]+$ ]] || {
+			INFO "Unreasonable value for mpm_serverlimit <$mpm_serverlimit>"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for mpm_serverlimit <$mpm_serverlimit>"
+		}
+		MPM_SERVERLIMIT=$mpm_serverlimit
+	fi
+	
+	# Read mpm_worker_minsparethreads
+	local mpm_worker_minsparethreads="$(grep "^\s*mpm_worker_minsparethreads\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+	if [ "$mpm_worker_minsparethreads" != "" ] ; then
+		[[ "$mpm_worker_minsparethreads" =~ ^[0-9]+$ ]] || {
+			INFO "Unreasonable value for mpm_worker_minsparethreads <$mpm_worker_minsparethreads>"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for mpm_worker_minsparethreads <$mpm_worker_minsparethreads>"
+		}
+		MPM_WORKER_MINSPARETHREADS=$mpm_worker_minsparethreads
+	fi
+	
+	# Read mpm_worker_maxsparethreads
+	local mpm_worker_maxsparethreads="$(grep "^\s*mpm_worker_maxsparethreads\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+	if [ "$mpm_worker_maxsparethreads" != "" ] ; then
+		[[ "$mpm_worker_maxsparethreads" =~ ^[0-9]+$ ]] || {
+			INFO "Unreasonable value for mpm_worker_maxsparethreads <$mpm_worker_maxsparethreads>"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for mpm_worker_maxsparethreads <$mpm_worker_maxsparethreads>"
+		}
+		MPM_WORKER_MAXSPARETHREADS=$mpm_worker_maxsparethreads
+	fi
+	
+	# Read mpm_worker_threadlimit
+	local mpm_worker_threadlimit="$(grep "^\s*mpm_worker_threadlimit\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+	if [ "$mpm_worker_threadlimit" != "" ] ; then
+		[[ "$mpm_worker_threadlimit" =~ ^[0-9]+$ ]] || {
+			INFO "Unreasonable value for mpm_worker_threadlimit <$mpm_worker_threadlimit>"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for mpm_worker_threadlimit <$mpm_worker_threadlimit>"
+		}
+		MPM_WORKER_THREADLIMIT=$mpm_worker_threadlimit
+	fi
+	
+	# Read mpm_worker_threadsperchild
+	local mpm_worker_threadsperchild="$(grep "^\s*mpm_worker_threadsperchild\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+	if [ "$mpm_worker_threadsperchild" != "" ] ; then
+		[[ "$mpm_worker_threadsperchild" =~ ^[0-9]+$ ]] || {
+			INFO "Unreasonable value for mpm_worker_threadsperchild <$mpm_worker_threadsperchild>"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for mpm_worker_threadsperchild <$mpm_worker_threadsperchild>"
+		}
+		MPM_WORKER_THREADSPERCHILD=$mpm_worker_threadsperchild
+	fi
+	
+	# Read keep_alive
+	local keep_alive="$(grep "^\s*keep_alive\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+	if [ "$keep_alive" != "" ] ; then
+		in_array "$keep_alive" "${ALLOWED_KEEP_ALIVE_VALUES[@]}" || {
+			INFO "Unreasonable value for keep_alive <$keep_alive>"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for keep_alive <$keep_alive>"
+		}
+		KEEP_ALIVE="$keep_alive"
+	fi
+	
+	# Read max_keep_alive_requests
+	local max_keep_alive_requests="$(grep "^\s*max_keep_alive_requests\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+	if [ "$max_keep_alive_requests" != "" ] ; then
+		[[ "$max_keep_alive_requests" =~ ^[0-9]+$ ]] || {
+			INFO "Unreasonable value for max_keep_alive_requests <$max_keep_alive_requests>"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for max_keep_alive_requests <$max_keep_alive_requests>"
+		}
+		MAX_KEEP_ALIVE_REQUESTS=$max_keep_alive_requests
+	fi
+	
+	# Read keep_alive_timeout
+	local keep_alive_timeout="$(grep "^\s*keep_alive_timeout\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+	if [ "$keep_alive_timeout" != "" ] ; then
+		[[ "$keep_alive_timeout" =~ ^[0-9]+$ ]] || {
+			INFO "Unreasonable value for keep_alive_timeout <$keep_alive_timeout>"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for keep_alive_timeout <$keep_alive_timeout>"
+		}
+		KEEP_ALIVE_TIMEOUT=$keep_alive_timeout
+	fi
+	
+	# Read limit_request_body
+  	local limit_request_body="$(grep "^\s*limit_request_body\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+  	if [ "$limit_request_body" != "" ] ; then
+    		[[ "$limit_request_body" =~ ^[0-9]+$ ]] || {
+      			INFO "Unreasonable value for limit_request_body <$limit_request_body>"
+      			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for limit_request_body <$limit_request_body>"
+		}
+    		LIMIT_REQUEST_BODY=$limit_request_body
+	fi
+
+	# Read trace_enable
+	local trace_enable="$(grep "^\s*trace_enable\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+	if [ "$trace_enable" != "" ] ; then
+		in_array "$trace_enable" "${ALLOWED_TRACE_ENABLE_VALUES[@]}" || {
+			INFO "Unreasonable value for trace_enable <$trace_enable>"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for trace_enable <$trace_enable>"
+		}
+		TRACE_ENABLE="$trace_enable"
+	fi
+	
+	# Read module_include parameters
+	local module_includes=($(grep "^\s*module_include\s*=" "$config_file" | awk -F'=' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//'))
+	local module_include
+	local module_include_wo_wildcards
+	for module_include in "${module_includes[@]}" ; do
+	if [ "$module_include" != "" ] ; then
+		# Can't accept wildcards in module names
+		module_include_wo_wildcards=$(echo "$module_include" | tr -d '?*[]{}!')
+		[[ "$module_include" != "$module_include_wo_wildcards" ]] && {
+			INFO "Unreasonable value for module_include <$module_include>\nWildcards are not accepted"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for module_include <$module_include>\nWildcards are not accepted"
+		}
+		
+		# Check that included module is not one of
+		# /etc/apache2/conf.d/*.conf
+		# /etc/apache2/conf.d/apache2-manual?conf
+		# already included by default default-server.conf
+		if [[ "$module_include" == /etc/apache2/conf.d/*.conf ]] ; then
+			INFO "Unreasonable value for module_include <$module_include>\nConfiguration file $module_include already included"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nConfiguration file $module_include already included"
+		fi
+		if [[ "$module_include" == /etc/apache2/conf.d/apache2-manual?conf ]] ; then
+			INFO "Unreasonable value for module_include <$module_include>\nConfiguration file $module_include already included"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nConfiguration file $module_include already included"
+		fi
+		
+		# Check that module is not already included by default httpd.conf
+		if grep "Include\s*$module_include" "$ETC_APACHE2_HTTPD_CONF_PATH" &> /dev/null ; then
+			INFO "Unreasonable value for module_include <$module_include>\nConfiguration file $module_include already included"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nConfiguration file $module_include already included"
+		fi
+		
+		# Check that included module exists
+		[[ -e "$module_include" ]] || {
+			INFO "Unreasonable value for module_include <$module_include>\nConfiguration file $module_include does not exist"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nUnreasonable value for module_include <$module_include>\nConfiguration file $module_include does not exist"
+		}
+		MODULE_INCLUDES[${#MODULE_INCLUDES[@]}]="$module_include"
+	fi
+	done
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+#######################################################################################
+# function httpmgr_cfg_restore();                                                     #
+#                                                                                     #
+# Restore the HTTP server configuration files using the backup under /tmp/            #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT                                                               #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_cfg_restore() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	
+	# Check that backup exists
+	[[ -s "$TMP_CONFIGURATION_BACKUP_PATH" ]] || {
+		INFO "Backup archive $TMP_CONFIGURATION_BACKUP_PATH does not exists"
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	# Check that backup contains only the needed files
+	local backup_file_list="$(tar -tzvf "$TMP_CONFIGURATION_BACKUP_PATH" | awk '{ print "/"$6 }')"
+	local backup_file_list_number=$(echo "$backup_file_list" | wc -l)
+	if [ $backup_file_list_number -ne 6 ] ; then
+		INFO "Unexpected content of backup archive $TMP_CONFIGURATION_BACKUP_PATH"
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	fi
+	
+	echo "$backup_file_list" | grep "$ETC_APACHE2_HTTPD_CONF_PATH" &> /dev/null
+	[[ $? -ne 0 ]] && {
+		INFO "Unexpected content of backup archive $TMP_CONFIGURATION_BACKUP_PATH"
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	echo "$backup_file_list" | grep "$ETC_APACHE2_LISTEN_CONF_PATH" &> /dev/null
+	[[ $? -ne 0 ]] && {
+		INFO "Unexpected content of backup archive $TMP_CONFIGURATION_BACKUP_PATH"
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	echo "$backup_file_list" | grep "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" &> /dev/null
+	[[ $? -ne 0 ]] && {
+		INFO "Unexpected content of backup archive $TMP_CONFIGURATION_BACKUP_PATH"
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	echo "$backup_file_list" | grep "$ETC_SYSCONFIG_APACHE2_PATH" &> /dev/null
+	[[ $? -ne 0 ]] && {
+		INFO "Unexpected content of backup archive $TMP_CONFIGURATION_BACKUP_PATH"
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	echo "$backup_file_list" | grep "$ETC_APACHE2_CONFD_CUSTOM_INCLUDES_CONF_PATH" &> /dev/null
+	[[ $? -ne 0 ]] && {
+		INFO "Unexpected content of backup archive $TMP_CONFIGURATION_BACKUP_PATH"
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	
+	echo "$backup_file_list" | grep "$HTTP_STATUS" &> /dev/null
+	[[ $? -ne 0 ]] && {
+		INFO "Unexpected content of backup archive $TMP_CONFIGURATION_BACKUP_PATH"
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	local extra_files=$(echo "$backup_file_list" | grep -vE "^$ETC_APACHE2_HTTPD_CONF_PATH$|^$ETC_APACHE2_LISTEN_CONF_PATH$|^$ETC_APACHE2_SERVER_TUNING_CONF_PATH$|^$ETC_SYSCONFIG_APACHE2_PATH$|^$ETC_APACHE2_CONFD_CUSTOM_INCLUDES_CONF_PATH$|^$HTTP_STATUS$" | wc -l)
+	[[ $extra_files -ne 0 ]] && {
+		INFO "Unexpected content of backup archive $TMP_CONFIGURATION_BACKUP_PATH"
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	tar -xzf "$TMP_CONFIGURATION_BACKUP_PATH" -C "/" &> /dev/null
+	[[ $? -ne 0 ]] && {
+		INFO "Unable to restore the backup of HTTP server configuration files"
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function httpmgr_cfg_unique_parameters_check($config_file);                         #
+#                                                                                     #
+# Takes in input a configuration file, and checks that there are no duplicates for    #
+# unique parameters                                                                   #
+#                                                                                     #
+# Arguments:                                                                          #
+# $config_file path of the configuration file                                         #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_INVALID_CONFIGURATION in case of duplicates                                 #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_cfg_unique_parameters_check() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	
+	local config_file="$1"
+	
+	local unique_parameter
+	local occurrencies
+	for unique_parameter in "${UNIQUE_CONFIGURATION_PARAMETERS[@]}" ; do
+		occurrencies=$(grep "^\s*$unique_parameter\s*=" "$config_file" | wc -l)
+		[[ $occurrencies -gt 1 ]] && {
+			INFO "Duplicate configuration parameter <$unique_parameter>"
+			httpmgr_exit $EXIT_INVALID_CONFIGURATION "$EXIT_INVALID_CONFIGURATION_MSG\nDuplicate configuration parameter <$unique_parameter>"
+		}
+	done
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function httpmgr_cfg_update_custom_includes_conf($module_includes);                 #
+#                                                                                     #
+# Creates/updates the /etc/apache2/conf.d/custom_includes.conf configuration file     #
+#                                                                                     #
+# Arguments:                                                                          #
+# $module_includes array of module configuration files to include                     #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_cfg_update_custom_includes_conf() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_FAILURE
+	
+	local module_includes=($*)
+	
+	cat /dev/null > "$ETC_APACHE2_CONFD_CUSTOM_INCLUDES_CONF_PATH"
+	if [ $? -eq 0 ] ; then
+		local module_include
+		for module_include in "${module_includes[@]}" ; do
+			echo "Include $module_include" >> "$ETC_APACHE2_CONFD_CUSTOM_INCLUDES_CONF_PATH"
+			[[ $? -ne 0 ]] && {
+				TRACE_LEAVE $FUNCNAME
+				return $rCode
+			}
+		done
+		
+		rCode=$EXIT_SUCCESS
+	fi
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function httpmgr_cfg_update_httpd_conf();                                           #
+#                                                                                     #
+# Updates the httpd.conf configuration file                                           #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_cfg_update_httpd_conf() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_FAILURE
+	
+	local error_log_row_with_nr=$(grep -n "^\s*ErrorLog\s" "$ETC_APACHE2_HTTPD_CONF_PATH")
+	if [ "$error_log_row_with_nr" != "" ] ; then
+		local occurrencies=$(echo "$error_log_row_with_nr" | wc -l)
+		if [ $occurrencies -eq 1 ] ; then
+			local error_log_row_nr=$(echo "$error_log_row_with_nr" | awk -F':' '{ print $1 }')
+			sed -i $error_log_row_nr"s/.*/ErrorLog \"|${CMD_LOGGER_ESCAPED} -t ${APACHE_LOG_TAG}\"/" "$ETC_APACHE2_HTTPD_CONF_PATH" &> /dev/null
+			[[ $? -eq 0 ]] && rCode=$EXIT_SUCCESS
+		fi
+	else
+		echo "ErrorLog \"|${CMD_LOGGER} -t ${APACHE_LOG_TAG}\"" >> "$ETC_APACHE2_HTTPD_CONF_PATH"
+		[[ $? -eq 0 ]] && rCode=$EXIT_SUCCESS
+	fi
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function httpmgr_cfg_update_listen_conf($server_address,$server_port);              #
+#                                                                                     #
+# Updates the listen.conf configuration file                                          #
+#                                                                                     #
+# Arguments:                                                                          #
+# $server_address in this implementation it will be either "nbi" or a valid MIP       #
+# $server_port TCP port on which HTTP server should listen                            #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_cfg_update_listen_conf() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_FAILURE
+	
+	local server_address="$1"
+	local server_port="$2"
+	
+	if [ "$server_address" == "nbi" ] ; then
+		echo "Listen $NBI_IP:$server_port" > $ETC_APACHE2_LISTEN_CONF_PATH
+		[[ $? -eq 0 ]] && rCode=$EXIT_SUCCESS
+	else
+		echo "Listen $server_address:$server_port" > $ETC_APACHE2_LISTEN_CONF_PATH
+                [[ $? -eq 0 ]] && rCode=$EXIT_SUCCESS
+	fi
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function httpmgr_cfg_update_server_tuning_conf($mpm_startservers,$mpm_maxclients,   #
+# $mpm_maxrequestsperchild,$mpm_prefork_minspareservers,$mpm_prefork_maxspareservers, #
+# $mpm_prefork_serverlimit,$mpm_worker_minsparethreads,$mpm_worker_maxsparethreads,   #
+# $mpm_worker_threadlimit,$mpm_worker_threadsperchild,$keep_alive,                    #
+# $max_keep_alive_requests,$keep_alive_timeout,$limit_request_body,$trace_enable);    #
+#                                                                                     #
+# Updates the server-tuning.conf configuration file                                   #
+#                                                                                     #
+# Arguments:                                                                          #
+# $mpm_startservers                                                                   #
+# $mpm_max[clients|requestworkers]                                                    #
+# $mpm_max[request|connections]perchild                                               #
+# $mpm_prefork_minspareservers                                                        #
+# $mpm_prefork_maxspareservers                                                        #
+# $mpm_prefork_serverlimit                                                            #
+# $mpm_worker_minsparethreads                                                         #
+# $mpm_worker_maxsparethreads                                                         #
+# $mpm_worker_threadlimit                                                             #
+# $mpm_worker_threadsperchild                                                         #
+# $keep_alive                                                                         #
+# $max_keep_alive_requests                                                            #
+# $keep_alive_timeout							 	      #
+# $limit_request_body                                                                 #
+# $trace_enable                                                                       #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_cfg_update_server_tuning_conf() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	
+	local mpm_startservers="$1"
+	local mpm_maxclients="$2"
+	local mpm_maxrequestsperchild="$3"
+	local mpm_prefork_minspareservers="$4"
+	local mpm_prefork_maxspareservers="$5"
+	local mpm_serverlimit="$6"
+	local mpm_worker_minsparethreads="$7"
+	local mpm_worker_maxsparethreads="$8"
+	local mpm_worker_threadlimit="$9"
+	local mpm_worker_threadsperchild="${10}"
+	local keep_alive="${11}"
+	local max_keep_alive_requests="${12}"
+	local keep_alive_timeout="${13}"
+	local limit_request_body="${14}"
+	local trace_enable="${15}"
+	
+	local prefork_updated=$FALSE
+	
+	local prefork_start="<IfModule prefork.c>"
+	local prefork_end="<\/IfModule>"
+	
+	if [ "$mpm_serverlimit" != "none" ] ; then
+		local prefork_replacement="StartServers $mpm_startservers\nMinSpareServers $mpm_prefork_minspareservers\nMaxSpareServers $mpm_prefork_maxspareservers\nServerLimit $mpm_serverlimit\nMaxRequestWorkers $mpm_maxclients\nMaxConnectionsPerChild $mpm_maxrequestsperchild"
+	else
+		local prefork_replacement="StartServers $mpm_startservers\nMinSpareServers $mpm_prefork_minspareservers\nMaxSpareServers $mpm_prefork_maxspareservers\nMaxRequestWorkers $mpm_maxclients\nMaxConnectionsPerChild $mpm_maxrequestsperchild"	
+	fi
+	
+	sed -i "/$prefork_start/{p;:a;N;/$prefork_end/!ba;s/.*\n/$prefork_replacement\n/};" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" &> /dev/null
+	[[ $? -eq 0 ]] && prefork_updated=$TRUE
+
+	[[ $prefork_updated -ne $TRUE ]] && rCode=$EXIT_FAILURE
+	
+	if [ $rCode -ne $EXIT_FAILURE ] ; then
+		local worker_updated=$FALSE
+		
+		local worker_start="<IfModule worker.c>"
+		local worker_end="<\/IfModule>"
+
+		if [ "$MPM_MODULE" != "prefork" ] ; then
+			if [ "$mpm_serverlimit" != "none" ] ; then
+				local worker_replacement="StartServers $mpm_startservers\nMinSpareThreads $mpm_worker_minsparethreads\nMaxSpareThreads $mpm_worker_maxsparethreads\nThreadLimit $mpm_worker_threadlimit\nServerLimit $mpm_serverlimit\nMaxRequestWorkers $mpm_maxclients\nThreadsPerChild $mpm_worker_threadsperchild\nMaxConnectionsPerChild $mpm_maxrequestsperchild"
+			else
+				local worker_replacement="StartServers $mpm_startservers\nMinSpareThreads $mpm_worker_minsparethreads\nMaxSpareThreads $mpm_worker_maxsparethreads\nThreadLimit $mpm_worker_threadlimit\nMaxRequestWorkers $mpm_maxclients\nThreadsPerChild $mpm_worker_threadsperchild\nMaxConnectionsPerChild $mpm_maxrequestsperchild"
+			fi
+		else
+			local worker_replacement="StartServers $mpm_startservers\nMinSpareThreads $mpm_worker_minsparethreads\nMaxSpareThreads $mpm_worker_maxsparethreads\nThreadLimit $mpm_worker_threadlimit\nMaxRequestWorkers $mpm_maxclients\nThreadsPerChild $mpm_worker_threadsperchild\nMaxConnectionsPerChild $mpm_maxrequestsperchild"
+		fi
+		
+		sed -i "/$worker_start/{p;:a;N;/$worker_end/!ba;s/.*\n/$worker_replacement\n/};" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" &> /dev/null
+		[[ $? -eq 0 ]] && worker_updated=$TRUE
+		
+		[[ $worker_updated -ne $TRUE ]] && rCode=$EXIT_FAILURE
+	fi
+	
+	if [ $rCode -ne $EXIT_FAILURE ] ; then
+		local keep_alive_updated=$FALSE
+		
+		local keep_alive_row_with_nr=$(grep -n "^\s*KeepAlive\s" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH")
+		if [ "$keep_alive_row_with_nr" != "" ] ; then
+			local occurrencies=$(echo "$keep_alive_row_with_nr" | wc -l)
+			if [ $occurrencies -eq 1 ] ; then
+				local keep_alive_row_nr=$(echo "$keep_alive_row_with_nr" | awk -F':' '{ print $1 }')
+				sed -i $keep_alive_row_nr"s/.*/KeepAlive $keep_alive/" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" &> /dev/null
+				[[ $? -eq 0 ]] && keep_alive_updated=$TRUE
+			fi
+		else
+			echo "KeepAlive $keep_alive" >> "$ETC_APACHE2_SERVER_TUNING_CONF_PATH"
+			[[ $? -eq 0 ]] && keep_alive_updated=$TRUE
+		fi
+		
+		[[ $keep_alive_updated -ne $TRUE ]] && rCode=$EXIT_FAILURE
+	fi
+	
+	if [ $rCode -ne $EXIT_FAILURE ] ; then
+		local max_keep_alive_requests_updated=$FALSE
+		
+		local max_keep_alive_requests_row_with_nr=$(grep -n "^\s*MaxKeepAliveRequests\s" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH")
+		if [ "$max_keep_alive_requests_row_with_nr" != "" ] ; then
+			local occurrencies=$(echo "$max_keep_alive_requests_row_with_nr" | wc -l)
+			if [ $occurrencies -eq 1 ] ; then
+				local max_keep_alive_requests_row_nr=$(echo "$max_keep_alive_requests_row_with_nr" | awk -F':' '{ print $1 }')
+				sed -i $max_keep_alive_requests_row_nr"s/.*/MaxKeepAliveRequests $max_keep_alive_requests/" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" &> /dev/null
+				[[ $? -eq 0 ]] && max_keep_alive_requests_updated=$TRUE
+			fi
+		else
+			echo "MaxKeepAliveRequests $max_keep_alive_requests" >> "$ETC_APACHE2_SERVER_TUNING_CONF_PATH"
+			[[ $? -eq 0 ]] && max_keep_alive_requests_updated=$TRUE
+		fi
+		
+		[[ $max_keep_alive_requests_updated -ne $TRUE ]] && rCode=$EXIT_FAILURE
+	fi
+	
+	if [ $rCode -ne $EXIT_FAILURE ] ; then
+		local keep_alive_timeout_updated=$FALSE
+		
+		local keep_alive_timeout_row_with_nr=$(grep -n "^\s*KeepAliveTimeout\s" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH")
+		if [ "$keep_alive_timeout_row_with_nr" != "" ] ; then
+			local occurrencies=$(echo "$keep_alive_timeout_row_with_nr" | wc -l)
+			if [ $occurrencies -eq 1 ] ; then
+				local keep_alive_timeout_row_nr=$(echo "$keep_alive_timeout_row_with_nr" | awk -F':' '{ print $1 }')
+				sed -i $keep_alive_timeout_row_nr"s/.*/KeepAliveTimeout $keep_alive_timeout/" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" &> /dev/null
+				[[ $? -eq 0 ]] && keep_alive_timeout_updated=$TRUE
+			fi
+		else
+			echo "KeepAliveTimeout $keep_alive_timeout" >> "$ETC_APACHE2_SERVER_TUNING_CONF_PATH"
+			[[ $? -eq 0 ]] && keep_alive_timeout_updated=$TRUE
+		fi
+		
+		[[ $keep_alive_timeout_updated -ne $TRUE ]] && rCode=$EXIT_FAILURE
+	fi
+	
+	if [ $rCode -ne $EXIT_FAILURE ] ; then
+		local limit_request_body_updated=$FALSE
+
+		local limit_request_body_row_with_nr=$(grep -n "^\s*LimitRequestBody\s" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH")
+		if [ "$limit_request_body_row_with_nr" != "" ] ; then
+			local occurrencies=$(echo "$limit_request_body_row_with_nr" | wc -l)
+			if [ $occurrencies -eq 1 ] ; then
+				local limit_request_body_row_with_nr=$(echo "$limit_request_body_row_with_nr" | awk -F':' '{ print $1 }')
+				sed -i $limit_request_body_row_with_nr"s/.*/LimitRequestBody $limit_request_body/" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" &> /dev/null
+				[[ $? -eq 0 ]] && limit_request_body_updated=$TRUE
+			fi
+		else
+			echo "LimitRequestBody $limit_request_body" >> "$ETC_APACHE2_SERVER_TUNING_CONF_PATH"
+			[[ $? -eq 0 ]] && limit_request_body_updated=$TRUE
+		fi
+
+		[[ $limit_request_body_updated -ne $TRUE ]] && rCode=$EXIT_FAILURE
+	fi
+
+	if [ $rCode -ne $EXIT_FAILURE ] ; then
+		local trace_enable_updated=$FALSE
+
+		local trace_enable_row_with_nr=$(grep -n "^\s*TraceEnable\s" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH")
+		if [ "$trace_enable_row_with_nr" != "" ] ; then
+			local occurrencies=$(echo "$trace_enable_row_with_nr" | wc -l)
+			if [ $occurrencies -eq 1 ] ; then
+				local trace_enable_row_with_nr=$(echo "$trace_enable_row_with_nr" | awk -F':' '{ print $1 }')
+				sed -i $trace_enable_row_with_nr"s/.*/TraceEnable $trace_enable/" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" &> /dev/null
+				[[ $? -eq 0 ]] && trace_enable_updated=$TRUE
+			fi
+		else
+			echo "TraceEnable $trace_enable" >> "$ETC_APACHE2_SERVER_TUNING_CONF_PATH"
+			[[ $? -eq 0 ]] && trace_enable_updated=$TRUE
+		fi
+
+		[[ $trace_enable_updated -ne $TRUE ]] && rCode=$EXIT_FAILURE
+	fi
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function httpmgr_cfg_update_sysconfig_apache2($mpm_module);                         #
+#                                                                                     #
+# Updates the /etc/sysconfig/apache2 configuration file                               #
+#                                                                                     #
+# Arguments:                                                                          #
+# $mpm_module "prefork" or "worker"                                                   #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_cfg_update_sysconfig_apache2() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	
+	local mpm_module="$1"
+	
+	local apache_mpm_updated=$FALSE
+	
+	local apache_mpm_row_with_nr=$(grep -n "^\s*APACHE_MPM\s*=" "$ETC_SYSCONFIG_APACHE2_PATH")
+	if [ "$apache_mpm_row_with_nr" != "" ] ; then
+		local occurrencies=$(echo "$apache_mpm_row_with_nr" | wc -l)
+		if [ $occurrencies -eq 1 ] ; then
+			local apache_mpm_row_nr=$(echo "$apache_mpm_row_with_nr" | awk -F':' '{ print $1 }')
+			sed -i $apache_mpm_row_nr"s/.*/APACHE_MPM=\"$mpm_module\"/" "$ETC_SYSCONFIG_APACHE2_PATH" &> /dev/null
+			[[ $? -eq 0 ]] && apache_mpm_updated=$TRUE
+		fi
+	else
+		echo "APACHE_MPM=$mpm_module" >> "$ETC_SYSCONFIG_APACHE2_PATH"
+		[[ $? -eq 0 ]] && apache_mpm_updated=$TRUE
+	fi
+	
+	[[ $apache_mpm_updated -ne $TRUE ]] && rCode=$EXIT_FAILURE
+	
+	if [ $rCode -ne $EXIT_FAILURE ] ; then
+		local apache_access_log_commented=$FALSE
+		
+		local apache_access_log_row_with_nr=$(grep -n "^\s*APACHE_ACCESS_LOG\s*=" "$ETC_SYSCONFIG_APACHE2_PATH")
+		if [ "$apache_access_log_row_with_nr" != "" ] ; then
+			occurrencies=$(echo "$apache_access_log_row_with_nr" | wc -l)
+			if [ $occurrencies -eq 1 ] ; then
+				local apache_access_log_row_nr=$(echo "$apache_access_log_row_with_nr" | awk -F':' '{ print $1 }')
+				local access_log_default="\/var\/log\/apache2\/access_log combined"
+				sed -i $apache_access_log_row_nr"s/.*/#APACHE_ACCESS_LOG=\"${access_log_default}\"/" "$ETC_SYSCONFIG_APACHE2_PATH" &> /dev/null
+				[[ $? -eq 0 ]] && apache_access_log_commented=$TRUE
+			fi
+		else
+			apache_access_log_commented=$TRUE
+		fi
+		
+		[[ $apache_access_log_commented -ne $TRUE ]] && rCode=$EXIT_FAILURE
+	fi
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function httpmgr_check_if_running_and_restart();                                    #
+#                                                                                     #
+# Check if HTTP server is running and restart it                                      #
+#                                                                                     #
+# Arguments:                                                                          #
+# $command (start|stop|restart)                                                       #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT                                                               #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_check_if_running_and_restart() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	
+	# Check the status of HTTP server
+	$CMD_RCAPACHE2 status &> /dev/null
+	# If running...
+	if [ $? -eq 0 ] ; then
+		# Restart it
+		echo -n "Restarting web server..."
+		httpmgr_daemon_restart
+		[[ $? -ne 0 ]] && {
+			INFO "Unable to restart HTTP server"
+			httpmgr_cfg_restore
+			echo -en "Error with new configuration\nRestarting web server with old configuration..."
+			httpmgr_daemon_restart
+			[[ $? -eq 0 ]] && echo "    DONE"
+			httpmgr_exit $EXIT_GENERAL_FAULT
+		}
+		echo "    DONE"
+	fi
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function httpmgr_copy_all_to_cluster();                                             #
+#                                                                                     #
+# Copy all needed configuration files under /cluster/...                              #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT                                                               #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_copy_all_to_cluster() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	
+	[[ -d "$HTTP_FILES_DIR" ]] || {
+		mkdir -p "$HTTP_FILES_DIR" &> /dev/null || httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	[[ -e "$ETC_APACHE2_HTTPD_CONF_PATH" ]] && {
+		cp "$ETC_APACHE2_HTTPD_CONF_PATH" "$HTTP_FILES_DIR" &> /dev/null || httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	[[ -e "$ETC_APACHE2_LISTEN_CONF_PATH" ]] && {
+		cp "$ETC_APACHE2_LISTEN_CONF_PATH" "$HTTP_FILES_DIR" &> /dev/null || httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	[[ -e "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" ]] && {
+		cp "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" "$HTTP_FILES_DIR" &> /dev/null || httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	[[ -e "$ETC_SYSCONFIG_APACHE2_PATH" ]] && {
+		cp "$ETC_SYSCONFIG_APACHE2_PATH" "$HTTP_FILES_DIR" &> /dev/null || httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	[[ -e "$ETC_APACHE2_CONFD_CUSTOM_INCLUDES_CONF_PATH" ]] && {
+		cp "$ETC_APACHE2_CONFD_CUSTOM_INCLUDES_CONF_PATH" "$HTTP_FILES_DIR" &> /dev/null || httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function httpmgr_daemon($command);                                                  #
+#                                                                                     #
+# Start, stop or restart the (Apache) HTTP server daemon                              #
+#                                                                                     #
+# Arguments:                                                                          #
+# $command (start|stop|restart)                                                       #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_NOT_CONFIGURED if HTTP configuration file is not present in the shared      #
+#   filesystem                                                                        #
+# - $EXIT_GENERAL_FAULT                                                               #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_daemon() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	
+	local command="$1"
+	
+	if [ "$command" == "start" ] || [ "$command" == "restart" ] ; then
+		#Check existence of configuration file in the shared filesystem
+		[[ -e "$HTTP_CONFIGURATION_FILE" ]] || {
+			INFO "Configuration file $HTTP_CONFIGURATION_FILE does not exist"
+			httpmgr_exit $EXIT_NOT_CONFIGURED "$EXIT_NOT_CONFIGURED_MSG"
+		}
+		
+		if [ "$command" == "start" ] ; then
+			$CMD_RCAPACHE2 status &> /dev/null
+			local httpd_status=$?
+			if [ $httpd_status -ne $HTTPD_STATUS_UNUSED ] ; then
+				command="restart"
+			fi
+		fi
+	fi
+	
+	# Build the action string (Starting, Stopping, Restarting)
+	local action="$(echo $command | sed 's/\<.\|_./\U&/g')"
+	[[ "$action" == "Stop" ]] && action="${action}p"
+	action="${action}ing"
+	
+	local command_function="httpmgr_daemon_$command"
+	
+	echo -n "$action web server..."
+	$command_function
+	[[ $? -ne $EXIT_SUCCESS ]] && {
+		INFO "Unable to $command the AP Web Server"
+		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+	}
+	echo "    DONE"
+
+	if [ "$command" == "start" ] || [ "$command" == "restart" ] ; then
+		echo "start" > "$HTTP_STATUS"
+		[[ $? -ne 0 ]] && {
+			INFO "Unable to create/update $CONFIG_PATH/apos/http_status"
+			httpmgr_cfg_restore
+			httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+		}
+	else # stop
+		echo "stop" > "$HTTP_STATUS"
+		[[ $? -ne 0 ]] && {
+			INFO "Unable to create/update $CONFIG_PATH/apos/http_status"
+			httpmgr_cfg_restore
+			httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+		}
+	fi
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function httpmgr_daemon_start();                                                    #
+#                                                                                     #
+# Start the (Apache) HTTP server daemon                                               #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_daemon_start() {
+	TRACE_ENTER $FUNCNAME
+	rCode=$EXIT_FAILURE
+	
+	INFO "Executing: $CMD_RCAPACHE2 start"
+	$CMD_RCAPACHE2 start &> /dev/null
+	[[ $? -eq 0 ]] && rCode=$EXIT_SUCCESS
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function httpmgr_daemon_stop();                                                     #
+#                                                                                     #
+# Stop the (Apache) HTTP server daemon                                                #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_daemon_stop() {
+	TRACE_ENTER $FUNCNAME
+	rCode=$EXIT_FAILURE
+	
+	INFO "Executing: $CMD_RCAPACHE2 stop"
+	$CMD_RCAPACHE2 stop &> /dev/null
+	if [ $? -eq 0 ] ; then
+		local pid=$(ps -e | grep -Ew "$WORKER_BINARY|$PREFORK_BINARY" | awk '{ print $1" "$4 }' | grep "^[0-9][0-9]* $WORKER_BINARY$\|^[0-9][0-9]* $PREFORK_BINARY$" | awk '{print $1}' | head -1)
+		while [ "$pid" != "" ] ; do
+			INFO "Found Apache dead PID $pid. Kill it!"
+			kill -9 $pid &> /dev/null || {
+				INFO "Unable to kill PID $pid"
+				TRACE_LEAVE $FUNCNAME
+				return $rCode
+			}
+			pid=$(ps -e | grep -Ew "$WORKER_BINARY|$PREFORK_BINARY" | awk '{ print $1" "$4 }' | grep "^[0-9][0-9]* $WORKER_BINARY$\|^[0-9][0-9]* $PREFORK_BINARY$" | awk '{print $1}' | head -1)
+		done
+		rm -f "$APACHE_PID_FILE" &> /dev/null
+		rCode=$EXIT_SUCCESS
+	fi
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function httpmgr_daemon_restart();                                                  #
+#                                                                                     #
+# Restart the (Apache) HTTP server daemon                                             #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_daemon_restart() {
+	TRACE_ENTER $FUNCNAME
+	rCode=$EXIT_FAILURE
+	
+	httpmgr_daemon_stop
+	if [ $? -eq $EXIT_SUCCESS ] ; then
+		httpmgr_daemon_start
+		[[ $? -eq $EXIT_SUCCESS ]] && rCode=$EXIT_SUCCESS
+	fi
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function httpmgr_exit($exit_code = $EXIT_SUCCESS,$exit_message = "");               #
+#                                                                                     #
+# Logs the execution end, and exits with provided exit code                           #
+# and message (if any) or with SUCCESS (0) if called without arguments                #
+# Optionally displays a message                                                       #
+#                                                                                     #
+# Arguments:                                                                          #
+# $exit_code (Optional, default 0) numeric exit code to return to the parent shell    #
+# $exit_message (Optional, default empty) exit message to display                     #
+#                                                                                     #
+# Exits:                                                                              #
+# - SUCCESS (0) if called without arguments                                           #
+# - $exit_code if exit code is passed as first argument                               #
+#######################################################################################
+function httpmgr_exit() {
+	TRACE_ENTER $FUNCNAME
+	
+	local exit_code=$EXIT_SUCCESS
+	local exit_message=""
+	
+	[[ "$1" != "" ]] && exit_code=$1
+	shift
+	[[ "$1" != "" ]] && exit_message="$@"
+	
+	[[ "$exit_message" != "" ]] && echo -e "\n$exit_message"
+	
+	INFO "$LOG_TAG version $_httpmgr_VER -- Execution ended on node $CURRENT_NODE_HOSTNAME ($CURRENT_NODE_IP) with exit code $exit_code"
+	if [ $exit_code != $EXIT_SUCCESS ] ; then
+		log_error "END <$LOG_TAG> - EXIT CODE <$exit_code>"
+	fi
+	
+	exit $exit_code
+}
+
+#######################################################################################
+# function httpmgr_init();                                                            #
+#                                                                                     #
+# - Initialize global variables (log file, current node, etc...)                      #
+# - Logs the execution start                                                          #
+#######################################################################################
+function httpmgr_init() {
+	TRACE_ENTER $FUNCNAME
+
+	[[ "$_DEBUG" == "on" ]] && F_INFO="$LOG_DIR/$LOG_FILE"
+	
+	CURRENT_NODE_HOSTNAME="$(< /etc/cluster/nodes/this/hostname)"
+	CURRENT_NODE_IP="$(< /etc/cluster/nodes/this/networks/public/primary/address)"
+	CURRENT_NODE_ID=$(< /etc/cluster/nodes/this/id)
+	NBI_IP="$(< /etc/cluster/nodes/this/mip/nbi/address)"
+	
+	INFO "$LOG_TAG version $_httpmgr_VER -- Execution started on node $CURRENT_NODE_HOSTNAME ($CURRENT_NODE_IP)"
+
+	TRACE_LEAVE $FUNCNAME
+}
+
+#######################################################################################
+# function httpmgr_query($command);                                                   #
+#                                                                                     #
+# Shows information about HTTP server                                                 #
+# - daemon status                                                                     #
+# - configuration parameters                                                          #
+#                                                                                     #
+# Arguments:                                                                          #
+# $command (daemon|conf|all)                                                          #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_NOT_CONFIGURED if HTTP configuration file is not present in the shared      #
+#   filesystem                                                                        #
+# - $EXIT_GENERAL_FAULT                                                               #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_query() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	
+	local command="$1"
+	
+	local query_daemon=$FALSE
+	local query_conf=$FALSE
+	
+	if [ "$command" == "daemon" ] ; then
+		query_daemon=$TRUE
+	elif [ "$command" == "conf" ] ; then
+		query_conf=$TRUE
+	else # all
+		query_daemon=$TRUE
+		query_conf=$TRUE
+		
+		#Check existence of configuration file in the shared filesystem
+		[[ -e "$HTTP_CONFIGURATION_FILE" ]] || {
+			INFO "Configuration file $HTTP_CONFIGURATION_FILE does not exist"
+			httpmgr_exit $EXIT_NOT_CONFIGURED "$EXIT_NOT_CONFIGURED_MSG"
+		}
+	fi
+	
+	if [ $query_daemon -eq $TRUE ] ; then
+		local http_configured=$FALSE
+		[[ -e "$HTTP_CONFIGURATION_FILE" ]] && http_configured=$TRUE
+		local http_status=""
+		[[ -e "$HTTP_STATUS" ]] && http_status=$(< "$HTTP_STATUS")
+		
+		$CMD_RCAPACHE2 status &> /dev/null
+		local httpd_status=$?
+		if [ $httpd_status -eq $HTTPD_STATUS_RUNNING ] ; then
+			echo "Web server is RUNNING"
+		elif [ $httpd_status -eq $HTTPD_STATUS_UNUSED ] ; then
+			if [ $http_configured -eq $TRUE ] ; then
+				if [ "$http_status" == "start" ] ; then
+					echo "Web server is NOT RUNNING"
+				else
+					echo "Web server is STOPPED"
+				fi
+			else
+				echo "Web server is NOT CONFIGURED"
+			fi
+		else
+			if [ $http_configured -eq $TRUE ] ; then
+				if [ "$http_status" == "start" ] ; then
+					echo "Web server is NOT RUNNING"
+				else
+					echo "Web server is STOPPED"
+					httpmgr_daemon_stop #To clean the situation
+				fi
+			else
+				echo "Web server is NOT CONFIGURED"
+				httpmgr_daemon_stop #To clean the situation
+			fi
+		fi
+	fi
+	
+	if [ $query_conf -eq $TRUE ] ; then
+		#Check existence of configuration file in the shared filesystem
+		[[ -e "$HTTP_CONFIGURATION_FILE" ]] || {
+			INFO "Configuration file $HTTP_CONFIGURATION_FILE does not exist"
+			httpmgr_exit $EXIT_NOT_CONFIGURED "$EXIT_NOT_CONFIGURED_MSG"
+		}
+		
+		local server_address_port="$(grep "^\s*Listen\s*" "$ETC_APACHE2_LISTEN_CONF_PATH" | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+		local server_address="$(echo "$server_address_port" | awk -F':' '{ print $1 }' | sed -e 's/^ *//' -e 's/ *$//')"
+		local server_port="$(echo "$server_address_port" | awk -F':' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+		
+		echo "WEB SERVER LISTENING ON"
+		echo "    IP address: $server_address"
+		echo "    TCP port  : $server_port"
+                https_status=$($CMD_IMMLIST  $GSNHSECDN | grep security | awk '{print $3}' 2>/dev/null)
+                
+                if [ "$https_status" == "enabled" ] ; then
+                   echo "WEB SERVER SECURITY: ENABLED"
+                   local https_cert_id=$($CMD_IMMLIST  $GSNHSECDN | grep nodeCredentialId | awk '{print $3}' 2>/dev/null)
+                      echo "    nodeCredential Id:   $https_cert_id"
+                   local https_tcerts_id=$($CMD_IMMLIST  $GSNHSECDN | grep trustCategoryId | awk '{print $3}' 2>/dev/null)
+                      echo "    trustCategory Id: $https_tcerts_id"
+		else
+			echo "WEB SERVER SECURITY: DISABLED"
+		fi
+		
+             if [ "$command" != "status" ] ; then
+                  if [ "$https_status" == "enabled" ] ; then
+                     Certificate=$(cat "/etc/apache2/conf.d/ssl.conf" | grep SSLCertificateFile | awk -F' ' '{  print $2 }')
+                     echo "    Certificate: $Certificate"
+                     PrivateKey=$(cat "/etc/apache2/conf.d/ssl.conf" | grep SSLCertificateKeyFile | awk -F' ' '{  print $2 }')
+                     echo "    PrivateKey: $PrivateKey"
+                     CACertificate=$(cat "/etc/apache2/conf.d/ssl.conf" | grep SSLCACertificateFile | awk -F' ' '{  print $2 }')
+                     echo "    CA Certificate: $CACertificate"
+                  fi
+	
+		echo
+		local mpm_module="$(grep "^\s*APACHE_MPM\s*=" "$ETC_SYSCONFIG_APACHE2_PATH" | awk -F'=' '{ $1=""; print $0 }' | awk -F'"' '{ $1=""; print $0 }' | awk -F'"' '{ print $1 }' | sed -e 's/^ *//' -e 's/ *$//')"
+		echo "MULTI-PROCESSING MODULE: $mpm_module"
+		
+		local mpm_startservers="$(grep "^\s*StartServers\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" | head -1 | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+		local mpm_maxclients="$((grep "^\s*MaxRequestWorkers\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" || grep "^\s*MaxClients\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH") | head -1 | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+		local mpm_maxrequestsperchild="$((grep "^\s*MaxConnectionsPerChild\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" || grep "^\s*MaxRequestsPerChild\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH") | head -1 | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+		local mpm_serverlimit="$(grep "^\s*ServerLimit\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" | head -1 | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+		
+		if [ "$mpm_module" == "prefork" ] ; then
+			local mpm_prefork_minspareservers="$(grep "^\s*MinSpareServers\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+			local mpm_prefork_maxspareservers="$(grep "^\s*MaxSpareServers\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+		
+			echo "    StartServers          : $mpm_startservers"
+			echo "    MinSpareServers       : $mpm_prefork_minspareservers"
+			echo "    MaxSpareServers       : $mpm_prefork_maxspareservers"
+			echo "    ServerLimit           : $mpm_serverlimit"
+			echo "    MaxRequestworkers     : $mpm_maxclients"
+			echo "    MaxConnectionsPerChild: $mpm_maxrequestsperchild"
+		elif [ "$mpm_module" == "worker" ] ; then
+			local mpm_worker_minsparethreads="$(grep "^\s*MinSpareThreads\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+			local mpm_worker_maxsparethreads="$(grep "^\s*MaxSpareThreads\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+			local mpm_worker_threadlimit="$(grep "^\s*ThreadLimit\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+			local mpm_worker_threadsperchild="$(grep "^\s*ThreadsPerChild\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+			
+			echo "    StartServers          : $mpm_startservers"
+			echo "    MinSpareThreads       : $mpm_worker_minsparethreads"
+			echo "    MaxSpareThreads       : $mpm_worker_maxsparethreads"
+			echo "    ThreadLimit           : $mpm_worker_threadlimit"
+			if [ "$mpm_serverlimit" != "" ] ; then
+				echo "    ServerLimit	   	  : $mpm_serverlimit"
+			fi
+			echo "    MaxRequestworkers     : $mpm_maxclients"
+			echo "    ThreadsPerChild       : $mpm_worker_threadsperchild"
+			echo "    MaxConnectionsPerChild: $mpm_maxrequestsperchild"
+		fi
+		
+		echo
+		echo "PERSISTENT CONNECTIONS SETTINGS"
+		
+		local keep_alive="$(grep "^\s*KeepAlive\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" | head -1 | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+		local max_keep_alive_requests="$(grep "^\s*MaxKeepAliveRequests\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" | head -1 | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+		local keep_alive_timeout="$(grep "^\s*KeepAliveTimeout\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" | head -1 | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+		local limit_request_body="$(grep "^\s*LimitRequestBody\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" | head -1 | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+		local trace_enable="$(grep "^\s*TraceEnable\s*" "$ETC_APACHE2_SERVER_TUNING_CONF_PATH" | head -1 | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+		
+		echo "    KeepAlive           : $keep_alive"
+		echo "    MaxKeepAliveRequests: $max_keep_alive_requests"
+		echo "    KeepAliveTimeout    : $keep_alive_timeout"
+		echo "    LimitRequestBody    : $limit_request_body"
+		echo "    TraceEnable         : $trace_enable"
+		
+		echo
+		echo "ADDITIONAL MODULES INCLUDED"
+		if [ -s "$ETC_APACHE2_CONFD_CUSTOM_INCLUDES_CONF_PATH" ] ; then
+			local line
+			local module_include
+			while read line || [ -n "$line" ] ; do
+				if [[ "$line" =~ ^Include ]] ; then
+					echo "$line" | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//'
+				fi
+			done < "$ETC_APACHE2_CONFD_CUSTOM_INCLUDES_CONF_PATH"
+           	fi
+           fi
+	fi
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+
+#######################################################################################
+# function httpmgr_apache_server_flag($flag);                                         #
+#                                                                                     #
+# Update APACHE_SERVER_FLAGS="SSL" when security is enabled in /etc/sysconfig/apache2 #
+# Update APACHE_SERVER_FLAGS="" when security is disabled in /etc/sysconfig/apache2   #
+#                                                                                     #
+# Arguments:                                                                          #
+# $flag ("SSL"|"")                                                                    #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT                                                               #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+
+function httpmgr_apache_server_flag()
+{
+        local apache_server_flags=$1
+        httpmgr_cfg_backup
+        local apache_server_flags_row_with_nr=$(grep -n "^\s*APACHE_SERVER_FLAGS\s*=" "$ETC_SYSCONFIG_APACHE2_PATH")
+        [[ "$apache_server_flags_row_with_nr" == "" ]] && {
+                echo "Unable to update /etc/sysconfig/apache2"
+                httpmgr_cfg_restore
+                httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+        }
+        local occurrencies=$(echo "$apache_server_flags_row_with_nr" | wc -l)
+        [[ $occurrencies -ne 1 ]] && {
+                echo "Unable to update /etc/sysconfig/apache2"
+               httpmgr_cfg_restore
+               httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+        }
+        local apache_server_flags_row_nr=$(echo "$apache_server_flags_row_with_nr" | awk -F':' '{ print $1 }')
+        sed -i $apache_server_flags_row_nr"s/.*/APACHE_SERVER_FLAGS=\"$apache_server_flags\"/" "$ETC_SYSCONFIG_APACHE2_PATH" &> /dev/null
+        [[ $? -ne 0 ]] && {
+                echo "Unable to update /etc/sysconfig/apache2"
+               httpmgr_cfg_restore
+               httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+        }
+}
+
+
+#######################################################################################
+# function httpmgr_security($command);                                                #
+#                                                                                     #
+# Enable or disable SSL security                                                      #
+# Store the status (enabled/disabled) of SSL security in IMM attribute "security"     #
+#                                                                                     #
+# Arguments:                                                                          #
+# $command (on|off)                                                                   #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_SSL_NOT_CONFIGURED if SSL certificate and private key are not present       #
+# - $EXIT_TRUSTED_CERTIFICATE_NOT_CONFIGURED if CA certificate(s) are not present     #
+# - $EXIT_SSL_NOT_VALID if SSL certificate is not valid                               #
+# - $EXIT_TRUSTED_CERTIFICATE_NOT_VALID if Trust certificate is not valid             #
+# - $EXIT_GENERAL_FAULT                                                               #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_security() {
+
+    TRACE_ENTER $FUNCNAME
+
+    local rCode=$EXIT_SUCCESS
+    local command="$1"
+    local apache_flag=""
+    local https_cert_id=$($CMD_IMMLIST  $GSNHSECDN | grep nodeCredentialId | awk '{print $3}')
+    if [ "$https_cert_id" == -1 ] ; then
+       httpmgr_exit $EXIT_SSL_NOT_CONFIGURED "$EXIT_SSL_NOT_CONFIGURED_MSG"
+    fi
+    local https_tcerts_id=$($CMD_IMMLIST  $GSNHSECDN | grep trustCategoryId | awk '{print $3}')
+    if [ "$https_tcerts_id" == -1 ] ; then
+         httpmgr_exit $EXIT_TRUSTED_CERTIFICATE_NOT_CONFIGURED
+	#httpmgr_exit $EXIT_TRUSTED_CERTIFICATE_NOT_CONFIGURED "$EXIT_TRUSTED_CERTIFICATE_NOT_CONFIGURED_MSG"
+    fi
+ 
+    httpmgr_cfg_backup  
+
+    if [ "$command" == "on" ] ; then
+       apache_flag="SSL"
+       httpmgr_apache_server_flag $apache_flag
+       echo -n "Enabling web server security..."
+       rOutput=$($CMD_IMMCFG -a security=enabled $GSNHSECDN 2>&1)
+       rCode=$?
+       INFO "$rOutput" 
+       if [ $rCode == $EXIT_SUCCESS ]; then
+          echo "DONE"   
+          INFO "Sucessfully Enabled security"
+          TRACE_LEAVE $FUNCNAME
+          httpmgr_copy_all_to_cluster 	 
+          httpmgr_check_if_running_and_restart
+          return $rCode
+       else
+          rCode=$(echo "$rOutput" | grep gsnh_error_code | cut -d= -f2) 
+          echo "FAILED"   
+          INFO "Failed to Enabling secuirty"
+          TRACE_LEAVE $FUNCNAME
+         case $rCode in
+           $EXIT_SSL_NOT_VALID)
+             httpmgr_cfg_restore 
+             httpmgr_exit $EXIT_SSL_NOT_VALID "$EXIT_SSL_NOT_VALID_MSG"
+             ;;
+           $EXIT_TRUSTED_CERTIFICATE_NOT_VALID)
+             httpmgr_cfg_restore 
+             httpmgr_exit $EXIT_TRUSTED_CERTIFICATE_NOT_VALID "$EXIT_TRUSTED_CERTIFICATE_NOT_VALID_MSG"
+             ;;
+           *) 
+            httpmgr_cfg_restore
+            httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+            ;;
+          esac
+       fi
+    else
+        INFO "Disabling web server security..."
+        httpmgr_apache_server_flag $apache_flag
+        $CMD_IMMCFG -a security=disabled $GSNHSECDN 2>/dev/null
+        rCode=$?
+        if [ $rCode == $EXIT_SUCCESS ]; then
+           echo "DONE"   
+           INFO "Sucessfully disabled security"
+           TRACE_LEAVE $FUNCNAME
+           httpmgr_copy_all_to_cluster
+           httpmgr_check_if_running_and_restart 
+           return $rCode
+        else
+           echo "FAILED"   
+           INFO "Failed to disabling security"
+           TRACE_LEAVE $FUNCNAME
+           httpmgr_cfg_restore
+           httpmgr_exit $EXIT_GENERAL_FAULT
+        fi
+    fi
+}
+
+#######################################################################################
+# function httpmgr_tcerts();                                                          #
+#                                                                                     #
+# Takes in input the ID of a Trust Category and stores in IMM attribute               #
+#  TrustCategoryId                                                                    #                                              
+# Arguments:                                                                          #
+# Tcert ID                                                                            #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT                                                               #
+# - $EXIT_TRUSTED_CERTIFICATE_NOT_FOUND                                               #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_tcerts() {
+
+        TRACE_ENTER $FUNCNAME
+
+        local trust_category_id=$1
+        local tcert_id=$(immlist trustCategoryId=$trust_category_id,certMId=1 2>/dev/null)
+        # Check existence of tCategoryId
+        if [ -z "$tcert_id" ]; then
+           INFO "CA X.509 certificate $tcert_id does not exist"
+            httpmgr_exit $EXIT_TRUSTED_CERTIFICATE_NOT_FOUND
+	   #httpmgr_exit $EXIT_TRUSTED_CERTIFICATE_NOT_FOUND "$EXIT_TRUSTED_CERTIFICATE_NOT_FOUND_MSG"
+        else   
+            INFO "Updating trustCategory=$trust_category_id... in IMM"
+            $CMD_IMMCFG -a trustCategoryId="$trust_category_id" $GSNHSECDN 2>/dev/null
+            rCode=$?
+            if [ $rCode == $EXIT_SUCCESS ]; then
+               INFO "Sucessfully trustCategory ID is stored in IMM"
+               TRACE_LEAVE $FUNCNAME
+               httpmgr_exit $EXIT_SUCCESS
+            else
+               INFO "Failed to store trustCategory ID in IMM"
+               TRACE_LEAVE $FUNCNAME
+               httpmgr_exit $EXIT_GENERAL_FAULT
+            fi
+        fi
+}
+
+#######################################################################################
+# function httmpmgr_cipher_validate();                                                #
+#                                                                                     #
+# Validate the Ciphers name with openssl command and stores that valid cipher names   #
+# in confCiphersList attribute of IMM.                                                #
+#                                                                                     #
+# Arguments:                                                                          #
+# $cipher_suites                                                                      #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_ALREADY_EXIST if ciphersuite name is already present                        #
+# - $EXIT_UNREASONABLE_VALUE if ciphernames is invalid                                #
+# - $EXIT_GENERAL_FAULT                                                               #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httmpmgr_cipher_validate() {
+	TRACE_ENTER $FUNCNAME
+	local cipher_suites=$1
+	IFS=':'
+	read -ra ARR <<< "$cipher_suites"
+	for i in "${ARR[@]}"; do
+		cmd=$(openssl ciphers -v $i 2>/dev/null)
+		rcode=$?
+		if [ $rcode -ne 0 ] ; then
+			httpmgr_exit $EXIT_CIPHER_UNREASONABLE_VALUE "$EXIT_CIPHER_UNREASONABLE_VALUE_MSG <$cipher_suites>"
+			httpmgr_exit $FAILURE
+			TRACE_LEAVE $FUNCNAME
+		else
+			TRACE_LEAVE $FUNCNAME
+			count=$(openssl ciphers -v $i | wc -l)
+ 			if [ $count -ne 1 ] ; then
+				httpmgr_exit $EXIT_CIPHER_UNREASONABLE_VALUE "$EXIT_CIPHER_UNREASONABLE_VALUE_MSG <$cipher_suites>"
+			fi
+		
+		fi
+	done
+	local ciphers_id=$(immlist -a confCiphersList asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+	delete=(" ")
+	delete1="<Empty>"
+	local trim_ciphers_id=`echo $ciphers_id | cut -c 17-`
+	IFS=' '
+	read -r -a ARR_LIST_ONE <<< "$trim_ciphers_id"
+	declare -a new_arr
+	new_arr=("${ARR_LIST_ONE[@]}" "${ARR[@]}")
+	new_arr=("${new_arr[@]/$delete1}")
+	res=("${#new_arr[@]}")
+	for element in "${delete[@]}"; do
+		res=(${res[@]/*${element}*/})
+	done
+	local icount="${#ARR[@]}"
+	local jcount="${#ARR_LIST_ONE[@]}"
+	for ((i=0; i < icount; i++)); do
+   		for ((j=0; j < jcount ; j++)); do
+			if [ "${ARR[i]}" == "${ARR_LIST_ONE[j]}" ]  ; then
+        			httpmgr_exit $EXIT_ALREADY_ENABLED_TLS_CIPHER "$EXIT_ALREADY_ENABLED_TLS_CIPHER_STRING_MSG"
+			else
+				continue 
+			fi
+		done
+	done 
+        INFO "Updating  TempCipherlist=$ciphers_suites... in IMM"
+	IFS=':';
+	local update_ciphers_id=`echo "${new_arr[*]// /:}"`
+	#echo "${update_ciphers_id:0:1}"
+	if [ "${update_ciphers_id:0:1}" == ':' ]; then
+		local trim_str=`echo "$update_ciphers_id" | cut -c 2-`
+		$CMD_IMMCFG -a confCiphersList="$trim_str" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+	else
+		$CMD_IMMCFG -a confCiphersList="$update_ciphers_id" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+	fi
+        rCode=$?
+        if [ $rCode == $EXIT_SUCCESS ]; then
+        	INFO "Sucessfully ciphers are stored in IMM"
+           	TRACE_LEAVE $FUNCNAME
+                httpmgr_exit $EXIT_SUCCESS
+        else
+            	INFO "Failed to store ciphers in temorarylist in IMM"
+                TRACE_LEAVE $FUNCNAME
+            	httpmgr_exit $EXIT_GENERAL_FAULT
+	 fi
+}
+
+#######################################################################################
+# function  httmpgr_ciphers_temporay_listing();                                       #
+#                                                                                     #
+# List the "confCiphersList" attribute of IMM and displays it with header.            #
+#                                                                                     #
+# Arguments:                                                                          #
+# $cipher_suites_list                                                                 #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT                                                               #       
+#                                                                                     #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httmpgr_ciphers_temporay_listing(){
+	TRACE_ENTER $FUNCNAME
+	local cipher_suites_list=$(immlist -a confCiphersList asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+	local trim_cipher_suites_list=`echo $cipher_suites_list | cut -c 17-`
+	if [ "$trim_cipher_suites_list" == "<Empty>" ] || [ "$trim_cipher_suites_list" == "" ] ; then
+		httpmgr_exit $EXIT_SUCCESS
+	fi
+	echo "$(openssl ciphers -v $trim_cipher_suites_list|awk '{print $1 " " $2 "   " $3 "       " $4 "            " $5 "       " $6}' | column -t 2>/dev/null)"
+	rcode=$?
+	if [ $rcode -ne 0 ] ; then
+        	httpmgr_exit $FAILURE
+        	TRACE_LEAVE $FUNCNAME
+	else
+		TRACE_LEAVE $FUNCNAME
+        	httpmgr_exit $EXIT_SUCCESS
+	fi
+}
+
+#######################################################################################
+# function function httpmgr_support_ciphers();                                        #
+#                                                                                     #
+# List all the supported ciphers and displays it with proper header.                  #
+#                                                                                     # 
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT                                                               #
+#                                                                                     #
+#  Return codes:                                                                      #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+
+function httpmgr_support_ciphers() {
+        TRACE_ENTER $FUNCNAME
+	echo "$(openssl ciphers -v $cmd|awk '{print $1 " " $2 "   " $3 "       " $4 "            " $5 "       " $6}' | column -t 2>/dev/null)"
+        rcode=$?
+        if [ $rcode -ne 0 ] ; then
+                httpmgr_exit $FAILURE
+                TRACE_LEAVE $FUNCNAME
+
+        else
+                TRACE_LEAVE $FUNCNAME
+                httpmgr_exit $EXIT_SUCCESS
+        fi
+
+
+}
+#######################################################################################
+# function httmpgr_ciphers_enabled_listing();                                         #
+#                                                                                     #
+# List the "enabledCipherList" attribute of IMM and displays it with header.          #
+#                                                                                     #
+# Arguments:                                                                          #
+# $cipher_suites_list                                                                 #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT                                                               #       
+#                                                                                     #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httmpgr_ciphers_enabled_listing(){
+        TRACE_ENTER $FUNCNAME
+        local cipher_suites=$(immlist -a enabledCiphersList asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+        local trim_cipher_suites=`echo $cipher_suites | cut -c 20-`
+	if [ $trim_cipher_suites == "<Empty>" ] ; then
+        	httpmgr_exit $EXIT_SUCCESS
+	fi
+	echo "$(openssl ciphers -v $trim_cipher_suites|awk '{print $1 " " $2 "   " $3 "       " $4 "            " $5 "       " $6}' | column -t 2>/dev/null)"
+	rcode=$?
+	if [ $rcode -ne 0 ] ; then
+        	httpmgr_exit $FAILURE
+        	TRACE_LEAVE $FUNCNAME
+	else	
+		TRACE_LEAVE $FUNCNAME
+        	httpmgr_exit $EXIT_SUCCESS
+	fi
+}
+#######################################################################################
+# function httmpmgr_clear_list();                                                     #
+#                                                                                     #
+# Validate the Ciphers name with openssl command and stored in array and              #
+# confCiphersList attribute of IMM is stored in another array. On comparing           #
+# Duplicates of both array, alreadhy existing one or more ciphernames are removed     #
+# and again stored in confCiphersList attribute of IMM.                               #
+#                                                                                     #
+#                                                                                     #
+# Arguments:                                                                          #
+# SPLIT_ARR[@] - for storing ciphernames from IMM attribute                           #
+# ARR[@] - for the ciphernames which are gives as input                               #
+                                                                                      #
+# Exits:                                                                              #
+#                                                                                     #                                         
+# - $EXIT_UNREASONABLE_VALUE if ciphernames is invalid                                #       
+# - $EXIT_GENERAL_FAULT                                                               #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_clear_list(){
+	TRACE_ENTER $FUNCNAME
+	local cipher_suites=$1
+	if [ "$1" == "ALL" ]; then
+		 $CMD_IMMCFG -a confCiphersList="" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null		
+		 rCode=$?
+                 if [ $rCode == $EXIT_SUCCESS ]; then
+                    INFO "Sucessfully ciphers are stored in IMM"
+                    TRACE_LEAVE $FUNCNAME
+                    httpmgr_exit $EXIT_SUCCESS
+                 else
+                    INFO "Failed to store ciphers in temorarylist in IMM"
+                    TRACE_LEAVE $FUNCNAME
+                    httpmgr_exit $EXIT_GENERAL_FAULT 
+                fi
+	fi
+	IFS=':'
+	read -ra ARR <<< "$cipher_suites"
+	local cfgread=$(immlist -a confCiphersList asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+	local cut_string=`echo $cfgread | cut -c 17-`
+	IFS=' ' 
+	read -ra SPLIT_ARR <<< "$cut_string"
+	local icount="${#ARR[@]}"
+	local jcount="${#SPLIT_ARR[@]}"
+	count=0
+	for ((k=0; k < icount; k++)); do
+		count=0
+   		for ((t=0; t < jcount ; t++)); do
+			if [ ${SPLIT_ARR[t]} == ${ARR[k]} ]  ; then    
+				count=$((count+1))         
+        		fi
+
+		done	
+		if [ $count -eq 0 ] ; then
+  	                 httpmgr_exit $EXIT_CIPHER_UNREASONABLE_VALUE  "$EXIT_CIPHER_UNREASONABLE_VALUE_MSG"
+		fi
+	done
+	if [ $count -gt 0 ]; then	
+		local icount="${#SPLIT_ARR[@]}"
+        	local jcount="${#ARR[@]}"
+		for ((i=0; i < icount; i++)); do
+   			for ((j=0; j < jcount ; j++)); do
+				KEEP=true
+       				if [ ${SPLIT_ARR[i]} == ${ARR[j]} ]  ; then
+					KEEP=false	
+					break
+				fi
+			done
+			if ${KEEP}; then
+				Temp_arr+=(${SPLIT_ARR[$i]})
+			fi
+		done
+		result=("${Temp_arr[@]}")
+		unset Temp_arr
+		IFS=':'
+		local final_imm_string=`echo "${result[*]// /:}"`
+		$CMD_IMMCFG -a confCiphersList="$final_imm_string" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+	 	rCode=$?
+                if [ $rCode == $EXIT_SUCCESS ]; then
+                	INFO "Sucessfully ciphers are stored in IMM"
+                	TRACE_LEAVE $FUNCNAME
+                	httpmgr_exit $EXIT_SUCCESS
+               	else
+                	INFO "Failed to store ciphers in temorarylist in IMM"
+                	TRACE_LEAVE $FUNCNAME
+                	httpmgr_exit $EXIT_GENERAL_FAULT
+		fi
+	else
+                httpmgr_exit $EXIT_CIPHER_UNREASONABLE_VALUE  "$EXIT_CIPHER_UNREASONABLE_VALUE_MSG"
+	fi
+
+}
+#######################################################################################
+# function httpmgr_protocol_validate();                                               #
+#                                                                                     #
+# Validate the Protocol Version and compares it with already available                #
+# confTLSVersion attribute in IMM and stores that valid Protocol version              #
+# in confTLSVersion attribute of IMM.                                                 #                                          
+#                                                                                     #
+#                                                                                     #
+# Arguments:                                                                          #
+# $protocol_version                                                                   #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_ALREADY_ENABLED_TLS_PROTOCOL_VERSION if TLSProtocol version name is already #
+#    present                                                                          #                                         
+# - $EXIT_UNREASONABLE_VALUE if TLSProtocol version is invalid                        #       
+# - $EXIT_GENERAL_FAULT                                                               #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+
+function httpmgr_protocol_validate() {
+	TRACE_ENTER $FUNCNAME
+	local protocol_version=$1
+	local store_protocol=$1
+	IFS=','
+	read -ra ARR_PRO <<< "$protocol_version"
+	sorted_unique_ids=($(echo "${ARR_PRO[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
+        IFS=" "
+        read -ra unique_arr <<< "$sorted_unique_ids"
+        #echo ${#unique_arr[@]}
+        #echo ${#ARR_PRO[@]}
+        if [ ${#unique_arr[@]} != ${#ARR_PRO[@]} ]; then
+                httpmgr_exit $EXIT_TLS_UNREASONABLE_VALUE "$EXIT_TLS_UNREASONABLE_VALUE_MSG"
+        fi
+	for i in "${ARR_PRO[@]}"; do
+		if [ "$i" == "TLSv1" ] || [ "$i" == "TLSv1.1" ] || [ "$i" == "TLSv1.2" ] ; then
+			TRACE_LEAVE $FUNCNAME
+		else
+			httpmgr_exit $EXIT_TLS_UNREASONABLE_VALUE "$EXIT_TLS_UNREASONABLE_VALUE_MSG <$i>"
+			httpmgr_exit $FAILURE
+			TRACE_LEAVE $FUNCNAME
+		fi
+	done
+	local protocol_id=$(immlist -a confTLSversion asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+	local trim_protocol_id=`echo $protocol_id | cut -c 16-`
+	local immread_protocol=`echo $trim_protocol_id |sed 's/ /,/g'`
+        if [ "$protocol_version" == "$immread_protocol" ]; then
+		httpmgr_exit $EXIT_ALREADY_ENABLED_TLS_PROTOCOL_VERSION "$EXIT_ALREADY_ENABLED_TLS_PROTOCOL_STRING_MSG"
+	else
+		INFO "Updating TlsVersion=$protocol_version... in IMM"
+		local imm_protocol=`echo $store_protocol |sed 's/,/ /g'`
+                $CMD_IMMCFG -a confTLSversion="$imm_protocol" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+		rCode=$?
+		if [ $rCode == $EXIT_SUCCESS ]; then
+			INFO "Sucessfully TlsVersion ID is stored in IMM"
+			TRACE_LEAVE $FUNCNAME
+			httpmgr_exit $EXIT_SUCCESS
+		else
+			INFO "Failed to store TlsVersion ID in IMM"
+			TRACE_LEAVE $FUNCNAME
+			httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+		fi
+	fi
+	httpmgr_exit $EXIT_SUCCESS
+}
+#######################################################################################
+# function httpmgr_protocol_list();                                                   #
+#                                                                                     #
+# List the "temProtocolList" attribute of IMM and displays it with header.            #
+#                                                                                     #
+# Arguments:                                                                          #
+# $cmd                                                                                #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT                                                               #       
+#                                                                                     #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_protocol_list() {
+        TRACE_ENTER $FUNCNAME
+	cmd=$(immlist -a confTLSversion asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+	rcode=$?
+	if [ $rcode -ne 0 ] ; then
+        	httpmgr_exit $FAILURE
+        	TRACE_LEAVE $FUNCNAME
+
+	else	
+		local trim_string=`echo $cmd | cut -c 16-`
+		if [ "$trim_string" == "<Empty>" ] ; then
+  		      httpmgr_exit $EXIT_SUCCESS
+		fi
+		echo $trim_string |sed 's/ /, /g'
+		
+        	TRACE_LEAVE $FUNCNAME
+        	httpmgr_exit $EXIT_SUCCESS
+        fi
+
+
+}
+#######################################################################################
+# function httmpgr_ciphers_enabled_listing();                                         #
+#                                                                                     #
+# List the "enabledTLSProtocol" attribute of IMM and displays it with header.          #
+#                                                                                     #                                                                          #                                                         #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT                                                               #       
+#                                                                                     #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_enabled_protocol_listing() {
+	TRACE_ENTER $FUNCNAME
+        cmd=$(immlist -a enabledTLSversion asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+        rcode=$?
+        if [ $rcode -ne 0 ] ; then
+                httpmgr_exit $FAILURE
+                TRACE_LEAVE $FUNCNAME
+
+        else
+                local trim_string=`echo $cmd | cut -c 19-`
+		if [ "$trim_string" == "<Empty>" ] ; then
+  		      httpmgr_exit $EXIT_SUCCESS
+		fi
+                echo $trim_string |sed 's/ /, /g'
+
+                TRACE_LEAVE $FUNCNAME
+                httpmgr_exit $EXIT_SUCCESS
+        fi
+
+}
+
+#######################################################################################
+# function httmpgr_checking_security();                                               #
+#                                                                                     #
+# Checks the "security" attribute is enabled or disabled in IMM .                     #
+#                                                                                     #
+# Arguments:                                                                          #
+# $cipher_suites                                                                      #
+# $trim_cipher_suites                                                                 #
+#                                                                                     #                    
+#                                                                                     #                                         
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+
+function httmpgr_checking_security(){
+        TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+        local cipher_suites=$(immlist -a security asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null2)
+        local trim_cipher_suites=`echo $cipher_suites | cut -c 10-`
+	if [ $trim_cipher_suites == "disabled" ] ; then
+      		httpmgr_exit $EXIT_WEBSERVER_DISABLED "$EXIT_WEBSERVER_DISABLED_MSG"
+	fi
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+
+#######################################################################################
+# function httpmgr_ciphers_applied();                                                 #
+#                                                                                     #
+# Apply TLS protocol versions and ciphers defined for Apache web server in            #
+# dialogue mode.                                                                      #
+#                                                                                     #
+# Arguments:                                                                          #
+# $confirm                                                                            #
+#                                                                                     #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT                                                               #       
+#                                                                                     #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_ciphers_applied() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	local confirm="";
+	read -p "The Web server will be restarted to apply the change. Please confirm (y=yes/n=no):" confirm
+	if [ "$confirm" == 'Y' ] || [ "$confirm" == 'Yes' ] || [ "$confirm" == 'yes' ] || [ "$confirm" == 'y' ] || [ "$confirm" == 'YES' ] ; then
+		local cipher_suites=$(immlist -a security asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+        	local trim_cipher_suites=`echo $cipher_suites | cut -c 10-`
+		local enabled_attr_read=$(immlist -a enabledCiphersList asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+		local trimenablecipher_attr_read=`echo $enabled_attr_read | cut -c 20-`
+		local enabled_tls_attr_read=$(immlist -a enabledTLSversion asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+                local trimenabletls_attr_read=`echo $enabled_tls_attr_read | cut -c 19-`
+		if [ $trim_cipher_suites == "disabled" ] ; then
+			httpmgr_exit $EXIT_WEBSERVER_DISABLED "$EXIT_WEBSERVER_DISABLED_MSG"
+		else
+	  		local conf_attr_read=$(immlist -a confTLSversion asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null) 
+			local trim_conf_attr_read=`echo $conf_attr_read | cut -c 16-`
+			local tempcipher_attr_read=$(immlist -a confCiphersList asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+			local trimcipher_attr_read=`echo $tempcipher_attr_read | cut -c 17-`
+			if [ "$trimcipher_attr_read" == '<Empty>' ] && [ "$trim_conf_attr_read" == '<Empty>' ]; then
+				httpmgr_exit $EXIT_NO_VALUE_EXIST_TO_UPDATE "$EXIT_NO_VALUE_TO_EXIST_TO_UPDATE_MSG"
+			elif [ "$trim_conf_attr_read" != '<Empty>' ] && [ "$trimcipher_attr_read" == '<Empty>' ]; then
+				INFO "Updating  enabledTLSversion=$... in IMM"
+				$CMD_IMMCFG -a enabledTLSversion="$trim_conf_attr_read" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+			elif [ "$trimcipher_attr_read" != '<Empty>' ] &&  [ "$trim_conf_attr_read" == '<Empty>' ]; then
+				INFO "Updating  enabledCiphersList=$... in IMM"
+				$CMD_IMMCFG -a enabledCiphersList="$trimcipher_attr_read" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+			elif [ "$trimcipher_attr_read" == '' ] &&  [ "$trim_conf_attr_read" == '' ]; then
+                                httpmgr_exit $EXIT_NO_VALUE_EXIST_TO_UPDATE "$EXIT_NO_VALUE_TO_EXIST_TO_UPDATE_MSG"
+			elif [ "$trim_conf_attr_read" != '<Empty>' ] && [ "$trimcipher_attr_read" == '' ]; then				
+		                INFO "Updating  enabledTLSversion=$... in IMM" 
+				$CMD_IMMCFG -a enabledTLSversion="$trim_conf_attr_read" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+                        elif [ "$trimcipher_attr_read" != '<Empty>' ] &&  [ "$trim_conf_attr_read" == '' ]; then
+				INFO "Updating  enabledCiphersList=$... in IMM"
+                                $CMD_IMMCFG -a enabledCiphersList="$trimcipher_attr_read" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+			else
+				INFO "Updating  enabledTLSversion=$... and enabledCiphersList=$... in IMM"
+				$CMD_IMMCFG -a enabledTLSversion="$trim_conf_attr_read" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+				$CMD_IMMCFG -a enabledCiphersList="$trimcipher_attr_read" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+			fi
+                        INFO "Updating  is restart flag=$... in IMM"
+			$CMD_IMMCFG -a isRestartTriggered=1 asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+          		rCode=$?
+          		if [ $rCode == $EXIT_SUCCESS ]; then
+            			INFO "Sucessfully is restart flag in IMM"
+            			TRACE_LEAVE $FUNCNAME
+				INFO "Updating  confTLSversion=$... in IMM"
+                                $CMD_IMMCFG -a confTLSversion="" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+				INFO "Updating confCiphersList=$... in IMM"
+				$CMD_IMMCFG -a confCiphersList="" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+				INFO "Updating isRestartTriggered=$... in IMM"
+				$CMD_IMMCFG -a isRestartTriggered=0 asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+                        	echo "Restarting web server...    DONE"
+			        httpmgr_exit $EXIT_SUCCESS
+          		else
+            			INFO "Failed to store is restart flag in IMM and restoring old enabled attributes of tls and Ciphers"
+				$CMD_IMMCFG -a enabledTLSversion="$trimenabletls_attr_read" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+				$CMD_IMMCFG -a enabledCiphersList="$trimenablecipher_attr_read" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+				$CMD_IMMCFG -a confTLSversion="" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+				$CMD_IMMCFG -a confCiphersList="" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+                                $CMD_IMMCFG -a isRestartTriggered=1 asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+            			TRACE_LEAVE $FUNCNAME
+           			httpmgr_exit $EXIT_GENERAL_FAULT
+          		fi
+		fi
+	elif  [ "$confirm" == 'N' ] || [ "$confirm" == 'No' ] || [ "$confirm" == 'no' ] || [ "$confirm" == 'n' ] || [ "$confirm" == 'NO' ]  ; then
+		INFO "Option No is choosen by operator"
+	else
+		httpmgr_ciphers_applied
+
+	fi
+	httpmgr_exit $EXIT_SUCCESS
+}
+#######################################################################################
+# function httpmgr_ciphers_force_applied();                                           #
+#                                                                                     #
+# Forcefully applies TLS protocol versions and ciphers defined for Apache web server  #
+# in dialogue mode.                                                                   #
+#                                                                                     #
+# Arguments:                                                                          #
+# $cipher_suites                                                                      #
+#                                                                                     #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT                                                              #       
+#                                                                                     #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_ciphers_force_applied(){
+	TRACE_ENTER $FUNCNAME
+ 	local cipher_suites=$(immlist -a security asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+        local trim_cipher_suites=`echo $cipher_suites | cut -c 10-`
+	local enabled_attr_read=$(immlist -a enabledCiphersList asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+        local trimenablecipher_attr_read=`echo $enabled_attr_read | cut -c 20-`
+        local enabled_tls_attr_read=$(immlist -a enabledTLSversion asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+        local trimenabletls_attr_read=`echo $enabled_tls_attr_read | cut -c 19-`
+
+        if [ $trim_cipher_suites == "disabled" ] ; then
+		httpmgr_exit $EXIT_WEBSERVER_DISABLED "$EXIT_WEBSERVER_DISABLED_MSG"
+	else
+                local conf_attr_read=$(immlist -a confTLSversion asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+                local trim_conf_attr_read=`echo $conf_attr_read | cut -c 16-`
+                local tempcipher_attr_read=$(immlist -a confCiphersList asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+                local trimcipher_attr_read=`echo $tempcipher_attr_read | cut -c 17-`
+                if [ "$trimcipher_attr_read" == '<Empty>' ] && [ "$trim_conf_attr_read" == '<Empty>' ]; then
+                	httpmgr_exit $EXIT_NO_VALUE_EXIST_TO_UPDATE "$EXIT_NO_VALUE_TO_EXIST_TO_UPDATE_MSG"
+                elif [ "$trim_conf_attr_read" != '<Empty>' ] && [ "$trimcipher_attr_read" == '<Empty>' ]; then
+                        INFO "Updating  enabledTLSversion=$... in IMM"
+		 	$CMD_IMMCFG -a enabledTLSversion="$trim_conf_attr_read" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+                elif [ "$trimcipher_attr_read" != '<Empty>' ] &&  [ "$trim_conf_attr_read" == '<Empty>' ]; then
+			INFO "Updating  enabledCiphersList=$... in IMM"
+                        $CMD_IMMCFG -a enabledCiphersList="$trimcipher_attr_read" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+                elif [ "$trimcipher_attr_read" == '' ] &&  [ "$trim_conf_attr_read" == '' ]; then
+			httpmgr_exit $EXIT_NO_VALUE_EXIST_TO_UPDATE "$EXIT_NO_VALUE_TO_EXIST_TO_UPDATE_MSG"
+		elif [ "$trim_conf_attr_read" != '<Empty>' ] && [ "$trimcipher_attr_read" == '' ]; then
+                        INFO "Updating  enabledTLSversion=$... in IMM"
+			$CMD_IMMCFG -a enabledTLSversion="$trim_conf_attr_read" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+                elif [ "$trimcipher_attr_read" != '<Empty>' ] &&  [ "$trim_conf_attr_read" == '' ]; then
+                        INFO "Updating  enabledCiphersList=$... in IMM"
+			$CMD_IMMCFG -a enabledCiphersList=$trimcipher_attr_read asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+		else
+			INFO "Updating  enabledTLSversion=$... and enabledCiphersList=$... in IMM"
+                        $CMD_IMMCFG -a enabledTLSversion="$trim_conf_attr_read" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+                        $CMD_IMMCFG -a enabledCiphersList="$trimcipher_attr_read" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+                fi
+                INFO "Updating  is restart flag=$... in IMM"
+                $CMD_IMMCFG -a isRestartTriggered=1 asecGsnhConfigDataId=GSNH,acsSecurityMId=1
+                rCode=$?
+                if [ $rCode == $EXIT_SUCCESS ]; then
+                        INFO "Sucessfully is restart flag in IMM"
+                        INFO "Updating  confTLSversion=$... in IMM"
+			$CMD_IMMCFG -a confTLSversion="" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+			INFO "Updating confCiphersList=$... in IMM"
+                        $CMD_IMMCFG -a confCiphersList="" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+			INFO "Updating isRestartTriggered=$... in IMM"
+                        $CMD_IMMCFG -a isRestartTriggered=0 asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+                	TRACE_LEAVE $FUNCNAME
+		        httpmgr_exit $EXIT_SUCCESS
+                else
+                        INFO "Failed to store is restart flag in IMM and restoring old enabled attributes of tls and Ciphers"
+                        $CMD_IMMCFG -a enabledTLSversion="$trimenabletls_attr_read" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+                        $CMD_IMMCFG -a enabledCiphersList="$trimenablecipher_attr_read" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+                        $CMD_IMMCFG -a confTLSversion="" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+                        $CMD_IMMCFG -a confCiphersList="" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+			$CMD_IMMCFG -a isRestartTriggered=1 asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+			TRACE_LEAVE $FUNCNAME
+                        httpmgr_exit $EXIT_GENERAL_FAULT
+                fi
+	fi
+	TRACE_LEAVE $FUNCNAME
+}
+
+#######################################################################################
+# function httpmgr_ciphers_reload();                                                  #
+#                                                                                     #
+# cleans up and reloads the list with last enabled ciphers                            #
+#                                                                                     #
+# Arguments:                                                                          #
+# $cipher_suites                                                                      #
+#                                                                                     #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_GENERAL_FAULT                                                               #       
+#                                                                                     #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_reload(){
+	TRACE_ENTER $FUNCNAME
+	local cipher_suites=$(immlist -a enabledCiphersList asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null)
+	local trim_cipher_suites=`echo $cipher_suites | cut -c 20-`
+	local update_string=$(openssl ciphers $trim_cipher_suites)
+	$CMD_IMMCFG -a confCiphersList="$update_string" asecGsnhConfigDataId=GSNH,acsSecurityMId=1 2>/dev/null
+	rCode=$?
+        if [ $rCode == $EXIT_SUCCESS ]; then
+        	INFO "Sucessfully ciphers are stored in IMM"
+                TRACE_LEAVE $FUNCNAME
+                httpmgr_exit $EXIT_SUCCESS
+        else
+                INFO "Failed to store ciphers in temorarylist in IMM"
+                TRACE_LEAVE $FUNCNAME
+                httpmgr_exit $EXIT_GENERAL_FAULT 
+	fi
+}
+#######################################################################################
+# function httpmgr_cert();                                         #
+#                                                                                     #
+# Takes in input the ID of a NodeCredential and stores in IMM attribute               #   
+# NodeCredentialId                                                                    #
+#                                                                                     #
+# Arguments:                                                                          #
+# $node_credential_id                                                                 #
+#                                                                                     #
+# Exits:                                                                              # 
+#   $EXIT_GENERAL_FAULT                                                               #
+#   $EXIT_NODE_CREDENTIAL_NOT_FOUND                                                   #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function httpmgr_cert() {
+       	TRACE_ENTER $FUNCNAME
+	local node_credential_id=$1
+        local cert_id=$($CMD_IMMLIST nodeCredentialId=$node_credential_id,certMId=1 2>/dev/null)
+        # Check existence of nodeCredentialId
+        if [ -z "$cert_id" ]; then
+    	      INFO "SSL X.509 certificate $cert_id does not exist"
+    	      httpmgr_exit $EXIT_NODE_CREDENTIAL_NOT_FOUND 
+        else
+              INFO "Updating  NodeCredential=$node_credential_id... in IMM"
+              $CMD_IMMCFG -a nodeCredentialId="$node_credential_id" $GSNHSECDN 2>/dev/null
+              rCode=$?
+              if [ $rCode == $EXIT_SUCCESS ]; then
+              		INFO "Sucessfully nodecredential ID is stored in IMM"
+              		TRACE_LEAVE $FUNCNAME
+              		httpmgr_exit $EXIT_SUCCESS
+              else
+             		INFO "Failed to store nodecredential ID in IMM"
+             		TRACE_LEAVE $FUNCNAME
+             		httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+              fi
+       fi
+}
+#######################################################################################
+# function invoke();                                                                  #
+#                                                                                     #
+# Execute one of the following according to option given (see functions descriptions) #
+# httpmgr_query()                                                                     #
+# httpmgr_cfg()                                                                       #
+# httpmgr_security()                                                                  #
+# httpmgr_daemon()                                                                    #
+#                                                                                     #
+# Exits:                                                                              #
+# - see exit codes of functions above                                                 #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function invoke() {
+	TRACE_ENTER $FUNCNAME
+	local rCode=$EXIT_SUCCESS
+	if [ $OPT_QUERY -eq $TRUE ] ; then
+		if [ $OPT_DAEMON -eq $TRUE ] || [ $OPT_CFG -eq $TRUE ] || [ $OPT_SECURITY -eq $TRUE ] || [ $OPT_CERT -eq $TRUE ] || [ $OPT_TCERT -eq $TRUE ] ; then
+			usage_error 
+		fi
+		httpmgr_query "$OPT_QUERY_ARG"
+	else
+		if [ $OPT_CERT -eq $TRUE ] ; then
+			[[ $OPT_DAEMON -eq $TRUE ]] || [[ $OPT_CFG -eq $TRUE ]] || [[ $OPT_SECURITY -eq $TRUE ]] || [[ $OPT_TCERT -eq $TRUE ]] && usage_error
+			
+			httpmgr_cert "$OPT_CERT_ARG"
+			
+		elif [ $OPT_TCERT -eq $TRUE ] ; then
+			[[ $OPT_DAEMON -eq $TRUE ]] || [[ $OPT_CFG -eq $TRUE ]] || [[ $OPT_SECURITY -eq $TRUE ]] || [[ $OPT_CERT -eq $TRUE ]] && usage_error
+			
+			httpmgr_tcerts "$OPT_TCERT_ARG"
+
+		elif [ $OPT_SECURITY -eq $TRUE ] ; then
+			httpmgr_security "$OPT_SECURITY_ARG"
+
+		elif [ $OPT_CIPHER_SUITES_ADD_TEMPARAORY -eq $TRUE ] ; then
+			httmpmgr_cipher_validate "$OPT_CIPHER_SUITES_ARG"
+
+		elif [ $OPT_CIPHER_SUITES_CLEAN_TEMPARAORY -eq $TRUE ] ; then
+			httpmgr_clear_list "$OPT_CIPHER_SUITES_ARG"
+		
+		elif [ $OPT_SUPPORTED_CIPHER -eq $TRUE ]; then
+			httpmgr_support_ciphers
+	
+		elif [ $OPT_LIST_TLS_PROTOCOL -eq $TRUE ] ; then
+			httpmgr_protocol_list
+			
+		elif [ $OPT_TLS_PROTOCOL_VALUE -eq $TRUE ] ; then
+			httpmgr_protocol_validate "$OPT_TLS_PROTOCOL_ARG"
+
+		elif [ $OPT_CIPHER_TEMPARAORY -eq $TRUE ] ; then
+			httmpgr_ciphers_temporay_listing
+
+		elif [ $OPT_LIST_TLS_ENABLED -eq $TRUE ] ; then
+			httpmgr_enabled_protocol_listing
+
+		elif [ $OPT_ENABLED_CIPHER_LIST -eq $TRUE ] ; then
+			httmpgr_ciphers_enabled_listing
+
+		elif [ $OPT_RELOAD_TEMPLIST -eq $TRUE ] ; then
+			httpmgr_ciphers_applied
+
+		elif [ $OPT_RELOAD_TEMPLIST_FORCE -eq $TRUE ] ; then
+			httpmgr_ciphers_force_applied
+
+		elif [ $OPT_LIST_RELOAD -eq $TRUE ] ; then
+			httpmgr_reload
+
+		else
+
+                        if [ $OPT_CFG -eq $TRUE ] ; then
+                                httpmgr_cfg "$OPT_CFG_ARG"
+                                httpmgr_copy_all_to_cluster
+                        fi
+
+                        if [ $OPT_DAEMON -eq $TRUE ] ; then
+                                [[ "$OPT_DAEMON_ARG" == "restart" ]] && {
+                                        INFO "Logging string for Alarm Handling"
+                                        log "Web Server is down. Trying to restart."
+                                }
+                                httpmgr_daemon "$OPT_DAEMON_ARG"
+                        else
+                                httpmgr_check_if_running_and_restart
+
+                        fi
+                fi
+        fi
+
+        TRACE_LEAVE $FUNCNAME
+        return $rCode
+}
+
+######################################################################################
+# function parse_args($args...);                                                      #
+#                                                                                    #
+# Parses the command line arguments and fill the global variables.                    #
+#                                                                                     #
+# Arguments:                                                                          #
+# - $args... command line arguments                                                   #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_USAGE_ERROR in case of incorrect usage                                      #
+#                                                                                     #
+# Return codes:                                                                       #
+# - SUCCESS (0)                                                                       #
+# - FAILURE (1)                                                                       #
+#######################################################################################
+function parse_args() {
+        TRACE_ENTER $FUNCNAME
+        local rCode=$EXIT_SUCCESS
+
+        local parameters=("$@")
+        local num_parameters=${#parameters[@]}
+
+        [ $num_parameters -lt 1 ] && usage_error
+        [ $num_parameters -gt 6 ] && usage_error
+
+        local argument=""
+
+        # Check for options
+        local options='dcsqrilpLaf'
+        local long_options='daemon,cfg,security,query,cert,tcert,ciphers,tlsversion,i,c,l,q,s,p,L,a,f'
+	getopt --quiet --quiet-output --options="$options" --longoptions="$long_options" -- "${parameters[@]}"
+        [ $? -ne $TRUE ] && usage_error
+
+        local args="${parameters[@]}"
+        eval set -- $args
+        while [ $# -gt 0 ]; do
+                case "$1" in
+                        '-d'|"--daemon")
+                                INFO "Option --daemon given"
+                                OPT_DAEMON=$TRUE
+                                OPT_DAEMON_ARG="$2"
+                                in_array "$OPT_DAEMON_ARG" "${ALLOWED_OPT_DAEMON_ARGS[@]}" || {
+                                        INFO "Argument $OPT_DAEMON_ARG not allowed for --daemon option"
+                                        usage_error
+                                }
+                                shift
+				;;
+			'-c'|"--cfg")
+                                INFO "Option --cfg given"
+                                OPT_CFG=$TRUE
+				OPT_CFG_ARG="$2"
+                                shift
+
+                                ;;
+                        '-s'|"--security")
+                                INFO "Option --security given"
+                                OPT_SECURITY=$TRUE
+                                OPT_SECURITY_ARG="$2"
+                                in_array "$OPT_SECURITY_ARG" "${ALLOWED_OPT_SECURITY_ARGS[@]}" || {
+                                        INFO "Argument $OPT_DAEMON_ARG not allowed for --security option"
+                                        usage_error
+                                }
+                                shift
+
+                                ;;
+                        '-q'|"--query")
+                                INFO "Option --query given"
+                                OPT_QUERY=$TRUE
+                                OPT_QUERY_ARG="$2"
+                                in_array "$OPT_QUERY_ARG" "${ALLOWED_OPT_QUERY_ARGS[@]}" || {
+                                        INFO "Argument $OPT_QUERY_ARG not allowed for --query option"
+                                        usage_error
+                                }
+                                shift
+
+                                ;;
+			'--cert')
+                                INFO "Option --cert given"
+                                OPT_CERT=$TRUE
+                                OPT_CERT_ARG="$2"
+                                [[ "$OPT_CERT_ARG" != "" ]] || {
+                                        INFO "Argument $OPT_CERT_ARG not allowed for --cert option"
+                                        usage_error
+                                }
+                                shift
+
+                                ;;
+                      
+			'--tcert')
+				INFO "Option --tcert given"
+				OPT_TCERT=$TRUE
+				OPT_TCERT_ARG="$2"
+				[[ "$OPT_TCERT_ARG" != "" ]] || {
+					INFO "Argument $OPT_TCERT_ARG not allowed for --tcert option"
+					usage_error
+				}
+				shift
+				
+				;;
+			'-a')
+				INFO "Option -a given"
+				case "$2" in
+					
+                                        '-f')
+                                                INFO "option -f given"
+                                                OPT_RELOAD_TEMPLIST_FORCE=$TRUE
+						OPT_FORCE_ARG="$3"
+                                		[[ "$OPT_FORCE_ARG" == "" ]] || {
+                                        		INFO "Argument $OPT_FORCE_ARG not allowed for -a -f option"
+                                 	        	usage_error
+        					}
+                                                shift
+                                                ;;
+                                        '')
+					
+                                                 OPT_RELOAD_TEMPLIST=$TRUE
+                                                shift
+                                                ;;
+                                        *)
+                                                usage_error
+                                                shift
+                                                ;;
+                                esac
+                                shift
+                                ;;
+			 "ciphers")
+                                INFO "Option ciphers given"
+                                case "$2" in
+					'-i')
+                                 		INFO " option -i given"
+						httmpgr_checking_security
+                                 		OPT_CIPHER_SUITES_ADD_TEMPARAORY=$TRUE
+                                 		OPT_CIPHER_SUITES_ARG="$3"
+                                 		[[ "$OPT_CIPHER_SUITES_ARG" != "" ]] ||{
+                                          		INFO "Argument $OPT_CIPHER_SUITES_ARG not allowed for -i option"
+                                          		httpmgr_exit $EXIT_UNSUPPORTED_CIPHER_SUITE "$EXIT_UNSUPPORTED_CIPHER_SUITE_MSG $OPT_CIPHER_SUITS_ARG"
+                                                	}
+                                  
+				  		shift
+                                  		;;
+
+                         		'-c')
+                                  		INFO " option -c given"
+                                  		httmpgr_checking_security
+						OPT_CIPHER_SUITES_CLEAN_TEMPARAORY=$TRUE
+						OPT_CIPHER_SUITES_ARG="$3"
+                                                [[ "$OPT_CIPHER_SUITES_ARG" != "" ]] ||{
+                                                      INFO "Argument $OPT_CIPHER_SUITES_ARG not allowed for -i option"
+                                                      httpmgr_exit $EXIT_UNSUPPORTED_CIPHER_SUITE "$EXIT_UNSUPPORTED_CIPHER_SUITE_MSG $OPT_CIPHER_SUITS_ARG"
+                                                       }
+                                  		shift
+				  		;;
+ 					'-l')
+                                  		 INFO "option -l given"
+                                   		 OPT_CIPHER_TEMPARAORY=$TRUE
+						 OPT_CIPHER_TEMP="$3"
+						 [[ "$OPT_CIPHER_TEMP" == "" ]] || {
+                                		        INFO "Argument $OPT_CIPHER_TEMP not allowed for -l option"
+                		                        usage_error
+		                                }
+                                   		 shift
+				   		 ;;
+                       	 		'-q')
+                                   		 
+						 INFO "Option -e given"
+                                   		 OPT_ENABLED_CIPHER_LIST=$TRUE
+						 OPT_ENABLED_CIPHER_TEMP="$3"
+                                                 [[ "$OPT_ENABLED_CIPHER_TEMP" == "" ]] || {
+                                                        INFO "Argument $OPT_ENABLED_CIPHER_TEMP not allowed for -q option"
+                                                        usage_error
+                                                }
+
+						 shift 
+			  	   		 ;;
+                        		'-s')
+                                   		 INFO "Option -s given"
+                                   		 OPT_SUPPORTED_CIPHER=$TRUE
+						 OPT_SUPPORTED_CIPHER_TEMP="$3"
+						 [[ "$OPT_SUPPORTED_CIPHER_TEMP" == "" ]] || {
+                                                        INFO "Argument $OPT_SUPPORTED_CIPHER_TEMP not allowed for -s option"
+                                                        usage_error
+                                                }
+
+                                   		 shift 
+				   		 ;;
+					'-r')
+						INFO "Option -r given"
+						httmpgr_checking_security
+						OPT_LIST_RELOAD=$TRUE
+						OPT_RELOAD_CIPHER_TEMP="$3"
+                                                [[ "$OPT_RELOAD_CIPHER_TEMP" == "" ]] || {
+                                                        INFO "Argument $OPT_RELOAD_CIPHER_TEMP not allowed for -s option"
+                                                        usage_error
+                                                }
+						shift
+						;;
+				*)
+                                                usage_error
+                                                ;;
+                                esac
+                                shift
+                                ;;
+			"tlsversion")
+                                INFO "Protocl Options given"
+                                case "$2" in
+					'-p')
+                              
+                                   		INFO "option -p given"
+						httmpgr_checking_security
+                                   		OPT_TLS_PROTOCOL_VALUE=$TRUE
+								
+					        OPT_TLS_PROTOCOL_ARG=$3
+                                  		[[ "$OPT_TLS_PROTOCOL_ARG" != "" ]] || {
+                                                        INFO "Argument $OPT_CIPHER_SUITES_ARG not allowed for -c option"
+							httpmgr_exit $EXIT_UNSUPPORTED_TLS_VERSION $EXIT_UNSUPPORTED_TLS_VERSION_MSG
+                                               
+                                                }
+                                             
+				   		shift
+                                   		;;
+                         		'-l')
+                                   		INFO "option -l given"
+                                   		OPT_LIST_TLS_PROTOCOL=$TRUE
+						OPT_TEMP_TLS="$3"
+                                                [[ "$OPT_TEMP_TLS" == "" ]] || {
+                                                        INFO "Argument $OPT_TEMP_TLS not allowed for -l option"
+                                                        usage_error
+                                                }
+                                   		shift
+                                   		;;
+
+					'-q')
+						INFO "option -e given"
+						OPT_LIST_TLS_ENABLED=$TRUE
+						OPT_ENABLED_TLS="$3"
+                                                [[ "$OPT_ENABLED_TLS" == "" ]] || {
+                                                        INFO "Argument $OPT_ENABLED_TLS not allowed for -q option"
+                                                        usage_error
+                                                }
+
+						shift
+						;;
+				 *)
+                                                usage_error
+                                                ;;
+                                esac
+                                shift
+                                ;;
+			*)
+				usage_error
+				;;
+		esac
+		shift
+	done
+	
+	TRACE_LEAVE $FUNCNAME
+	return $rCode
+}
+
+#######################################################################################
+# function usage();                                                                   #
+#                                                                                     #
+# Displays the command usage                                                          #
+#######################################################################################
+function usage() {
+	TRACE_ENTER $FUNCNAME
+	
+	cat << EOF
+Usage:
+       httpmgr [-c|--cfg config_file] [-s|--security on|off] [-d|--daemon start|stop|restart]
+       httpmgr [-q|--query daemon|conf|all]
+
+EOF
+	TRACE_LEAVE $FUNCNAME
+}
+
+#######################################################################################
+# function usage_error();                                                             #
+#                                                                                     #
+# Displays the command usage and exits with $EXIT_USAGE_ERROR (3)                     #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_USAGE_ERROR                                                                 #
+#######################################################################################
+function usage_error() {
+	TRACE_ENTER $FUNCNAME
+	httpmgr_exit $EXIT_USAGE_ERROR "$EXIT_USAGE_ERROR_MSG\n$(usage)"
+}
+
+
+########################################################################################################################
+# function add_IPtables_rule();                                                                                        #
+#                                                                                                                      #
+# Adds IP table rules on SOAP interaface                                                                               #
+#                                                                                                                      #
+# When the Apache web server is started,                                                                               #
+# IP tables rules to close the unused ports and allow traffic only for server port on SOAP                             #
+# custom IP interface will be added                                                                                    #
+# if such IP tables rules are not present. If Apache web server is listening on nbi interface,                         #
+# no IP tables rules will be added.                                                                                    #
+#                                                                                                                      #
+# When Apache web server is stopped, the applied IP tables rules will not be removed on custom interface               #
+#                                                                                                                      #
+#                                                                                                                      #
+# Arguments:                                                                                                           #
+# No Arguments                                                                                                         #
+########################################################################################################################
+function add_IPtables_rule()
+{
+
+    local server_address_port="$(grep "^\s*Listen\s*" "$ETC_APACHE2_LISTEN_CONF_PATH" | awk '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+    local server_address="$(echo "$server_address_port" | awk -F':' '{ print $1 }' | sed -e 's/^ *//' -e 's/ *$//')"
+    local mip_interface=$($CMD_CLUSTER_CONF mip -D | $CMD_GREP  -E $server_address | $CMD_AWK '{print $5}'| cut -d : -f 1)
+    local interface_name=$($CMD_CLUSTER_CONF mip -D | $CMD_GREP  -E $server_address | $CMD_AWK '{print $4}')
+    local interface_type=$($CMD_CLUSTER_CONF mip -D | $CMD_GREP  -E $server_address | $CMD_AWK '{print $6}')
+
+    if [ "$interface_name" != "nbi" ] && [ "$interface_type" != "public" ]; then
+        local server_port="$(echo "$server_address_port" | awk -F':' '{ $1=""; print $0 }' | sed -e 's/^ *//' -e 's/ *$//')"
+        NoOfRule=`${CMD_CLUSTER_CONF} iptables -D |grep "[[:space:]]$mip_interface" | grep -w "$server_port" | wc -l`
+
+        #If IP table is present, do not apply any IPtable rules
+        if [ "$NoOfRule" -eq 0 ]; then
+           $( ${CMD_CLUSTER_CONF} iptables --m_add all -A INPUT -p tcp --dport $server_port -i $mip_interface -j ACCEPT > /dev/null)
+           if [ $? -ne 0 ]; then
+              log "addRule: IPv4 iptable rule to acceppt add failed"
+              httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+           fi
+           $( ${CMD_CLUSTER_CONF} iptables --m_add all -A INPUT -i $mip_interface -j DROP > /dev/null)
+           if [ $? -ne 0 ]; then
+              log "addRule: IPv4 iptable rule to drop add failed"
+              httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+           fi
+
+           reload_IPtables_rules
+       else
+          log "addRule: IPtables rule already present no action is needed"
+       fi
+    else
+       log "addRule: Web server is listening on PUBLIC interface, no IPtables rule is added"
+    fi   
+
+}
+
+
+#######################################################################################
+# function reload_IPtables_rules();                                                   #
+#                                                                                     #
+# Reloads IP table rules added on SOAP interaface                                     #
+#                                                                                     #
+# Arguments:                                                                          #
+# No Arguments                                                                        #
+#######################################################################################
+function reload_IPtables_rules()
+{
+    $CMD_CLUSTER_CONF mgmt --cluster --verify > /dev/null
+    [ "$?" != 0 ] && httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+    log 'sleep(3): allow verify to settle down'
+    sleep 3
+    $CMD_CLUSTER_CONF mgmt --cluster --reload > /dev/null
+    [ "$?" != 0 ] && httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+    $CMD_CLUSTER_CONF mgmt --cluster --commit > /dev/null
+    [ "$?" != 0 ] && httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+    $SERVICEMGMT restart lde-iptables.service
+    [ "$?" != 0 ] && httpmgr_exit $EXIT_GENERAL_FAULT "$EXIT_GENERAL_FAULT_MSG"
+}
+
+
+#######################################################################################
+#                                        MAIN                                         #
+#######################################################################################
+# Initialize
+httpmgr_init
+
+# Command can be executed only by root user (or sudoers)
+if [ "$(id -u -n)" != "root" ] ; then
+	httpmgr_exit $EXIT_NOT_ROOT "$EXIT_NOT_ROOT_MSG"
+fi
+
+# Check the HA state of current node
+is_node_active $CURRENT_NODE_ID || {
+	INFO "Current AP node is not active"
+	httpmgr_exit $EXIT_NOT_ACTIVE_NODE "$EXIT_NOT_ACTIVE_NODE_MSG"
+}
+
+# Parse the command line arguments
+parse_args "$@"
+
+# Invoke the validation and execution
+
+# Invoke the validation and execution
+invoke
+
+# Exit!
+httpmgr_exit $EXIT_SUCCESS
+
+#!/bin/bash
+##
+# ------------------------------------------------------------------------

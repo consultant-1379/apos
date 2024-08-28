@@ -1,0 +1,11 @@
+[Unit]
+Conflicts=vsftpd.service
+DefaultDependencies=no
+
+[Socket]
+ListenStream=<node_ipnb_network_ip_address>:21
+Accept=yes
+MaxConnections=640
+
+[Install]
+WantedBy=lde-servicestart.target

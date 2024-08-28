@@ -1,0 +1,188 @@
+#!/bin/bash -u
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#   apos_grub-config
+# Description:
+#   A script to configure the grub.cfg file according to the
+#   APG needs.
+# Note:
+#   This script is intended to be deployed to the
+#   /usr/lib/lde/config-management/ directory.
+#
+#   It relies on the /opt/ap/apos/conf/apos_common.sh library.
+##
+# Changelog:
+# - Thu Jun 10 2021- AnjiReddy D (xdakanj)
+#   Impacts for Security Enhancement feature
+# - Wed Mar 20 2019 - Neelam Kumar (xneelku)
+#   Impacts of LDE 4.9 integration 
+# - Tue Sep 04 2018 - Pratap Reddy Uppada(xpraupp)
+#   Impacts of LDE 4.7 integration 
+# - Thu July  19 2018 - Pratap Reddy Uppada(xpraupp)
+#   Adopted to support security mitigation provided by LDE 4.6
+# - Thu March 23 2017 - Dharma Teja (xdhatej)
+#   Fix included for TR:HV69962
+# - Sat January 16 2016 - Fabio Ronca (efabron)
+#   First version.
+##
+# LDE_deployment:
+#   type:     config
+#   priority: 580
+##
+
+##
+# libraries -------------------------------------------------------------- BEGIN
+if [ -r /opt/ap/apos/conf/apos_common.sh ]; then
+  . /opt/ap/apos/conf/apos_common.sh
+else
+  echo '/opt/ap/apos/conf/apos_common.sh not found or not readable!' >&2
+  exit 1
+fi
+# libraries ---------------------------------------------------------------- END
+##
+
+
+##
+# functions -------------------------------------------------------------- BEGIN
+function usage(){
+  cat << HEREDOC
+Usage: $0 <action> <phase> [<etc_root>]
+where:
+  <action> can be "start" or "stop" or "config"
+  <phase> can be "init" or "reload"
+  <etc_root> (optional) specifies the base folder where the configuration
+             will be generated (/etc by default)
+HEREDOC
+}
+
+function do_start(){
+  # TO-DO: implement the start phase if needed.
+  return
+}
+
+function do_stop(){
+  # TO-DO: implement the stop phase if needed.
+  return
+}
+
+function do_config(){
+  CONF_DIR='/opt/ap/apos/conf'
+  SUFFIX='grub.cfg'
+  DEST_FILE=/boot/grub2/${SUFFIX}
+  BOOT_ADMIN="password_pbkdf2 boot-admin"
+  BOOT_ADMIN_ENTRY=''
+  if grep -q "${BOOT_ADMIN}" $DEST_FILE; then
+    BOOT_ADMIN_ENTRY=$(cat $DEST_FILE | grep -i "${BOOT_ADMIN}")
+  fi
+  if [ -r /etc/cluster/nodes/all/$(</etc/cluster/nodes/this/id)/default-output ]; then
+    DEFAULT_OUTPUT=$(cat /etc/cluster/nodes/all/$(</etc/cluster/nodes/this/id)/default-output)
+    case "$DEFAULT_OUTPUT" in
+      serial)
+        SRC_FILE=$(find ${CONF_DIR} -maxdepth 1 -name "${DEFAULT_OUTPUT}_${SUFFIX}" -exec basename {} \;)
+      ;;
+      vga)
+        SRC_FILE=$(find ${CONF_DIR} -maxdepth 1 -name "${DEFAULT_OUTPUT}_${SUFFIX}" -exec basename {} \;)
+      ;;
+      *)
+        apos_abort "Unknown value for default output"
+        exit 1
+      ;;
+    esac
+    if [ -r "${CONF_DIR}/${SRC_FILE}" ]; then
+      ${CONF_DIR}/apos_deploy.sh --from "${CONF_DIR}/${SRC_FILE}" --to "$DEST_FILE"
+      if [ $? -ne 0 ]; then
+        apos_abort 'apos-made grub.cfg deployment failed'
+      fi
+      
+      # Updating boot_label variable (in grub.cfg) with the actual value present
+      # on the boot filesystem
+      /usr/bin/sed -i -r "s@^set[[:space:]]+boot_label=.*@set boot_label=$(blkid -o value -s LABEL /dev/part_boot)@g" "$DEST_FILE"
+      if [ $? -ne 0 ]; then
+        apos_abort 'failure while updating boot_label in grub.cfg'
+      fi
+
+      # update security mitigations information based on lde-config relaod 
+      KERNEL_CMDLINE_OPTS=''
+      if [ -f /etc/cluster/nodes/this/kernel-cmdline ]; then
+	      KERNEL_CMDLINE_OPTS=$(</etc/cluster/nodes/this/kernel-cmdline)
+      fi
+      if [ -n "${KERNEL_CMDLINE_OPTS}" ]; then
+        BOOT_CMDLINE_OPTION="cc_cmds.start ${KERNEL_CMDLINE_OPTS} cc_cmds.end"
+        # update the grub.cfg with available kernel-cmdline parameters
+        if ! grep -wq "${BOOT_CMDLINE_OPTION}" $DEST_FILE 2>/dev/null; then 
+          sed -i -r "/^[[:space:]]*linux/ s/$/ ${BOOT_CMDLINE_OPTION}/" $DEST_FILE || \
+           apos_abort 'Failure while adding kernel-cmdline parameters to grub.cfg'
+        fi 
+      fi
+      
+      # Update of boot user entries
+      if [ -n "$BOOT_ADMIN_ENTRY" ];then
+        sed -i -e "1s/^/${BOOT_ADMIN_ENTRY} \n/" $DEST_FILE || \
+               apos_abort "Failed to add boot-admin user"
+        BOOT_ENTRY=$(grep "Maintenance mode" $DEST_FILE | awk -F '--unrestricted' '{print $1}')
+        sed -i "/$BOOT_ENTRY/c$BOOT_ENTRY--users\ \"\" {" $DEST_FILE || \
+          apos_abort "Failed to modify menuentry for boot-maint"
+      fi
+
+    else 
+      apos_abort '${CONF_DIR}/${SRC_FILE} not found or not readable!'
+    fi
+  else
+    apos_abort '/opt/ap/apos/conf/apos_common.sh not found or not readable!'
+  fi
+  return
+}
+# functions ---------------------------------------------------------------- END
+##
+
+##
+# variables -------------------------------------------------------------- BEGIN
+
+# variables ---------------------------------------------------------------- END
+##
+
+##
+# main ------------------------------------------------------------------- BEGIN
+##
+# LDE config scripts called with the following:
+# param 1: action - start, stop or config
+# param 2: generate phase - init or reload
+# param 3: root path where config should be generated
+
+apos_intro $0
+
+if [ $# -lt 2 ]; then
+  usage
+  apos_abort 'missing parameter'
+fi
+
+if [ $(</etc/cluster/nodes/this/type) != 'control' ]; then
+  apos_abort 'this script must be run ONLY in control nodes'
+fi
+
+ACTION="$1"
+PHASE="$2"
+ETC_ROOT=${3:-"/etc"}
+
+case "$ACTION" in
+  start)
+    do_start
+  ;;
+  stop)
+    do_stop
+  ;;
+  config)
+    do_config
+  ;;
+  *)
+    usage
+  ;;
+esac
+
+apos_outro
+# main --------------------------------------------------------------------- END
+##

@@ -1,0 +1,84 @@
+#!/bin/bash
+#
+# Copyright (C) 2015 by Ericsson AB
+#
+##
+# Name:
+#       node1_vm_preinstall 
+# Description:
+#       A script to configure APG configurations on Node SC-2-1 of vAPG.
+# Note:
+#       Invoked by preinstall.sh script
+##
+# Usage:
+#       Used during vAPG maiden installation.
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Mon Nov 30 2015 - Nikhila Sattala (XNIKSAT)
+#   First version.
+
+PLUGIN_SCRIPTS_ROOT=$1
+echo $PLUGIN_SCRIPTS_ROOT
+if [ ! -d "${PLUGIN_SCRIPTS_ROOT}" ]; then
+  echo "${PLUGIN_SCRIPTS_ROOT} not found...exiting" >&2
+  exit 1
+fi
+
+COMMON_FUNCTIONS="${PLUGIN_SCRIPTS_ROOT}/non_exec-common_functions"
+if [ ! -r "$COMMON_FUNCTIONS" ]; then
+  echo 'COMMON_FUNCTIONS not found...exiting' >&2
+  exit 1
+fi
+
+export PLUGIN_SCRIPTS_ROOT
+. ${COMMON_FUNCTIONS}
+
+# common variables
+CMD_ECHO='/bin/echo'
+
+#--------------------------------------------------------------------
+function sec_la() {
+  echo "--- sec_la() begin"
+  # this function is used to configure sec la configuration file
+  local SEC_LA_CONFIG_PATH='/storage/system/config/sec-apr9010539/la/etc'
+  local SEC_LA_CONFIG_FILE='la-admin.conf'
+  mkdir -p $SEC_LA_CONFIG_PATH
+  if [ $? -ne 0 ];then
+    abort "Failure while creating sec_la configuration folder $SEC_LA_CONFIG_PATH"
+  fi
+  cat > $SEC_LA_CONFIG_PATH/$SEC_LA_CONFIG_FILE << EOF
+ADMIN_USERID=laadmin
+ADMIN_PASSWD=!\$6\$rZPQ75jIt6PoP\$/wPqicx1kQpfYvxGCXJCZEL//OpW7WhqaVy03ope5FNW6Yf9sSkUgYWgT87NXuK3zSFvH18N/lkVzpotNVb8p/
+EOF
+  if [ $? -ne 0 ];then
+    abort "Failure while creating sec_la configuration file $SEC_LA_CONFIG_FILE"
+  fi
+  echo "--- sec_la() end"
+}
+#--------------------------------------------------------------------
+
+### MAIN ###
+main() {
+  $CMD_ECHO "--- main() begin"
+
+  # SEC LA Config file
+  sec_la
+
+  # Sync drbd1 resource
+  sync_drbd1
+
+  # Create status file for vAPG
+  create_stage
+
+  $CMD_ECHO "--- main() end"
+}
+
+$CMD_ECHO "## node1_vm_preinstall ##"
+
+main "@"
+
+exit $TRUE
+# End of file

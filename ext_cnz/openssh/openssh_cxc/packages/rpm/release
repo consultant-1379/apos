@@ -1,0 +1,52 @@
+* Thu Mar 07 2024 - AC/DC 11.0.1
+- Implemented the version 11.0.1. This version has the LDE baseline openssh-7.2p2-81.12.1.src.rpm
+- to which we have applied the APG-specific changes. it has been compiled with the LDE 4.27
+
+* Mon Jan 22 2024 - AC/DC 10.0.1
+- Implemented the version 10.0.1. This version has the LDE baseline openssh-7.2p2-81.8.1.src.rpm
+- to which we have applied the APG-specific changes. it has been compiled with the LDE 4.26
+
+* Thu Aug 03 2023 AC/DC 9.0.1
+- Implemented the version 9.0.1. This version has the LDE baseline openssh-7.2p2-81.4.2.src.rpm
+- to which we have applied the APG-specific changes. it has been compiled with the LDE 4.25
+
+* Thu Jan 19 2023 AC/DC 8.0.1
+- Implemented the version 8.0.1. This version has the LDE baseline openssh-7.2p2-78.16.1.src.rpm
+- to which we have applied the APG-specific changes. it has been compiled with the LDE 4.24
+
+* Mon May 31 2021 AC/DC 6.0.1
+- Implemented the version 6.0.1. This version has the LDE baseline openssh-7.2p2-78.10.1.src.rpm
+- to which we have applied the APG-specific changes. it has been compiled with the LDE 4.17
+
+* Wed Nov 11 2020 AC/DC 5.0.1 
+- Implemented the version 5.0.1. This version has the LDE baseline openssh-7.2p2-74.54.1.src.rpm
+- to which we have applied the APG-specific changes. it has been compiled with the LDE 4.15
+
+* Fri Mar 13 2020 Eagles 4.0.1 
+- Implemented the version 4.0.1. This version has the LDE baseline openssh-7.2p2-74.45.1.src.rpm
+- to which we have applied the APG-specific changes. it has been compiled with the LDE 4.11
+
+* Mon Mar 04 2019 RollingStones
+- Implemented the version 3.0.2. This version has the LDE baseline openssh-7.2p2-74.39.1.src.rpm
+- to which we have applied the APG-specific changes. it has been compiled with the LDE 4.8
+
+* Wed Sep 13 2017 AC/DC
+- Implemented the version 3.0.1. This version has the LDE baseline openssh-7.2p2-74.1.src.rpm
+- to which we have applied the APG-specific changes. it has been compiled with the LDE 4.3.
+
+* Wed Jul 27 2016 Turing
+- Implemented the version 2.0.2. This version has the LDE baseline openssh-6.6p1-42.1.src.rpm
+- to which we have applied the APG-specific changes. it has been compiled with the SLES12 LDE.
+
+* Tue Nov 03 2015 Sunrise
+- Implemented the version 2.0.1. This version has the LDE baseline openssh-6.6p1-29.1.src.rpm
+- to which we have applied the APG-specific changes. it has been compiled with the SLES12 LDE.
+
+* Thu Apr 30 2015 Turing
+- Implemented the version 1.1.0. This version has the LDE baseline openssh-6.2p2p-0.13.1.src.rpm
+- to which we have applied the APG-specific changes.
+
+* Mon Apr 23 2012 Caravaggio
+- Initial implementation
+
+openssh-7.2p2_81.12.1-11.0.1.x86_64

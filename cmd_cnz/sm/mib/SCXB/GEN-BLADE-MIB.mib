@@ -1,0 +1,1217 @@
+-- =====================================================================
+--
+-- %CCaseFile:	GEN-BLADE-MIB.mib %
+-- %CCaseDocNo:	3/196 03-CRA 119 1365 Ux %
+-- %Rev: C %
+-- Author:	uabhlar
+--
+-- =====================================================================
+--
+-- Copyright (C) 2009-2010 by Ericsson AB
+-- S-126 25  STOCKHOLM
+-- SWEDEN, tel int + 46 8 719 0000
+--
+-- This Program may be used and/or copied only with the written 
+-- permission from Ericsson AB, or in accordance with the terms and
+-- conditions stipulated in the agreement/contract under which the 
+-- program has been supplied.
+--
+-- All rights reserved.
+--
+-- =====================================================================
+--
+-- REVISION HISTORY
+--
+-- Rev     Date         Name        What
+-- ===     ==========   ========    ====                               
+-- PB1     2010-04-15   uabhlar     - New Sensor handling objects
+--                                  - New Hardware inventory objects
+--                                  - New look & feel LED objects 
+--                                  - Old EGEM LED objects added
+--                                  - Blade Reset object added
+--                                  - New IPMI upgrade objects
+--                                  - New Backplane inventory objects
+-- PB2     2010-04-19   uabhlar     - Textual conventions to GEN-TC-MIB
+--                                  - new objects:
+--                                    . bladeReturnToFactoryDefault
+--                                    . bladeLedtype
+-- PB3     2010-04-26   uabhlar     - Backplane inv objects removed
+--                                  - WarningLevel desc. in GEN-TC-MIB
+--                                  - bladeIPMIAlarm read-write and
+--                                    renamed to bladeIPMINotification
+--                                  - New object bladePwrOff added
+--                                  - Doc number changed
+-- PB4     2010-04-29   uabhlar     Prefix all objects with bm
+-- PB5     2010-04-30   uabhlar     Further prefixing
+-- PB6     2010-05-06   uabhlar     bmBladeLedType descr updated
+-- PB7     2010-06-04   uabhlar     - New value in object bmBladeLedTest
+--                                  - "notSupported" added for LEDs
+--                                  - bmBladePwrOff always directly
+-- B       2010-06-10   uabhlar     MIB in firm revision.
+-- PC5	   2010-09-07	uabhlar	    - bmBladeCommonRed/Green/Yellow/Blue
+--                                    Led descriptions changed
+-- C       2010-09-16	uabhlar	     Firm revision after review. 
+-- =====================================================================
+
+
+GEN-BLADE-MIB  DEFINITIONS ::= BEGIN          
+
+IMPORTS
+	MODULE-IDENTITY,
+	OBJECT-TYPE,
+	NOTIFICATION-TYPE,
+	Integer32,
+	Unsigned32,
+	enterprises	
+		FROM SNMPv2-SMI
+	DisplayString
+		FROM SNMPv2-TC
+	OBJECT-GROUP,             
+        NOTIFICATION-GROUP,
+        MODULE-COMPLIANCE       
+                FROM SNMPv2-CONF
+
+	SensorTypeValues, 
+	SensorTypeCodeValues,
+	SensorIDValues, 
+	SensorEventDataValues,
+	SensorValues,
+	SensorStates,
+	CommonLedStates,
+	WarningLevel
+   		FROM GEN-TC-MIB;
+
+-- *********************************************************************
+
+    genBladeMIB MODULE-IDENTITY
+        LAST-UPDATED 
+   		"201009160000Z"
+        ORGANIZATION
+		"Ericsson AB"
+	CONTACT-INFO
+                "E-mail: ingvar.froroth@ericsson.com"
+	DESCRIPTION
+	    "This MIB module defines Blade Management objects
+	     for a generic blade." 
+
+	-- Revision history.	  
+	REVISION
+	    "201009160000Z"
+	DESCRIPTION
+	    "See top of document"
+                                                           
+        ::= { enterprises ericsson(193) components(177) 
+              generic(2) equipment(2) genBladeMIB(2) }
+
+-- ---------------------------------------------------------------------
+-- Groups in the MIB
+-- ---------------------------------------------------------------------
+
+bmNotifications              OBJECT IDENTIFIER ::= { genBladeMIB 0 }
+bmNotificationObjects        OBJECT IDENTIFIER ::= { genBladeMIB 1 }
+
+bmBlade                      OBJECT IDENTIFIER ::= { genBladeMIB 2 }
+   bmBladeObjects               OBJECT IDENTIFIER ::= { bmBlade 1 }
+   bmTestObjects                OBJECT IDENTIFIER ::= { bmBlade 2}
+   processorLoadObjects         OBJECT IDENTIFIER ::= { bmBlade 3}
+   bmSensorObjects              OBJECT IDENTIFIER ::= { bmBlade 4}
+
+bmConformance                OBJECT IDENTIFIER ::= { genBladeMIB 3 }
+   bmGroups                     OBJECT IDENTIFIER ::= { bmConformance 1 }
+   bmCompliance                 OBJECT IDENTIFIER ::= { bmConformance 2 }
+
+
+--**********************************************************************
+--bmNotificationObjects    OBJECT IDENTIFIER ::= { genBladeMIB 1 }
+--**********************************************************************
+ 
+hwTestResultValues OBJECT-TYPE 
+    SYNTAX      Unsigned32
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+       " A bit vector that indicates the current status and result 
+         of the most recently ordered HW test procedure.
+         The bit vector definition is as follows:
+           Bits 0-29:  Test result indication bits; non-zero values 
+		       signifies a fault condition.
+           Bit 30:     If set, the test procedure is currently 
+		       in progress.
+      	   Bit 31:     If set, the test procedure has 
+		       finished or terminated.
+
+         The different result indication bits may be mapped by each  
+	 specific component to represent e.g. different parts of the
+	 applicable HW or different test phases. 
+	 Refer to applicable  product documentation for details."
+    ::= { bmNotificationObjects 1 }
+
+processorLoadThreshold OBJECT-TYPE 
+    SYNTAX      INTEGER {belowThreshold(0), aboveThreshold(1)}
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+       "Indicates if processor load goes above risingTreshhold
+        or falls below fallingTreshold."
+    ::= { bmNotificationObjects 2 }
+
+flashWarningLevel OBJECT-TYPE 
+    SYNTAX     WarningLevel 
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+       "Indicates compact flash warning level.
+        See Textual Convention: WarningLevel"
+    ::= { bmNotificationObjects 3 }
+
+bmSensorType OBJECT-TYPE 
+    SYNTAX      SensorTypeValues
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+       "This object defines different types of sensors.
+	See Textual Convention: SensorTypeValues."
+    ::= { bmNotificationObjects 4 }
+
+bmSensorID OBJECT-TYPE 
+    SYNTAX      SensorIDValues 
+    MAX-ACCESS  accessible-for-notify 
+    STATUS      current 
+    DESCRIPTION
+        "This object defines different sensor numbers.
+         See Textual Convention: SensorIDValues." 
+    ::= { bmNotificationObjects 5 }
+
+bmSensorTypeCode OBJECT-TYPE 
+    SYNTAX      SensorTypeCodeValues 
+    MAX-ACCESS  accessible-for-notify 
+    STATUS      current 
+    DESCRIPTION
+        "This object defines different types of sensor event codes:
+         See Textual Convention: SensorTypeCodeValues" 
+    ::= { bmNotificationObjects 6 }
+
+bmSensorEventData OBJECT-TYPE 
+    SYNTAX       SensorEventDataValues 
+    MAX-ACCESS   accessible-for-notify 
+    STATUS       current 
+    DESCRIPTION 
+       "The state values have different meanings for 
+        different type of sensors.
+        See Textual Convention: SensorEventDataValues."
+ ::= { bmNotificationObjects 7 }
+
+bmIpmiUpgradeResultValue OBJECT-TYPE 
+    SYNTAX      Integer32
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+        "Result of an IPMI upgrade request.
+         Reserved values are:
+         0 = ok
+         1 = fileError; error when accessing/reading FW file
+         2 = otherError
+         Further values to be defined."
+    ::= { bmNotificationObjects 8 }   
+
+bmIpmiFwType OBJECT-TYPE 
+    SYNTAX      OCTET STRING (SIZE (1)) 
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+	    "IPMI FW type (Mode).
+	     Upgradeable(UPG) = 0, 
+             Fallback   (FB)  = 1"
+    ::= {bmNotificationObjects 9}
+
+bmIpmiFwVersion OBJECT-TYPE 
+    SYNTAX      OCTET STRING (SIZE (2)) 
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+	"IPMI FW version.
+	 Most significant digit Hex, 
+         least significant digit BCD"
+    ::= {bmNotificationObjects 10}
+
+bmIpmiFwTimestamp OBJECT-TYPE 
+    SYNTAX      OCTET STRING (SIZE (4)) 
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+	"Standard timestamp, LSB first.
+         The time is given in seconds since 1970-01-01 00:00 UTC"
+    ::= {bmNotificationObjects 11}
+
+--********************************************************************* 
+-- BmNotifications
+-- bmNotifications   OBJECT IDENTIFIER ::= { genBladeMIB  0 }
+--********************************************************************* 
+    
+hwTestCompleted NOTIFICATION-TYPE
+    OBJECTS { hwTestResultValues }
+    STATUS  current
+    DESCRIPTION
+	"Indicates that an ordered HW (BIST) test 
+	has completed."
+    ::= { bmNotifications 1 }  
+
+processorLoad NOTIFICATION-TYPE
+    OBJECTS { processorLoadThreshold }
+    STATUS  current
+    DESCRIPTION
+	"Indicates if processor load goes above or falls below
+	specified thresholds."
+    ::= { bmNotifications 2 }  
+
+flashWearWarning NOTIFICATION-TYPE
+    OBJECTS { flashWarningLevel }
+    STATUS  current
+    DESCRIPTION
+        "Indicates that the health of a Compact Flash 
+         is degenerating.
+
+        This notification will be sent at two occasions:
+
+        1. warning(1):  
+	     The Compact Flash on the board has started to
+             wear out some of its blocks. 
+             It is thus recommended to have the
+             degenerating Compact Flash replaced 
+             as soon as practicable. 
+             (It may wear out in a few weeks.)
+
+        2. critical(2): 
+             The Compact Flash on the board has degenerated 
+             further and needs to be replaced without further
+             due, in order to avoid a disk crash."
+
+    ::= { bmNotifications 3 }  
+
+bmSensorStateChange	NOTIFICATION-TYPE
+    OBJECTS { bmSensorType, 
+	      bmSensorID,		      
+	      bmSensorTypeCode, 
+	      bmSensorEventData
+	    }
+     STATUS  current
+     DESCRIPTION
+         "Indicates that an IPMI supervised sensor 
+          has changed state."
+     ::= { bmNotifications 4 }  
+
+bmIpmiUpgradeResult    NOTIFICATION-TYPE
+     OBJECTS { bmIpmiUpgradeResultValue 
+	     }
+     STATUS  current
+     DESCRIPTION
+   	 "Indicates the result of a IPMI FW upgrade"
+     ::= { bmNotifications 5 }   
+
+bmIpmiRestart    NOTIFICATION-TYPE
+     OBJECTS {  bmIpmiFwType,
+	        bmIpmiFwVersion,
+	        bmIpmiFwTimestamp 
+	        }
+     STATUS  current
+     DESCRIPTION
+   	    "Indicates that IPMI FW has restarted."
+    	::= { bmNotifications 6}   
+
+
+-- *********************************************************************
+-- bmBlade              OBJECT IDENTIFIER ::= { genBladeMIB 2 }
+--  bmBladeObjects	     OBJECT IDENTIFIER ::= { bmBlade 1 }        
+-- *********************************************************************
+
+flashWearLevel OBJECT-TYPE
+    SYNTAX      WarningLevel 
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+       "Indicates the wear level of the Compact Flash." 
+     ::={ bmBladeObjects 1 }
+
+bmBladeProductNumber OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Product number (e.g. ROJ xxx xxx/1),
+	 [24 ASCII characters]."
+    ::={ bmBladeObjects 2 }
+
+bmBladeProductRevisionState OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Product Revision State (e.g. P1C/3),
+	 [7 ASCII characters]."
+    ::={ bmBladeObjects 3 }
+
+bmBladeProductName OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Product Name (e.g. CMXB),
+	 [12 ASCII characters]."
+    ::={ bmBladeObjects 4 }
+
+bmBladeSerialNumber OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Serial Number (e.g. A27000 0141000),
+	 [13 ASCII characters
+	   6 characters for factory code
+           7 characters for individual number]."
+    ::={ bmBladeObjects 5 }
+
+bmBladeManufacturingDate OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Manufacturing Date (e.g. 20080124),
+	 [8 ASCII characters]."
+    ::={ bmBladeObjects 6 }
+
+bmBladeVendorName OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Vendor Name (e.g.Ericsson ),
+	 [31 ASCII characters]."
+    ::={ bmBladeObjects 7 }
+
+bmBladeCommonRedLed OBJECT-TYPE 
+    SYNTAX      CommonLedStates
+    MAX-ACCESS  read-write
+    STATUS      current    
+    DESCRIPTION
+        "Fault LED
+
+	 Result of reading the Red LED:
+	 off (0)	   No fault exists on this blade
+	 on  (1)	   A HW fault exists on this blade that
+			   requires manual attention
+	 notSupported(4)   Not supported
+         
+	 The following CommonLedStates could be written:
+	 off (0)           No fault exists on this blade
+	 on  (1)	   A HW fault exists on this blade
+ 	 
+	 Writing another CommonLedState will result in an error."
+
+    ::={ bmBladeObjects 8 }
+
+bmBladeCommonGreenLed OBJECT-TYPE 
+    SYNTAX      CommonLedStates
+    MAX-ACCESS  read-write
+    STATUS      current    
+    DESCRIPTION
+        "Operational LED
+
+ 	 Result of reading the Green LED:
+ 	 off (0)	  No power
+ 	 on  (1)	  Operational
+                          (All secondary voltages and frequencies are
+		          OK and the unit is functioning as intended.)
+          slowBlink (2)   Not connected to supervising system 
+                          or other remote resource.
+			  (E.g. not yet received DHCP response.)
+ 	 fastBlink (3)	  Busy
+                          (The unit is not yet fully operational)
+         notSupported(4)  Not supported
+ 
+	 The following CommonLedStates could be written:
+ 	 on  (1)	  Operational
+   	 slowBlink (2)    Not connected to supervising system 
+                          or other remote resource.
+ 
+         Writing another CommonLedState will result in an error."
+
+    ::={ bmBladeObjects 9 }
+
+
+bmBladeCommonBlueLed OBJECT-TYPE 
+    SYNTAX      CommonLedStates
+    MAX-ACCESS  read-write
+    STATUS      current    
+    DESCRIPTION
+        "Maintenance LED
+
+	 Result of reading the Blue LED:
+ 	 off (0)	   The blade is not in maintenance mode
+			   (Manual intervention not allowed)
+	 on  (1)	   Full maintenance mode enabled
+			   (Manual intervention allowed)
+         slowBlink (2)	   Removing traffic
+			   (Traffic is about to be suppressed or the
+			   unit is preparing for full maintenance mode)
+  	 fastBlink (3)	   Notification that a front button is pressed
+			   (Today the only front button is the reset button
+		           on GEP blades. In the GEP case, the main processor
+			   will be reset immediately when the button is
+			   pressed and after 4 seconds the blade will be 
+			   powered down
+	 notSupported(4)   Not supported
+ 
+	 The following CommonLedStates could be written:
+ 	 off (0)           The blade is not in maintenance mode
+	 on  (1)           Full maintenance mode enabled
+ 	 slowBlink (2)     Removing traffic
+
+         Writing another CommonLedState will result in an error."
+    ::={ bmBladeObjects 10 }
+
+
+bmBladeCommonYellowLed OBJECT-TYPE 
+    SYNTAX      CommonLedStates
+    MAX-ACCESS  read-write
+    STATUS      current    
+    DESCRIPTION
+        "Status LED
+
+	 Result of reading the Yellow LED:
+ 	 off (0)	   No fault exists on the blade
+	 on  (1)	   HW/SW configuration is not OK
+			   (E.g. missing sensor table, new SW download
+                            required, reloading flash, restarting to
+			    get new SW.)
+  	 fastBlink (3)	   Operational but reduced functionality
+			   on blade. Do not manually intervene.
+			   (E.g. IPMI running in fallback mode.)
+         notSupported(4)   Not supported
+ 
+	 The following	   CommonLedStates could be written:
+ 	 off (0)	   No fault exists on the blade
+	 on  (1)	   HW/SW configuration is not OK
+  	 fastBlink (4)	   Operational but reduced functionality
+			   on blade. Do not manually intervene.
+ 
+         Writing another CommonLedState will result in an error."
+    ::={ bmBladeObjects 11 }
+
+
+bmBladeLedTest OBJECT-TYPE
+    SYNTAX INTEGER {off(0), on(1), notSupported(2)}
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION
+	"Writing value on(1) to this object will turn on
+         all LEDS on the board for 10 seconds.
+         Writing value off(0) while the led test is running
+         will stop the led test.
+         Reading this object will return on(1) if a led
+         test is running, off(0) if no led test is running and
+         notSupported(2) if led test is not supported."
+    ::= { bmBladeObjects 12 }
+
+bmBladeLedType OBJECT-TYPE 
+    SYNTAX      INTEGER {old(0), new(1)}
+    MAX-ACCESS  read-only
+    STATUS      current    
+    DESCRIPTION
+        "Type of LEDS on blade.
+         0 = old (red, green and yellow LEDs)
+	 1 = new (red, green, blue and yellow LEDs)"
+    ::={ bmBladeObjects 13 }
+
+bmBladeGreenLed OBJECT-TYPE 
+    SYNTAX      INTEGER {off(0), on(1), flashing(2), notSupported(3)}
+    MAX-ACCESS  read-only  
+    STATUS      current    
+    DESCRIPTION
+        "This object shows the operational state of the green LED, 
+         and it can be in one of the following states:
+
+           0 = off
+           1 = on
+           2 = flashing
+	   3 = not supported"
+
+    ::={ bmBladeObjects 14 }
+
+bmBladeRedLed OBJECT-TYPE 
+    SYNTAX      INTEGER {off(0), on(1), notSupported(2)}
+    MAX-ACCESS  read-write
+    STATUS      current    
+    DESCRIPTION
+        "This object is a mixed administrative/operational state 
+         that always shows the operational state of the red LED, 
+         and it can be in one of the following states when read:
+
+           0 = off
+           1 = on
+	   2 = not supported
+
+	 The following states could be written:
+	   0 = off
+           1 = on"
+
+    ::={ bmBladeObjects  15 }
+
+bmBladeYellowLed OBJECT-TYPE 
+    SYNTAX      INTEGER {off(0), on(1), flashing(2), notSupported(3)}
+    MAX-ACCESS  read-write
+    STATUS      current    
+    DESCRIPTION
+        "This object is a mixed administrative/operational state 
+         that always shows the operational state of the yellow LED, 
+         and it can be in one of the following states when read:
+
+           0 = off
+           1 = on
+           2 = flashing
+	   3 = not supported
+	   
+
+	 The following states could be written:
+	   0 = off
+           1 = on"
+
+    ::={ bmBladeObjects  16 }
+
+
+bmBladeReset OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+	"Setting this object will cause a blade reset.
+	 The supported types of reset are:
+
+	 0 - NMI
+	 1 - Power-cycle
+
+	 NMI shall trigger a reset including a graceful shutdown
+	 of the board. This is the recommended reset option.
+
+	 Power-cycle may enforce a brutal shutdown of the board,
+	 i.e. consistency of e.g. file systems (log files etc.) may
+	 be somewhat compromised.
+	 Hence tis option is recommended only if the NMI option
+	 do not suffice.
+
+	 When read, this object always returns 0."
+
+     ::={ bmBladeObjects 17 }
+
+bmBladeIPMINotification OBJECT-TYPE
+    SYNTAX      Integer32 
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+	"Writing any value to this object will order IPMI FW to start
+         or stop replicate all notifications also on the PIP interface.
+
+	 0 = stop replicate notifications
+	 1 = start replicate notifications
+
+	 Reading this object will always return 0."
+    ::={ bmBladeObjects 18 }
+
+bmBladeIPMIData OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"IPMI identity string for the board
+	 in this slot.
+         The ASCII string is encoded as follows:
+         bmBladeIPMIData[0] : 
+            Firmware type,
+	    0 = UPG (Upgrade)
+	    [1 ASCII character]
+         bmBladeIPMIData[1-25] : 
+            IPMI product number,
+            [25 ASCII characters]
+         bmBladeIPMIData[26-33] :
+            IPMI product Revision State,
+            [8 ASCII characters]
+	 bmBladeIPMIData[34-41] :
+             IPMI firmware revision
+             [8 ASCII characters]
+
+         bmBladeIPMIData[42] : 
+             Firmware type,
+	     1 = FB (Fallback)
+	     [1 ASCII character]
+         bmBladeIPMIData[43-67] : 
+             IPMI product number,
+             [25 ASCII characters]
+         bmBladeIPMIData[68-75] :
+            IPMI product Revision State,
+            [8 ASCII characters]
+	 bmBladeIPMIData[76-83] :
+            IPMI firmware revision
+            [8 ASCII characters]
+
+         bmBladeIPMIData[84] : 
+            Firmware type,
+             2 = NON UPG (Non Upgradeable)
+             [1 ASCII character]
+         bmBladeIPMIData[85-109] : 
+            IPMI product number,
+            [25 ASCII characters]
+         bmBladeIPMIData[110-117] :
+            IPMI product Revision State,
+            [8 ASCII characters]
+	 bmBladeIPMIData[118-125] :
+            IPMI firmware revision
+            [8 ASCII characters]
+
+         bmBladeIPMIData[126] : 
+            Firmware type,
+	    X = RUNNING (UPG(0) | FB(1) | NON UPG(2))
+            [1 ASCII character]
+         bmBladeIPMIData[127-151] : 
+            IPMI product number,
+            [25 ASCII characters]
+         bmBladeIPMIData[152-159] :
+            IPMI product Revision State,
+            [8 ASCII characters]
+	 bmBladeIPMIData[160-167] :
+            IPMI firmware revision
+            [8 ASCII characters]"
+        ::={ bmBladeObjects 19 }
+
+bmBladeIPMIUpgrade OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-write
+    STATUS	current
+    DESCRIPTION
+	"The path (and file name) as well as the IP address to 
+         a FTP/TFTP server where the IPMI firmware is located.
+	 The ASCII string is encoded as follows:
+	 bmBladeIPMIUpgrade[0-N]:
+             Path to and File name of IPMI firmware file
+         bmBladeIPMIUpgrade[N+1]
+             Divider (semicolon)
+	 bmBladeIPMIUpgrade [(N+2)-(N+X)]:   
+             IP address (AAA.BBB.CCC.DDD)
+		In case of locally stored IPMI firmware 
+                file the IP address should be coded: 127.0.0.1
+         bmBladeIPMIUpgrade[N+X+1]
+            Ending character (\0) = Integer 0.
+
+         When read this object returns the written ASCII string above.
+         If no ASCII string is written a string with all zeroes is returned."
+        ::={ bmBladeObjects 20 }
+
+bmBladeIPMIUpgradeStatus OBJECT-TYPE
+    SYNTAX      INTEGER {ready(0), ongoing(1), notStarted(2)}
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+	"IPMI upgrade status:
+         - ready (0)
+           IPMI upgrade is ready
+         - ongoing (1)
+           IPMI upgrade is ongoing
+         - notStarted (2)
+	   IPMI upgrade is not started"
+    ::={ bmBladeObjects 21 }
+
+bmBladeReturnToFactoryDefault OBJECT-TYPE
+    SYNTAX Integer32
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION
+	"Writing a value to this object will 
+         force the blade to factory default.
+
+         Reading this object will always return 0."
+    ::= { bmBladeObjects 22 }
+
+bmBladePwrOff OBJECT-TYPE
+    SYNTAX      Integer32 
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Setting this value will cause the power 
+         to be 'turned off' directly. 
+
+	 There is no arguments specified for this object.
+ 
+         When read this object always returns 0"
+    ::={ bmBladeObjects 23 }
+
+
+-- *********************************************************************      
+--  bmTestObjects             OBJECT IDENTIFIER ::= { bmBlade 2 }
+-- *********************************************************************      
+orderHwTest OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Reading of this object should always return 0.
+
+         Writing to this object will cause a restart 
+         of the board.
+
+         Writing to this object:
+         0 - Start complete hardware test." 
+
+    ::={ bmTestObjects  1 }
+
+readHwTestResult OBJECT-TYPE
+    SYNTAX      Unsigned32 
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+       " A bit vector that indicates the current status and result of the most
+         recently ordered HW test procedure.
+         The bit vector definition is as follows:
+            Bits 0-29:  Test result indication bits; non-zero values signifies
+                        a fault condition.
+            Bit 30:     If set, the test procedure is currently in progress.
+      	    Bit 31:     If set, the test procedure has finished or terminated.
+
+         The different result indication bits may be mapped by each  specific
+         component to represent e.g. different parts of the  applicable HW or
+         different test phases. Refer to applicable  product documentation for
+         details."
+
+        ::={ bmTestObjects  2 }
+
+
+-- *********************************************************************   
+-- processorLoadObjects  OBJECT IDENTIFIER ::= { bmBlade 3 }
+-- *********************************************************************   
+
+startMeasure OBJECT-TYPE
+    SYNTAX      Integer32 (1..60)
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+	"A set on this object with the value X starts measuring the
+         processor load at an interval of X seconds.
+
+	 The measuring will continue until stopped by writing
+	 to the stopMeasure object.
+
+	 If the average processor load over that period 
+	 goes above the rising threshold, defined by OBJECT 
+         risingThreshold, then a NOTIFICATION processorLoad 
+	 will be received with data 'aboveThreshold'.
+		 
+	 If the average processor load after having passed the rising
+	 threshold then falls below the falling threshold,
+	 defined by OBJECT fallingThreshold,
+	 then a NOTIFICATION processorLoad will be 
+	 received with data 'belowThreshold'.
+
+	 Reading of this object will return the measuring
+	 period in seconds. If no measuring is in progress
+	 then the value 0 is returned."
+
+     ::={ processorLoadObjects  1 }
+
+
+stopMeasure OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+	"An ordered measuring of processor load is stopped.
+
+	 Reading of this object should always return 0.
+	
+	 Writing to this object:
+	 0 - Default value to stop measure."
+
+     ::={ processorLoadObjects 2 }
+
+risingThreshold OBJECT-TYPE
+    SYNTAX      Integer32 (1..100)
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+	"Set the rising threshold for the processor load.
+	    
+	 Reading of this object will return the rising
+	 threshold value in percent(%) of used CPU.
+
+	 The rising threshold must be higher than the
+	 falling threshold. If a rising threshold is
+	 given that is lower or equal to the falling
+	 threshold then 'inconsistent value' is returned."
+
+     ::={ processorLoadObjects 3 }
+
+fallingThreshold OBJECT-TYPE
+    SYNTAX      Integer32 (0..99)
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+	"Set the falling threshold for the processor load.
+	    
+	 Reading of this object will return the falling
+	 threshold value in percent(%) of used CPU.
+
+	 The falling threshold must be lower than the
+	 rising threshold. If a falling threshold is
+	 given that is higher or equal to the rising
+	 threshold then 'inconsistant value' is returned."
+
+     ::={ processorLoadObjects 4 }
+
+
+processorLoadAverage OBJECT-TYPE
+    SYNTAX      Integer32 (0..100)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+	"Read processor load as an average over 
+         the actual measuring period.
+
+	 Processor load is returned in percent(%)."
+
+     ::={ processorLoadObjects 5 }
+
+
+-- *********************************************************************
+-- bmSensorObjects         OBJECT IDENTIFIER ::= { bmBlade 4 }
+-- *********************************************************************
+
+-- ---------------------------------------------------------------------
+-- Sensor Table
+-- ---------------------------------------------------------------------
+bmSensorTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF BmSensorEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table contains sensor information."
+    ::= { bmSensorObjects 1 }
+
+bmSensorEntry OBJECT-TYPE
+    SYNTAX      BmSensorEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "A entry in the bmSensorTable.
+         The table is indexed with SensorIDIndex"
+    INDEX       { bmSensorIDIndex }
+    ::= { bmSensorTable 1 }
+
+
+BmSensorEntry ::= SEQUENCE {
+    bmSensorIDIndex    SensorIDValues,
+    bmSensorValue      SensorValues,
+    bmSensorState      SensorStates
+    }
+
+bmSensorIDIndex OBJECT-TYPE
+    SYNTAX      SensorIDValues
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Index for the Sensor Table is SensorIDValue.
+         Trying to read a not existing SensorIDValue
+         will return SNMP error: No Such Instance."
+    ::= { bmSensorEntry 1 }      
+                             
+bmSensorValue OBJECT-TYPE
+    SYNTAX	SensorValues
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Sensor Value.
+	 For an example of values see textual convention SensorValues."
+    ::= { bmSensorEntry 2 }
+
+bmSensorState OBJECT-TYPE
+    SYNTAX      SensorStates 
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Sensor State. 
+	 For an example of states see textual convention SensorStates."
+    ::= { bmSensorEntry 3 }
+
+
+-- ---------------------------------------------------------------------
+-- BmConformance Groups
+-- bmConformance                OBJECT IDENTIFIER ::= { genBladeMIB 3 }
+--    bmGroups                     OBJECT IDENTIFIER ::= { bmConformance 1 }
+-- ---------------------------------------------------------------------
+
+confNotificationGroup1 NOTIFICATION-GROUP
+      NOTIFICATIONS {
+                     hwTestCompleted
+                   }
+      STATUS current
+      DESCRIPTION
+           "See corresponding notification description"
+        ::= {bmGroups 1}
+
+confNotificationGroup2 NOTIFICATION-GROUP
+    NOTIFICATIONS {
+                   processorLoad
+                 }
+    STATUS current
+    DESCRIPTION
+           "See corresponding notification description"
+        ::= {bmGroups 2}
+
+confNotificationGroup3 NOTIFICATION-GROUP
+    NOTIFICATIONS {
+                   flashWearWarning
+                 }
+    STATUS current
+    DESCRIPTION
+           "See corresponding notification description"
+        ::= {bmGroups 3}
+
+confNotificationGroup4 NOTIFICATION-GROUP
+    NOTIFICATIONS {
+                   bmSensorStateChange
+                 }
+    STATUS current
+    DESCRIPTION
+           "See corresponding notification description"
+        ::= {bmGroups 4}
+
+confNotificationGroup5 NOTIFICATION-GROUP
+    NOTIFICATIONS {
+                   bmIpmiUpgradeResult,
+		   bmIpmiRestart
+                 }
+    STATUS current
+    DESCRIPTION
+           "See corresponding notification description"
+        ::= {bmGroups 5}
+
+
+confBmBladeObjectsGroup1 OBJECT-GROUP
+    OBJECTS { 
+              flashWearLevel,
+              flashWarningLevel
+            }
+        STATUS  current
+        DESCRIPTION
+            "See corresponding bmBladeObjects description."
+        ::= { bmGroups 6 }
+
+confBmBladeObjectsGroup2 OBJECT-GROUP
+    OBJECTS { 
+	      bmBladeProductNumber,
+	      bmBladeProductRevisionState,
+	      bmBladeProductName,
+	      bmBladeSerialNumber,
+	      bmBladeManufacturingDate,
+	      bmBladeVendorName
+            }
+        STATUS  current
+        DESCRIPTION
+            "See corresponding bmBladeObjects description."
+        ::= { bmGroups 7 }
+
+confBmBladeObjectsGroup3 OBJECT-GROUP
+    OBJECTS { 
+	     bmBladeGreenLed,
+	     bmBladeRedLed,
+	     bmBladeYellowLed  
+            }
+        STATUS  current
+        DESCRIPTION
+            "See corresponding bmBladeObjects description."
+        ::= { bmGroups 8 }
+
+
+confBmBladeObjectsGroup4 OBJECT-GROUP
+    OBJECTS { 
+	      bmBladeCommonGreenLed,
+	      bmBladeCommonRedLed,
+	      bmBladeCommonBlueLed,
+	      bmBladeCommonYellowLed,
+	      bmBladeLedTest  
+            }
+        STATUS  current
+        DESCRIPTION
+            "See corresponding bmBladeObjects description."
+        ::= { bmGroups 9 }
+
+confBmBladeObjectsGroup5 OBJECT-GROUP
+    OBJECTS { 
+	     bmBladeReset 
+            }
+        STATUS  current
+        DESCRIPTION
+            "See corresponding bmBladeObjects description."
+        ::= { bmGroups 10 }
+
+
+confBmBladeObjectsGroup6 OBJECT-GROUP
+    OBJECTS { 
+              bmBladeIPMIData,
+	      bmBladeIPMIUpgrade,
+	      bmBladeIPMIUpgradeStatus,
+
+	      bmIpmiUpgradeResultValue,
+	      bmIpmiFwType,
+	      bmIpmiFwVersion,
+	      bmIpmiFwTimestamp
+            }
+        STATUS  current
+        DESCRIPTION
+            "See corresponding bmBladeObjects description."
+        ::= { bmGroups 11 }
+
+confBmBladeObjectsGroup7 OBJECT-GROUP
+    OBJECTS { 
+	      bmBladeIPMINotification
+            }
+        STATUS  current
+        DESCRIPTION
+            "See corresponding bmBladeObjects description."
+        ::= { bmGroups 12 }
+
+confBmBladeObjectsGroup8 OBJECT-GROUP
+    OBJECTS { 
+	      bmBladeReturnToFactoryDefault
+            }
+        STATUS  current
+        DESCRIPTION
+            "See corresponding bmBladeObjects description."
+        ::= { bmGroups 13 }
+
+confBmBladeObjectsGroup9 OBJECT-GROUP
+    OBJECTS { 
+	      bmBladeLedType
+            }
+        STATUS  current
+        DESCRIPTION
+            "See corresponding bmBladeObjects description."
+        ::= { bmGroups 14 }
+
+confBmBladeObjectsGroup10 OBJECT-GROUP
+    OBJECTS { 
+	      bmBladePwrOff
+            }
+        STATUS  current
+        DESCRIPTION
+            "See corresponding bmBladeObjects description."
+        ::= { bmGroups 15 }
+
+
+
+confHwTestObjectsGroup OBJECT-GROUP
+    OBJECTS { orderHwTest,
+              readHwTestResult,
+              hwTestResultValues
+            }
+        STATUS  current
+        DESCRIPTION
+            "See corresponding bmTestObjects description."
+        ::= { bmGroups 16 }
+
+confProcessorLoadObjectsGroup OBJECT-GROUP
+    OBJECTS { startMeasure,
+              stopMeasure,
+              risingThreshold,
+              fallingThreshold,
+              processorLoadAverage,
+              processorLoadThreshold
+            }
+        STATUS  current
+        DESCRIPTION
+            "See corresponding processorLoadObjects description."
+        ::= { bmGroups 17 }
+
+
+
+confBmSensorObjectsGroup OBJECT-GROUP
+    OBJECTS { 
+              bmSensorValue,
+	      bmSensorState,
+
+	      bmSensorType,
+	      bmSensorID,
+	      bmSensorTypeCode,
+	      bmSensorEventData
+            }
+        STATUS  current
+        DESCRIPTION
+            "See corresponding bmSensorObjects description."
+        ::= { bmGroups 18 }
+
+
+--**********************************************************************
+-- Compliance Statement
+-- bmCompliance                OBJECT IDENTIFIER ::= { bmConformance 2 }
+--**********************************************************************
+
+genBmBladeMIBCompliance MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+	"The compliance statement for the SNMP entities supported."
+    MODULE -- this module
+        GROUP confNotificationGroup1
+        DESCRIPTION "Implementation of this group is optional"
+
+        GROUP confNotificationGroup2
+        DESCRIPTION "Implementation of this group is optional"
+
+        GROUP confNotificationGroup3
+        DESCRIPTION "Implementation of this group is optional"
+
+        GROUP confNotificationGroup4
+        DESCRIPTION "Implementation of this group is optional"
+
+        GROUP confNotificationGroup5
+        DESCRIPTION "Implementation of this group is optional"
+
+ 
+        GROUP confBmBladeObjectsGroup1
+        DESCRIPTION "Implementation of this group is optional"
+
+        GROUP confBmBladeObjectsGroup2
+        DESCRIPTION "Implementation of this group is optional"
+
+        GROUP confBmBladeObjectsGroup3
+        DESCRIPTION "Implementation of this group is optional"
+
+        GROUP confBmBladeObjectsGroup4
+        DESCRIPTION "Implementation of this group is optional"
+
+        GROUP confBmBladeObjectsGroup5
+        DESCRIPTION "Implementation of this group is optional"
+
+        GROUP confBmBladeObjectsGroup6
+        DESCRIPTION "Implementation of this group is optional"
+
+        GROUP confBmBladeObjectsGroup7
+        DESCRIPTION "Implementation of this group is optional"
+
+        GROUP confBmBladeObjectsGroup8
+        DESCRIPTION "Implementation of this group is optional"
+
+        GROUP confBmBladeObjectsGroup9
+        DESCRIPTION "Implementation of this group is optional"
+
+        GROUP confBmBladeObjectsGroup10
+        DESCRIPTION "Implementation of this group is optional"
+
+        GROUP confHwTestObjectsGroup
+        DESCRIPTION "Implementation of this group is optional"
+
+        GROUP confProcessorLoadObjectsGroup
+        DESCRIPTION "Implementation of this group is optional"
+
+        GROUP confBmSensorObjectsGroup
+        DESCRIPTION "Implementation of this group is optional"
+
+    ::= { bmCompliance 1 }
+
+
+END
+   

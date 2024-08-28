@@ -1,0 +1,4 @@
+#!/bin/sh
+
+exec @LIBEXECDIR@/ssh-ldap-helper -s "$1"
+

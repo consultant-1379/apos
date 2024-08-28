@@ -1,0 +1,261 @@
+-- =============================================================================
+--
+-- %CCaseFile:	GEN-RTLMT-MIB.mib %
+-- %CCaseRev:	/main/R1A/1 %
+-- %CCaseDate:	2010-08-27 %
+-- %CCaseDocNo:	9/196 03-CRA 119 1365 Ux %
+-- Author:      xramgun
+--
+-- =============================================================================
+--
+-- Copyright (C) 2009-2010 by Ericsson AB
+-- S-126 25  STOCKHOLM
+-- SWEDEN, tel int + 46 8 719 0000
+--
+-- This Program may be used and/or copied only with the written permission
+-- from Ericsson AB, or in accordance with the terms and
+-- conditions stipulated in the agreement/contract under which the program
+-- has been supplied.
+--
+-- All rights reserved.
+--
+-- =============================================================================
+--
+-- REVISION HISTORY
+--
+-- Rev        Date         Name        What
+-- ========   ==========   ========    ========
+-- PA1        2009-10-01   xramgun     Initial version of Generic rate limiting mib
+-- A          2010-02-12   qsangov     Firm revision of GEN-RTLMT-MIB
+-- B          2010-04-27   qsangov     Updated RTLMT MIB OID
+-- A          2010-08-27   uabpnil     New document number
+-- =============================================================================
+GEN-RTLMT-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY,
+    OBJECT-TYPE,
+    Integer32,
+    enterprises
+        FROM SNMPv2-SMI
+
+    TEXTUAL-CONVENTION
+        FROM SNMPv2-TC
+        
+    OBJECT-GROUP,             
+    MODULE-COMPLIANCE       
+        FROM SNMPv2-CONF; 
+
+genRateLimit MODULE-IDENTITY
+    LAST-UPDATED "200910010000Z"
+    ORGANIZATION "Ericsson AB - EAB/FTI/IE"
+    CONTACT-INFO "Email: ingvar.froroth@ericsson.com"
+    DESCRIPTION
+        "This MIB module defines objects for managing DLF, MCAST and BCAST 
+         rate limiting of flooded frames for common component."
+    
+    REVISION  "200910010000Z"
+    DESCRIPTION "First version"
+
+    REVISION  "201004270000Z"
+    DESCRIPTION "Updated OID to remove conflict with gen-lag-mib" 
+
+    ::= { enterprises ericsson(193) component(177) generic(2) transport(1) 7 }       
+    
+-- ============================================================================
+-- Definitions of objects
+-- ============================================================================
+
+--ericsson      OBJECT IDENTIFIER ::= {enterprises 193}
+--component     OBJECT IDENTIFIER ::= {ericsson 177}
+--generic       OBJECT IDENTIFIER ::= {component 2}
+--transport     OBJECT IDENTIFIER ::= {generic 1}
+--genRateLimit  OBJECT IDENTIFIER ::= {transport 2}
+
+-- --------------------------------------------------------------
+-- Group definitions
+-- --------------------------------------------------------------
+--rateLimitNotifications           OBJECT IDENTIFIER ::= { genRateLimit 0 }
+--rateLimitNotificationObjects     OBJECT IDENTIFIER ::= { genRateLimit 1 }
+rateLimitObjects                 OBJECT IDENTIFIER ::= { genRateLimit 2 }
+
+rateLimitConformance OBJECT IDENTIFIER ::= { genRateLimit 3 }
+rateLimitGroups      OBJECT IDENTIFIER ::= { rateLimitConformance 1 }
+rateLimitCompliance  OBJECT IDENTIFIER ::= { rateLimitConformance 2 }
+
+-- ----------------------------------------------------------------
+-- Textual conventions
+-- ----------------------------------------------------------------    
+PortIfIndex ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d"
+    STATUS       current
+    DESCRIPTION
+        "A unique value grater than zero for the interfaces.
+         Values are assigned from 1 and fixed per interface
+         from startup to next Initialization."
+    SYNTAX       Integer32 (1..2147483647)         
+
+-- ---------------------------------------------------------------------------------
+-- rateLimitNotifications    OBJECT IDENTIFIER ::= { rateLimit 0 }
+-- ---------------------------------------------------------------------------------
+-- TBD
+
+-- ------------------------------------------------------------------------------------
+-- rateLimitNotificationObjects OBJECT IDENTIFIER ::= { rateLimit 1 }
+-- ------------------------------------------------------------------------------------
+-- TBD
+
+---------------------------------------------------------------------------------------
+-- rateLimitObjects           OBJECT IDENTIFIER ::= { rateLimitMIB 2 }
+-- ------------------------------------------------------------------------------------
+
+rateLimitTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF RateLimitEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "List of RateLimit objects that can be configured to limit 
+         the flooding of frames to member ports of vlan for the common component switch"
+    ::= { rateLimitObjects 1 }
+
+rateLimitEntry OBJECT-TYPE
+    SYNTAX            RateLimitEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "RateLimit objects that can be configured per port"
+    INDEX      { rateLimitIfIndex }        
+    ::= { rateLimitTable 1 }
+
+RateLimitEntry ::=
+    SEQUENCE {
+              rateLimitIfIndex              PortIfIndex,
+              rateLimitMaxDlfsPerSecond     Integer32,
+              rateLimitMaxBcastsPerSecond   Integer32,
+              rateLimitMaxMcastsPerSecond   Integer32,
+              maxRateLimitPktsPerSecond     Integer32
+             }
+             
+rateLimitIfIndex OBJECT-TYPE
+    SYNTAX              PortIfIndex
+    MAX-ACCESS          not-accessible
+    STATUS              current
+    DESCRIPTION
+        "Specifies the interface index of the port, value is greater than zero.
+         For futher details access RFC 2863 - The Interfaces Group MIB"
+    ::= { rateLimitEntry 1 }
+    
+rateLimitMaxDlfsPerSecond    OBJECT-TYPE
+    SYNTAX                           Integer32 (0..2147483647)
+    MAX-ACCESS                       read-write
+    STATUS                           current
+    DESCRIPTION
+        "This object can be configured from the range 0 to 0x1FFFFFF.
+         This counter value is cleared once per second. Setting the
+         value zero to the object disables DLF rate limiting frames 
+         for the interface. If it is enabled, then port discards all 
+         DLF packets received when counter is greater than the 
+         programmed threshold MaxDlfsPerSecond for remaining part of 
+         second."
+
+    DEFVAL                           {0}
+    ::= { rateLimitEntry 2 }
+
+rateLimitMaxBcastsPerSecond    OBJECT-TYPE
+    SYNTAX                             Integer32 (0..2147483647)
+    MAX-ACCESS                         read-write
+    STATUS                             current
+    DESCRIPTION
+        "This object can be configured from the range 0 to 0x1FFFFFF.
+         This counter value is cleared once per second. Setting the
+         value zero to the object disables BCAST rate limiting frames 
+         for the interface. If it is enabled, then port discards all 
+         BCAST packets received when counter is greater than the 
+         programmed threshold MaxBcastsPerSecond for remaining part 
+         of second."
+
+    DEFVAL                           {0}
+    ::= { rateLimitEntry 3 }
+
+rateLimitMaxMcastsPerSecond    OBJECT-TYPE
+    SYNTAX                             Integer32 (0..2147483647)
+    MAX-ACCESS                         read-write
+    STATUS                             current
+    DESCRIPTION
+        "This object can be configured from the range 0 to 0x1FFFFFF.
+         This counter value is cleared once per second. Setting the
+         value zero to the object disables MCAST rate limiting frames 
+         for the interface. If it is enabled, then port discards all 
+         MCAST packets received when counter is greater than the 
+         programmed threshold MaxMcastsPerSecond for remaining part 
+         of second."
+
+    DEFVAL                           {0}
+    ::= { rateLimitEntry 4 }
+
+maxRateLimitPktsPerSecond    OBJECT-TYPE
+    SYNTAX                           Integer32 (0..2147483647)
+    MAX-ACCESS                       read-only
+    STATUS                           current
+    DESCRIPTION                   
+        "This object denotes the maximum configurable packets per 
+         second value for rate limiting DLF, MCAST and BCAST frames"   
+    ::= { rateLimitEntry 5 }
+-- ------------------------------------------------------------------------------------
+-- Conformance Groups 
+-- rateLimitGroups      OBJECT IDENTIFIER ::= {rateLimitConformance 1}
+-- ------------------------------------------------------------------------------------
+--rateLimitNotificationGroup NOTIFICATION-GROUP
+--    NOTIFICATIONS {
+--       }
+--    STATUS    current
+--    DESCRIPTION
+--  "See corresponding notification description."
+--    ::= { rateLimitGroups 1 }
+
+--rateLimitTrapObjectGroup OBJECT-GROUP
+--    OBJECT {
+--       }
+--    STATUS    current
+--    DESCRIPTION
+--  "See corresponding object description."
+--    ::= { rateLimitGroups  2 }
+
+rateLimitObjectGroup OBJECT-GROUP
+    OBJECTS {
+              rateLimitMaxDlfsPerSecond,
+              rateLimitMaxBcastsPerSecond,
+              rateLimitMaxMcastsPerSecond,
+              maxRateLimitPktsPerSecond
+            }
+    STATUS     current
+    DESCRIPTION 
+        "See corresponding object descriptions."
+    ::= { rateLimitGroups 3 }
+
+-- ---------------------------------------------------------------------------------
+-- Compliance Statement
+-- rateLimitCompliance OBJECT IDENTIFIER ::= {rateLimitConformance 2}
+-- ----------------------------------------------------------------------------------
+
+genRateLimitCompliance MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION 
+        "The compliance statement for SNMP entities supported
+         by common component switch"
+    MODULE -- this module
+
+--    GROUP rateLimitNotificationGroup
+--    DESCRIPTION
+--        "Implementation of this group is optional."
+
+--    GROUP rateLimitTrapObjectGroup
+--    DESCRIPTION
+--            "Implementation of this group is optional."
+            
+    GROUP rateLimitObjectGroup        
+    DESCRIPTION
+                "Implementation of this group is optional."
+
+    ::= { rateLimitCompliance 1 }    
+END        

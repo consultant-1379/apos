@@ -1,0 +1,30 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       lde-brf
+# Description:
+#       A script to wrap the invocation of lde-brf by TS user.
+# Note:
+#       None.
+##
+# Usage:
+#       None.
+##
+# Output:
+#       None.
+##
+# Changelog:
+#- Mon Apr 01 2019  - Neelam Kumar (xneelku)
+#       Made changes to identify "\n" special character.
+#
+# - Thu Nov 08 2013  - Madhu Muthyala (xmadmut)
+#       First version.
+##
+
+/usr/bin/sudo /usr/sbin/lde-brf "$@"
+exit $?
+

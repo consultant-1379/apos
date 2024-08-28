@@ -1,0 +1,17 @@
+Usage:  usermgmt --help
+        usermgmt <command> <sub_command> [<sub_command_options>]
+
+Manage the users and groups.
+
+<command> <sub_command> must be one of the following pairs:
+        group add
+        group modify
+        group delete
+        group list
+        user add
+        user modify
+        user delete
+        user list
+
+<sub_command_options>   call "usermgmt <command> <sub_command> --help" 
+                        for more details.

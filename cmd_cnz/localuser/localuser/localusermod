@@ -1,0 +1,523 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2015 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       localusermod
+# Description:
+#       A script to modify local APG user
+#
+##
+# Usage:
+#	localusermod  [-A|-D|-R] <role,...> <username> 
+#	localusermod  -u <username>
+#	localusermod  -e expiry <username>
+#	localusermod  -n <username>
+#	localusermod  -h
+##
+# Output:
+#       Command print-out is printed on console.
+#
+##
+# Changelog:
+# - Thu Jun 25 2015 - Stefano Volpe
+#       First version.
+##
+
+# Commands 
+ECHO=/bin/echo
+PASSWD="/usr/bin/passwd"
+GREP=/usr/bin/grep
+AWK=/usr/bin/awk
+PAM="/sbin/pam_tally"
+CHAGE="/usr/bin/chage"
+USERDEL="/usr/sbin/userdel"
+USERMOD="/usr/sbin/usermod"
+CMD_CAT="/bin/cat"
+DATE="/bin/date"
+peer_node_file="/etc/cluster/nodes/peer/hostname"
+CMD_IMMLIST="/usr/bin/immlist"
+SSH="/usr/bin/ssh"
+CMD_CUT="/usr/bin/cut"
+CAT=/bin/cat
+NSCD_GROUP="/usr/sbin/nscd -i group"
+NSCD_PWD="/usr/sbin/nscd -i passwd"
+
+# Exit codes
+
+exit_success=0
+exit_failure=1
+exit_usage=2
+exit_privilege=3
+exit_expiry_info=4
+#exit_user_exists=5
+#exit_max_users=6
+exit_usermod=7
+exit_force_pwd=8
+exit_unlock_fail=9
+exit_expiry_fail=10
+exit_pwd_fail=11
+#exit_file_updt_fail=12
+#exit_invalid_user=13
+exit_pwdx_lenx=14
+exit_pwdx_hist=15
+#exit_acct_fail=16
+exit_term=17
+#exit_renew_fail=18
+exit_user_notexist=19
+exit_error=20
+
+
+# Global variables
+expiry_info=0
+expiry_info_value=""
+secondary_group_info=0
+secondary_group_info_value=""
+group_opt=""
+root_user="root"
+root_group="root"
+local_group="apg-local"
+com_group="com-emergency"
+com_ldap_group="com-ldap"
+ts_group="tsgroup"
+admin="tsadmin"
+secondary_group=""
+group_file=/cluster/etc/group
+reset_pwd_info=0
+
+#linux_date="1970-01-01"
+maxacntdays=-1
+script_name="localusermod"
+#common_home_dir=/cluster/home/nohome/
+reset_old_f=0
+grp_count=0
+# Message functions
+
+#set -x 
+
+function show_usage() {
+        ${ECHO} "Usage: $script_name [-A|-D|-R] <role,...> <username>"        
+        ${ECHO} "       $script_name -u <username>"
+        ${ECHO} "       $script_name -n <username>"
+        ${ECHO} "       $script_name -e expiry <username>"
+        ${ECHO} "       $script_name -h"
+        ${ECHO} ""
+}
+
+#-------------------------------------------------------------------------
+
+function usage_error() {
+    ${ECHO} "$1"
+    show_usage
+    exit $2
+}
+#-------------------------------------------------------------------------
+function abort () {
+    ${ECHO} "ERROR: Failed to modify user [$username]"
+    slog  "ABORTING: <"$1">"
+    exit $2
+}
+
+#------------------------------------------------------------------------
+function slog () {
+    /bin/logger -t localusermod "$*"
+}
+
+#-------------------------------------------------------------------------
+function error() {
+    ${ECHO} "$1"
+    ${ECHO} ""
+    exit $2
+}
+#-------------------------------------------------------------------------
+function print_passwd_policy() {
+    
+	# hardcode the needed paramters for now.
+    dn='AxeLocalTsUsersPolicylocalTsUsersPolicyMId=1'
+    pwdlen_str='minimumPasswordLength'
+    pwdhis_str='passwordHistorySize'
+
+    # retries the corresponding values from imm.
+    pwdlen_val=$( $CMD_IMMLIST -a $pwdlen_str $dn | $CMD_CUT -d = -f2)
+    [ -z $pwdlen_val ] && error "ERROR: Minimum password length could not be retrieved" $exit_pwdx_lenx
+
+    pwdhis_val=$( $CMD_IMMLIST -a $pwdhis_str $dn | $CMD_CUT -d = -f2)
+    [ -z $pwdhis_val ] && error "ERROR: Minimum password history size could not be retrieved" $exit_pwdx_hist
+
+    # print format on console
+        
+    ${ECHO} -e 'The password policy for local users may be overridden ONLY when'
+    ${ECHO} -e 'assigning the initial password below.'
+    ${ECHO} -e 'This is done by simply ignoring the bad password messages.'
+    ${ECHO} -e          
+    ${ECHO} -e 'Please note that the password set below must be changed'
+    ${ECHO} -e 'at first login.'
+    ${ECHO} -e           
+    ${ECHO} -e 'When changing it is required that'
+    ${ECHO} -e "* At least $pwdlen_val  characters are used"
+    ${ECHO} -e "* Previous  $pwdhis_val passwords may not be reused"
+    ${ECHO} -e '(minimum password length and password history are configurable in'
+    ${ECHO} -e 'MO LocalTsUsersPolicyM=1)'
+    ${ECHO} -e           
+    ${ECHO} -e 'It is also required that the changed password must contain'
+    ${ECHO} -e 'characters from at least 3 out of the 4 classes,'
+    ${ECHO} -e 'upper case characters, lower case characters, digits and'
+    ${ECHO} -e 'special characters.'
+    ${ECHO} -e           
+    ${ECHO} -e 'The changed password is also checked if it is found in a'
+    ${ECHO} -e 'dictionary, if it is just a case change only, or if it is just'
+    ${ECHO} -e 'a rotated variant of the old password.\n'
+ }                                  
+#-------------------------------------------------------------------------
+function privilege_check() {
+    userid=`id -u`
+    tsadmin_id=`${GREP} "^$admin:" /cluster/etc/passwd | ${AWK} -F: '{print $3}'`
+    root_id=`${GREP} "^$root_user:" /etc/passwd  | ${AWK} -F: '{print $3}'`
+    if [ "$userid" != "$tsadmin_id" ] && [ "$userid" != "$root_id" ];then
+        error "ERROR: Not enough privileges to use this command" $exit_privilege
+    fi 
+}
+#-------------------------------------------------------------------------
+function expiry_info_set() {
+	expiry=$1
+	re='^([0-9]+)$|^(-1)$'
+	expirylength=${#expiry}
+	if ! [[ $expiry =~ $re ]] ; then
+		error "ERROR: Invalid expiry information provided" $exit_expiry_info
+	fi
+	if [ "$expirylength" -gt 4 ] ;then
+        	error "ERROR: Maximum 4 digit expiry information is allowed" $exit_expiry_info
+    	fi
+   	if [ $expiry -eq 0 ];then		
+        	error "ERROR: Invalid expiry information provided" $exit_expiry_info
+    	fi
+}
+#-------------------------------------------------------------------------
+function check_group() {
+	group=$1
+	
+	if [ "$group" == "$com_ldap_group" ] || [ "$group" == "$local_group" ] || [ "$group" == "$ts_group" ] || [ "$group" == "$root_group" ] || [ "$group" == "$com_group" ]; then
+		error "ERROR: Role '$group' not allowed" $exit_usermod
+	fi
+	
+	${CMD_CAT} $group_file | ${GREP} "^$group:" &>/dev/null
+	
+	if [ $? -ne 0 ]; then
+		error "ERROR: Role '$group' not found" $exit_usermod
+	fi	
+}
+#-------------------------------------------------------------------------
+function secondary_group_set() {
+    secondary_group=$1
+
+	re='^[a-zA-Z0-9_-]+((,[a-zA-Z0-9_-]+)*)?$'
+    if ! [[ $secondary_group =~ $re ]] ; then
+	    error "ERROR: Invalid group information provided" $exit_expiry_info
+	fi
+	
+	for j in $($ECHO $secondary_group | $AWK 'BEGIN { FS = "," }; { for (i = 1; i <= NF; i = i + 1) {print $i}}')
+	do
+		check_group $j
+	done	
+}
+
+#-------------------------------------------------------------------------
+function reload_sshd(){
+    # senidng HUP signal to all instances of sshd
+    # to reload the configuration.
+    for PID in $( ps -ef | grep '/usr/sbin/sshd' | grep -v grep | awk '{print $2}')
+    do
+          kill -HUP $PID
+    done
+}
+
+#-------------------------------------------------------------------------
+function passwd_change() {	
+	username="$1"
+	#echo username:$username
+	if [ $reset_old_f -eq 0 ];then
+	 	# print the policy first
+	  	password_unlock 
+		print_passwd_policy
+		${PASSWD} $username
+		if [ $? != 0 ];then
+         		error "ERROR: Password setting failed for [$username]" $exit_pwd_fail
+		fi
+
+		# Setting force password change
+		${PASSWD} -e $username 1>/dev/null
+		if [ $? != 0 ];then
+			error "ERROR: Failed to set forced password change on account [$username]" exit_force_pwd
+		fi
+	
+		${ECHO} "password reset with new password success for [$username]"
+		${ECHO} ""
+	else
+		password_unlock
+		${ECHO} "[$username] account successfully unlocked"
+		${ECHO} ""
+	fi
+}
+#-------------------------------------------------------------------------
+function password_unlock() {
+
+	${PAM} --user $username --reset 1>/dev/null
+	if [ $? != 0 ];then
+		error "ERROR: Password unlocking failed for [$username]" $exit_unlock_fail
+	fi	
+	check_peer_node_state
+	if [ $? == 0 ];then
+		${SSH} $remote_node ${PAM} --user $username --reset 1>/dev/null
+		[ $? != 0 ] && error "ERROR: Password unlocking failed for [$username]" $exit_unlock_fail
+	fi
+}
+#----------------------------------------------------------------------------------------
+function check_peer_node_state(){
+
+	remote_node=`${CMD_CAT} $peer_node_file`
+	$PING -c 2 -w 2 $remote_node &> /dev/null
+	if [ $? == 0 ]; then
+		return $exit_success
+	else
+		return $exit_failure
+	fi
+}
+#----------------------------------------------------------------------------------------
+function parse_args() {
+    if  [ $# -lt 2 ] || [ $# -gt 3 ];then
+        usage_error "Incorrect usage" $exit_usage
+    fi
+
+    if [ $# -eq 1 ];then
+        case "$1" in
+            -h)
+                show_usage
+                exit $exit_usage
+                ;;
+            -*)
+                usage_error "Incorrect usage" $exit_usage
+                ;;
+            *)
+                username=$1
+                ;;
+        esac
+    else
+        validate_args "$@"
+    fi
+
+}
+
+#---------------------------------------------------------------------------------------
+function validate_args() {
+	local parameters=($@)
+	local num_parameters=${#parameters[@]}
+	username=${parameters[$num_parameters - 1]}
+	
+	TEMP=$(getopt -q "e:D:A:R:u:n" $@)
+
+    #exit from code if invalid arguments
+    if [ $? != 0 ]; then
+        usage_error "Incorrect usage" $exit_usage
+    fi
+
+
+    # The following section is redirect the functionality as per options
+#   eval set -- "$TEMP"
+
+#   echo "$LINENO: param 1 $1, parm2 $2, param3 $3, DollarSTAR -$*-"
+
+    ##  while true; do
+    while [ $# -gt 0 ]; do
+        case $1 in
+				-e)
+                        #Set expiry information
+                        #    echo "$LINENO: param 1 $1, parm2 $2, param3 $3, DollarSTAR -$*-"
+					if [ $expiry_info -eq 1 ]; then
+						usage_error "Incorrect usage" $exit_usage
+					fi	
+					expiry_info_value=$2
+					expiry_info=1                            
+					shift                        	
+					;;
+			-D|-A|-R)
+					if [ $secondary_group_info -eq 1 ]; then
+						usage_error "Incorrect usage" $exit_usage
+					fi
+					
+					#Set secondary groups  
+					secondary_group_info=1
+					secondary_group_info_value=$2					
+					group_opt=$1
+					shift
+					;;
+				-u|-n)
+					if [ $reset_pwd_info -eq 1 ]; then
+						usage_error "Incorrect usage" $exit_usage
+					fi
+					if [ "$1" == "-u" ];then
+						reset_old_f=1
+					fi
+					reset_pwd_info=1						
+					shift
+					;;					
+		esac
+		shift
+	done
+
+#   echo "$LINENO: num_parameters $num_parameters, gecos set $gecos_data_set, -e set $expiry_info "
+    case $num_parameters in
+        3)
+#          echo "Only -e plus num should have been set"
+            if [ $expiry_info -ne 1 ] && [ $secondary_group_info -ne 1 ] && [ $reset_pwd_info -eq 1 ]; then
+                usage_error "Incorrect usage" $exit_usage
+            fi
+        ;;
+		2)
+			if [ $reset_pwd_info -ne 1 ]; then
+			usage_error "Incorrect usage" $exit_usage
+            fi			
+		;;
+        *)
+                usage_error "Incorrect usage" $exit_usage
+        ;;
+    esac
+
+	if [ $secondary_group_info -eq 1 ]; then
+          secondary_group_set $secondary_group_info_value
+        fi
+
+	if [ $expiry_info -eq 1 ]; then
+		expiry_info_set $expiry_info_value
+	fi	
+	
+
+}
+#-------------------------------------------------------------------------
+function set_expiry_max() {
+    if [ "$expiry_info" -eq "0" ];then
+        expiry=$maxacntdays
+    fi
+}
+#------------------------------------------------------------------------
+function clean_up() {
+    ${USERDEL} -P /cluster/etc "$username" 1>/dev/null
+    abort "Termination signal received" $exit_term
+    #exit 1
+}
+#-------------------------------------------------------------------------
+function check_role() {
+	group=$secondary_group_info_value
+	for i in $($ECHO $group | $AWK 'BEGIN { FS = "," }; { for (i = 1; i <= NF; i = i + 1) {print $i}}')
+	do	
+	gp_present=0
+	for j in $(${CAT} $group_file | ${GREP} -E "(*[:|,]$username$)|(*[:|,]$username,)" | ${AWK} -F: '{print $1}'); do
+			if [ "$j" == "$i" ]; then
+			gp_present=1
+			fi	
+	done
+	((grp_count = grp_count + 1))
+	if [ $gp_present == 0 ]; then
+		error "ERROR: User [$username] does not have role $i" $exit_usermod		
+	fi
+	done
+}
+#-------------------------------------------------------------------------
+function mod_user() {
+
+	if [ $secondary_group_info -eq 1 ]; then	
+		if [ "$group_opt" == "-R" ]; then
+			${USERMOD}  -P /cluster/etc -G $com_ldap_group,"$secondary_group" "$username" &>/dev/null
+		elif [ "$group_opt" == "-D" ]; then	
+			check_role 
+			count=0
+			for group in $(${CAT} $group_file | ${GREP} -E "(*[:|,]$username$)|(*[:|,]$username,)" | ${AWK} -F: '{print $1}'); do			
+				((count = count + 1))
+			done
+			#atleast 2 roles should be present for user including com-ldap
+			if [ $((count - 1)) -gt $grp_count  ]; then
+				${USERMOD}  -P /cluster/etc -R "$secondary_group" "$username" &>/dev/null			
+			else
+				error "ERROR: Cannot remove all roles for user [$username]" $exit_usermod
+			fi
+		else 
+			${USERMOD}  -P /cluster/etc -A "$secondary_group" "$username" &>/dev/null
+		fi
+		
+		if [ $? != 0 ];then
+            error "ERROR: Failed to modify user [$username]" $exit_usermod
+		fi
+	fi
+	
+	if [ $expiry_info -eq 1 ]; then
+		${CHAGE} -M $expiry "$username" &>/dev/null
+		
+		if [ $? != 0 ];then
+            error "ERROR: Failed to modify user [$username]" $exit_usermod
+		fi
+	fi
+    
+	if [ $reset_pwd_info -eq 1 ]; then
+		passwd_change $username
+	fi
+	
+	# To destroy the existing OS cache on local and peer node
+	# Invalidating the group information on local node
+	${NSCD_GROUP}
+
+	# Invalidating the group information on peer node
+	${SSH} $(<$peer_node_file) $NSCD_GROUP
+
+	# Invalidating the password info on local node
+	${NSCD_PWD}
+
+	# Invalidating the password info on peer node
+	${SSH} $(<$peer_node_file)  $NSCD_PWD
+	
+}
+#-------------------------------------------------------------------------
+function check_user() {
+	if [ $username == "root" ];then
+			error "ERROR: User [$username] is not a local user" $exit_invalid_user
+	fi
+
+	${GREP} "^$username:" /cluster/etc/passwd 1>/dev/null
+	if [ $? != 0 ];then
+			error "ERROR: User [$username] does not exist" $exit_user_notexist
+	fi
+	
+	local_group_id=`${GREP} "^$local_group:" /cluster/etc/group | ${AWK} -F: '{print $3}'` #group id of tsgroup
+	user_grpid=`${GREP} "^$username:" /cluster/etc/passwd | ${AWK} -F: '{print $4}'`
+	
+	if [ "$user_grpid" != "$local_group_id" ];then
+		error "ERROR: User [$username] is not a local user" $exit_invalid_user
+	fi
+}
+
+#-------------------------------------------------------------------------
+
+# _____________________ _____________________ 
+#|    _ _   _  .  _    |    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |   | ) ) (_| | | )   |   
+#|_____________________|_____________________|
+# Here begins the "main" function...
+#set -x
+# Set the interpreter to exit if a non-initialized variable is used.
+#set -u
+
+# Parse command line arguments.
+parse_args $*
+
+
+# Setting expiry information for maximum days when expiry information is not given as input
+set_expiry_max
+
+# Checking if username already exists
+check_user
+
+# Adding localuser with given information 
+mod_user
+
+
+exit $exit_success                                                                                

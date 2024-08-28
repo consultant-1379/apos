@@ -1,0 +1,146 @@
+raidmgmt: a script to manage the software Redundant Array of Independent Disks (RAID) level 1 in APG43L.
+
+Prerequisites:		
+	- This command relies on the following executables to be present on the system:
+		/bin/cat
+		/bin/dd
+		/bin/fuser
+		/bin/logger
+		/bin/ls
+		/bin/mkdir
+		/bin/mount
+		/bin/ps
+		/bin/rm
+		/bin/umount
+		/opt/ap/apos/conf/apos_hwtype.sh
+		/sbin/blockdev
+		/sbin/e2fsck
+		/sbin/fdisk
+		/sbin/mdadm
+		/sbin/mkfs.ext3
+		/sbin/quotacheck
+		/sbin/quotaoff
+		/sbin/quotaon
+		/sbin/resize2fs
+		/sbin/sysctl
+		/sbin/udevadm
+		/usr/bin/awk
+		/usr/bin/basename
+		/usr/bin/dirname
+		/usr/bin/find
+		/usr/bin/getopt
+		/usr/bin/grep
+		/usr/bin/sed
+		/usr/bin/tail
+		/usr/bin/tr
+		/usr/bin/wc
+		/usr/sbin/partprobe
+
+Notes:
+	- The definition of the RAID device (/dev/md0) is only triggered by the "-p, --part" and "-a, --assemble" options (see description below).
+	- The script logs in the system log file (/var/log/messages).
+	- The variable $TRUE is defined to be $( true; echo $? ). $FALSE is $( false; echo $? ).
+	- Calling raidmgmt without any option will trigger exactly the same behavior than calling it with the --status option.
+
+
+usage:	raidmgmt
+
+	raidmgmt --add|-A <device> [--force|-F] [--verbose|-v]
+
+	raidmgmt [--assemble|-a [<device>]] [--mount|-m] [--persistent|-P]
+		 [--force|-F] [--verbose|-v]
+
+	raidmgmt --check|-c <device> [--verbose|-v]
+
+	raidmgmt --dfi|-i [--verbose|-v]
+
+	raidmgmt [--disable|-d] [--unmount|-u] [--verbose|-v]
+
+	raidmgmt --enlarge|-E [--verbose|-v]
+
+	raidmgmt [--part|-p [<device>]] [--format|-f] [--mount|-m]
+	         [--persistent|-P] [--bitmap|-b] [--force|-F] [--verbose|-v]
+
+	raidmgmt --help|-h
+
+	raidmgmt --is-mounted|-M [--verbose|-v]
+
+	raidmgmt --list|-l [--verbose|-v]
+
+	raidmgmt --quota|-q [--verbose|-v]
+
+	raidmgmt --recover|-r [--verbose|-v] [--force|-F]
+
+	raidmgmt --remove|-R <device> [--verbose|-v]
+
+	raidmgmt --speedup <ON|OFF> [--verbose|-v]
+
+	raidmgmt --status|-s [--verbose|-v]
+	
+OPTIONS
+	--add, -A <device>
+		This option will call "mdadm --add /dev/md0 <device>" but only if the size of <device> is greater-or-equal than /dev/md0's size. <device> must be the relative or the absolute path of the device to add (i.e. "/dev/sdc1", "./sdd1"). The raid device will be automatically grown to handle the added device as part of the array (and not as a spare disk). If the --force option is specified, the insertion of the new disk will be done by zeroing-out bitmap (if present) and/or superblock.
+		
+	--assemble, -a [<device>]
+		This option re-creates an existent-but-disabled RAID array (by using the "mdadm --assemble" command). If invoked with the --persistent option, it updates the "/etc/mdadm.conf" and "/etc/fstab" files accordingly. It cannot be used in conjunction with the "--part" switch. If the optional parameter <device> is specified, then it will be possible to assemble and re-create a raid array only composed by the <device> device.
+	
+	--bitmap, -b
+		This option, used in conjuction with the --part switch, will trigger the definition of a raid1 device containing an internal bitmap (useful for speeding up the resync, recovery and reshape phases).
+		
+	--check, -c <device>
+		This option returns $TRUE if <device> contains valid raid metadata, $FALSE otherwise. If the option --verbose is specified, it prints some information on stdout too. <device> must be the relative or the absolute path of the device to check (i.e. "/dev/sdc1", "./sdd1").
+		
+	--dfi, -i
+		This option lists the devices that the script will elect as components of the raid array. The syntax used is: <physical_channel>:<device> (for example "phy0:/dev/sdc").
+
+	--disable, -d
+		This option will cause the script to stop the current active RAID array (if any) and will remove references to the /dev/md0 device from the /etc/fstab and /etc/mdadm.conf files (if any). It will fail in the case the device /dev/md0 is mounted.
+		
+	--enlarge, -E
+		This option will search for spare devices and put them online in the /dev/md0 raid array.
+
+	--force, -F
+		By specifying this switch, the invoked command will run operations that are potentially destructive, even if it finds an already active RAID device.
+		
+	--format, -f
+		First it checks for a valid (and running) RAID array (by using the "mdadm --detail --test ..." command), then formats the disk $RAID_DEVICE using the "mkfs.ext3" command. If invoked with the --persistent option, it updates the "/etc/fstab" file with information about the newly created filesystem.
+		
+	--help, -h
+		The option prints the command usage and then exit.
+		
+	--is-mounted, -M
+		The option returns $TRUE if the raid device is mounted, $FALSE otherwise. If the --verbose option is specified, a message on stdout is printed too.
+
+	--list, -l
+		This option will show information about the $RAID_DEVICE device. The first row will show the status of the RAID device and the last optional lines (one per disk) will report the name, the ID and the current status of all the RAID-involved disks. It will also report the percentage of completion in the case of ongoing resyncing operations.
+
+	--mount, -m
+		This option mounts the $RAID_DEVICE to the $MOUNT_POINT folder, using $FSTAB_OPTIONS as mount options.
+
+	--part, -p [<device>]
+		If this option is invoked without the --force option and it finds an existent RAID array (or RAID metadata already existent inside the data disks), it prints an error and then exit with the $FALSE return value. Otherwise it will partition the disks with two "Non-fs data" (0xDA) partition per disk: sd?1 (the proper raid partition) and sd?2 (a ~128MiB empty data reserved for future uses), then creates a RAID array by invoking the command "mdadm --create /dev/md0 --assume-clean --force --level=raid1 --raid-devices=$DEVICE_NUMBER $RAID_PARTITIONS --run". If invoked with the --persistent option, it also updates the "/etc/mdadm" file with information about the newly created RAID array. If the optional parameter <device> is specified, then it will be possible to partition and create a raid array only containing the <device> device. If the --bitmap option is specified, an internal bitmap will be used.
+
+	--persistent, -P
+		This option lets the raid survive a reboot of the system: the device /dev/md0 will be automatically created and mounted during the system startup. If not specified, the files /etc/fstab and /etc/mdadm.conf will be left untouched. This behavior can cause problems to APOS-HA-agent.
+
+	--quota, -q
+		This option turns off, triggers a scan and then turns on the disk quota management. It requires the RAID array to be active and mounted.
+		
+	--recover, -r
+		This option will make the script to remove all the disks set as faulty and re-add them to the /dev/md0 device. In the case the --force option has been specified and the re-add operation fails, the command will zero-superblock the failed device and add it to the raid array.
+
+	--remove, -R <device>
+		This option will call the "mdadm /dev/md0 --set-faulty <device>" and "mdadm /dev/md0 --remove <device>" commands. <device> must be the relative or the absolute path of the device to remove (i.e. "/dev/sdc1", "./sdd1"). The raid device will be automatically shrunk to not show the "degraded" status.
+		
+	--speedup, -S <ON|OFF>
+		If invoked with the "ON" parameter, this option will arrange some system-wide options in order to speedup the re-syncing phase. When the raid will be in sync, the tweaks introduced by this command are automatically reset to the previous values (the reset can be forced before the sync to be complete by invoking the command with the "OFF" parameter). This is a blocking call that will not return until the whole resync process completes.
+		
+	--status, -s
+		This option will show the status of the RAID array. It can print one of these status messages: "UP" (for an up&running RAID array, even if in syncing mode), "DOWN" (for a stopped device), "DEGRADED" (in the case a disk is recognized as faulty) or "NOT-VALID" (when no-valid RAID devices are found).
+
+	--unmount, -u
+		This option umounts /dev/md0. It will print a warning in the case it was not mounted (but a $TRUE exit code will be returned). A $FALSE return code will be issued only if the /dev/md0 device will still be mounted after the execution of the command (i.e. in the case of a busy filesystem).
+
+	--verbose, -v
+		This switch will enable a verbose output to be printed to stdout.
+		

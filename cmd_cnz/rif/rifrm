@@ -1,0 +1,652 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2014 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       rifrm
+# Description:
+#       This script is to remove Reliable Ethernet on the Public network
+##
+# Usage:
+#     rifrm [-f]
+##
+
+# Changelog:
+# -  Thu May 05 2016 - Luca De Simone (xludesi) 
+#        Updated to inhibit 'rifrm' command in SMX architecture 
+#    PC3 06 Nov 2014 - by Fabio Imperato (xfabimp)
+#		 Call cluster_conf_commit function before restart of active node 
+#    PC2 16 May 2014 - by Fabrizio Paglia (xfabpag)
+#        Updated _RIFRM_VER
+#    PC1 7 May 2014 - by Fabrizio Paglia (xfabpag)
+#        Changed "grep -r" in "grep -w" in newbondnamecheck
+#        Changed "grep -i" in "grep -w" in ifconfigcheck
+#    PB3 28 Mar 2014   by Torgny Wilhelmsson (xtorwil)
+#        More updates for Public VLAN compatibility 
+#    PB2 27 Mar 2014   by Torgny Wilhelmsson (xtorwil)
+#        Update with Public VLAN compatibility 
+#
+#    PB1  27  of February - by Gianluigi Crispino (XGIACRI)
+#         Added VLAN Update
+#    PA41 2nd of December - by Marco Zambonelli (XMARZAM)
+#         Changed PassiveNodeReboot to control passive node status
+#         function  StartSupervisingPeriod not used any more
+#         aposconf updating moved into rif_common.PassiveNodeReboot fn.
+#    PA40 28st of November - by Marco Zambonelli (XMARZAM)
+#         update messages implementation according to 
+#         3/190 80-CNZ 226 23 Uen PA7
+#    PA39 21st of November - by Marco Zambonelli (XMARZAM)
+#         rolling back and messages implementation according to 
+#         3/190 80-CNZ 226 23 Uen PA6
+#    PA38 18th of November - by Marco Zambonelli (XMARZAM)
+#         rif_imm_status movedo to rif_common (shared with rifdef)
+#    PA37 14th of November - by Marco Zambonelli (XMARZAM)
+#         use of Reload_Network_Conf to reload network parameters in function Start_first_config_round
+#    PA36 14th of November - by Luca Ruffini (XLUCRUF)
+#          bug fixing
+#    PA35 12nd of November - by Luca Ruffini (XLUCRUF)
+#         rifdef rollback call to recover intermediate configurations
+#    PA34 12nd of November - by Marco Zambonelli (XMARZAM)
+#         rifrm rollback implementation
+#         set immstatus moved after RebootActive
+#    PA33 06th of November - by Marco Zambonelli (XMARZAM)
+#         cleanup, move some output messages on calling funtions
+#         RebootActive moved to rif_common (shared function)
+#    PA32 29th of October - by Luca Ruffini (XLUCRUF)
+#	  small changes in printout for accordance to the manual
+#    PA31 24th of October - by (XMARZAM)
+#	  removed local_global_cluster_config_consistency_check and
+#	  VerifyPassiveAfterReboot, plus general improvements
+#    PA30 23rd of October - by Luca Ruffini (XLUCRUF)
+# 	  apos_rif.conf handling for intermediate states, and is_rifrm_allowed function added
+#	  Merge with PA29
+#    PA29 21s1 of October - by (XMARZAM)
+#         moved common funtions and variables to rif_common
+#         function ChangeNetwork2eth1 moved to rif_common with name ChangeNetwork2intf (shared with rifdef)
+#    PA28 9th of October - by Torgny Wilhelmsson (XTORWIL)
+# 	  in func ChangeNetwork2eth1 changed 'grep public' to 'grep "public "'
+#	  to avoid problem with PS which names its network as public2
+#    PA27 4th of October - by Luca Ruffini (XLUCRUF)
+#         removed exit_success_string at the end of the script, and changed printout on active node reboot
+#    PA26 4th of October - by Torgny Wilhelmsson (XTORWIL)
+#         changed exit_PeerNodeNotPassive_String to exit_PeerNodeNotPassive_string
+#    PA25 3rd of October - by Gianluigi Crispino (XGIACRI)
+#         call to initvar moved on TOP of main
+#    PA24 3rd of October - by Torgny Wilhelmsson (XTORWIL)
+#         DEBUG and logging changes
+#         RIF_COMMON added
+#         Printouts reordered and changed to match latest MAN page
+#         Exit codes realigned with man page and rifdef cmd
+#         added extra checks for passive node after reboot.
+#    PA22 17th of September - by Torgny Wilhelmsson (XTORWIL)
+#         Removed unused functions and redundant comments
+#    PA21 16th of September - by Torgny Wilhelmsson (XTORWIL)
+#         Changed code to supervice reboot of passive node, thereafter verify changes in passive
+#         and reboot active node, functions added: StartSupervisingPeriod, SupervisingPeriod,
+#         EndSupervisingPeriod, VerifyPassiveAfterReboot and RebootActive
+#    PA9  12th of September - by Torgny Wilhelmsson (XTORWIL)
+#         Added check that eth1 is up and running in function Eth1InterfaceCheck
+#         exit code exit_Eth1Down_string (12)
+#    PA8  3nd of September - by Torgny Wilhelmsson (XTORWIL)
+#         Added exit code exit_clus_upd_fail
+#    PA7  2nd of September - by Torgny Wilhelmsson (XTORWIL)
+#         Added info lines before success exits
+#         Added \n before a few exit printout (e.g $exit_ifconfig_fail_string")
+#         Added a ssh rhost cd> /dev/null before any real ssh to try to avoid ssh connection error while node reboot
+#    PA6  Friday 30th of August - Fabrizio Paglia (XFABPAG)
+#         handling of the [-f] option
+#         redirect cluster config -v stderr and stdout to /dev/null
+#    PA5  Friday 30th of August - Torgny Wilhelmsson
+#         renamed frunction alias_interface_properly_configured to ifconfig_check_alias_configuration
+#         renamed variable inside this function
+#         changed Vlan with VLAN
+#    PA4  Thu 29th of Aug - Fabrizio Paglia (XFABPAG)
+#         Change printouts from 'PARTLY CONFIGURED' to 'PARTLY REMOVED'
+#         Exit code 6 modified to align with the simmetric exit code in RIFDEF
+#         Changed exit to script_exit in ifconfig_bond1_check
+#         redirect cluster config -v stderr to /dev/null
+#         changed $exit_Eth0Exist with $exit_Eth1Exist and $exit_NICeth0 with $exit_NICeth1 in Eth1InterfaceCheck
+#         changed [y(es)/n(o)] with [y=yes, n=no]?
+#         changed VLAN with Vlan
+#    PA3  Wed 28th of Aug - Torgny Wilhelmsson
+#         Change log time from utc to local time in func INFO
+#         added functions script_exit, trylock & lock,
+#         rif_imm_set, ChangeNetwork2eth1
+#         added exit code/string for exit_clus_bond, exit_Eth1Exist exit_NICeth1
+#         added first and second round routines
+#    PA2  Tue aug 27 2013 - PA2 - Fabrizio Paglia (XFABPAG)
+#         start reusing functions from RIFDEF
+#         lots of work to be done
+#    PA1 Tue aug 13 2013 - Fabrizio Paglia (XFABPAG)
+#        First draft.
+###
+
+
+RIF_COMMON=$(dirname $0)/rif_common
+source $RIF_COMMON
+
+_RIFRM_VER="pc3"
+
+exit_virtual_arch_string="Illegal command in this system configuration"
+exit_virtual_arch=44
+
+##########################################################
+# Function ClusterConfigCheck
+### Checking the cluster configuration before RE configuration ###############
+function ClusterConfigCheck(){
+    TRACE_ENTER $FUNCNAME
+
+    INFO "$print_ClusterConfigCheck_string_check"
+    INFO "Doing command cluster config -v"
+    cluster config -v &> /dev/null
+    if [ $? == 0 ] ; then
+        :
+    else
+        INFO "$LINENO: $?: CMD cluster config -v failed, exiting with $exit_check_fail"
+        echo -e "$exit_check_fail_string"
+        exit $exit_check_fail
+    fi
+
+    INFO "Compare /cluster/etc/cluster.conf with /boot/.cluster.conf"
+    CC_OWN_CONSISTENT=$(local_global_cluster_config_consistency_check "this")
+    if [ $CC_OWN_CONSISTENT -eq 0 ] ; then
+        log_error "$LINENO Inconsistent cluster configuration!"
+        echo -e "$exit_check_fail_string"
+        script_exit $exit_check_fail
+    fi
+
+    CC_PEER_CONSISTENT=$(local_global_cluster_config_consistency_check "peer")
+    if [ $CC_PEER_CONSISTENT -eq 0 ] ; then
+        log_error "$LINENO Inconsistent cluster configuration!"
+        echo -e "$exit_check_fail_string"
+        script_exit $exit_check_fail
+    fi
+
+    if [ $rif_status -eq 1 ] ; then
+
+        Eth1InterfaceCheck
+
+        newbondnamecheck
+    fi
+
+    INFO "$print_ClusterConfigCheck_string_ok"
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+##########################################################
+# Function newbondnamecheck
+### Check if the old bond name, bond1, is found in cluster configuration #####
+function newbondnamecheck() {
+    TRACE_ENTER $FUNCNAME
+
+    if [ ! "$($CMD_GREP -w $BOND_NAME $CLUSTER_CONF | tr -d ' ')" ] ; then
+        INFO "$LINENO: $BOND_NAME not in use in $CLUSTER_CONF"
+        echo -e "$exit_check_fail_string"
+        exit $exit_check_fail
+    fi
+
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+##########################################################
+# Function ifconfigcheck
+### Check if the old bond name, bond1, is found in cluster configuration #####
+function ifconfigcheck() {
+    TRACE_ENTER $FUNCNAME
+
+    if [ ! "$($CMD_IFCONFIG | grep -w $BOND_NAME| tr -d ' ')" ] ; then
+        INFO "$LINENO: $BOND_NAME not in use in ifconfig on local node"
+        echo -e "$exit_check_fail_string"
+        exit $exit_check_fail
+    fi
+
+    ssh $RHOST cd /tmp &> /dev/null
+    if [ $? -eq 0 ] ; then
+        if [ ! "$(ssh $RHOST $CMD_IFCONFIG | grep -w $BOND_NAME | tr -d ' ')" ] ; then
+            INFO "$LINENO: $BOND_NAME not in use in ifconfig on local node"
+            echo -e "$exit_check_fail_string"
+            exit $exit_check_fail
+        fi
+    else
+        INFO "$LINENO: SSH to other node \"$RHOST\" failed"
+        echo -e "$exit_failure_string"
+        exit $exit_failure
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+
+
+##
+# Name:
+#	is_rifrm_allowed
+# Description:
+#       Compares timestamp of last change in the given node with the 
+#    actual one, in order to know if a pre-existing incomplete configuration
+#    is still ongoing or can be deleted
+# Output:
+#	0 if configured -> rifrm allowed
+#	1 if not configured -> rifrm not allowed
+#	2 if partly configured and timestamp older than MAX_LATENCY_TIME -> call rifdef_rollback to recover
+#	3 if partly configured and configuration ongoing -> rifrm not allowed
+#	4 if unexpected state -> rifrm not allowed
+function is_rifrm_allowed(){
+    TRACE_ENTER $FUNCNAME
+    returnValue=1
+    get_apos_rif_state $LNODE
+    localNodeStatus=$?
+    get_apos_rif_state $RNODE
+    remoteNodeStatus=$?
+    get_apos_rif_timestamp $LNODE
+    localNodeTimestamp=$ReturnTimestampValue
+    get_apos_rif_timestamp $RNODE
+    remoteNodeTimestamp=$ReturnTimestampValue
+    timestamp=$(date +%s)
+    if [ ! -z $rif_status ] ; then
+    	if [ $rif_status -eq 1 ] ; then   # CONFIGURED/PARTLY REMOVED
+	        # If you are here it means that rif_status == 1, and the return value is evaluated
+	        #     according to the following table ("xx" is any intermediate state):
+	        # __________________________________
+	        # | Node A | Node B | Return value |
+	        # |--------+--------+--------------|
+	        # |   1    |   1    |      0       |
+	        # |--------+--------+--------------|
+	        # |   0    |  xx    | 2 if TS>MAX* |
+	        # |  xx    |   0    | 3 if TS<MAX* |
+	        # |  xx    |  xx    |              |
+	        # |--------+--------+--------------|
+	        # |   0    |   1    |      4       |
+	        # |   1    |   0    |      4       |
+	        # |   0    |   0    |      4       |
+	        # |   1    |  xx    |      4       |
+	        # |  xx    |   1    |      4       |
+	        # |________________________________|
+	        #
+	        # *) TS=timestamp / MAX=MAX_LATENCY_TIME
+
+	        if [ $localNodeStatus -eq 1 ] && [ $remoteNodeStatus -eq 1 ] ; then
+	            returnValue=0
+	        elif ( [ $localNodeStatus -ne 1 ] && [ $remoteNodeStatus -eq 1 ] ) ||\
+			       ( [ $localNodeStatus -eq 1 ] && [ $remoteNodeStatus -ne 1 ] ) ||\
+			       ( [ $localNodeStatus -eq 0 ] && [ $remoteNodeStatus -eq 0 ] ) ; then
+	            returnValue=4
+	        elif [ $localNodeStatus -eq 0  ] && [ $(($timestamp-$remoteNodeTimestamp)) -gt $MAX_LATENCY_TIME ] ; then
+	            returnValue=2
+	        elif [ $remoteNodeStatus -eq 0  ] && [ $(($timestamp-$localNodeTimestamp)) -gt $MAX_LATENCY_TIME ] ; then
+	            returnValue=2
+	        elif [ $(($timestamp-$remoteNodeTimestamp)) -gt $MAX_LATENCY_TIME ] || [ $(($timestamp-$localNodeTimestamp)) -gt $MAX_LATENCY_TIME ] ; then
+	            returnValue=2
+	        else
+	            returnValue=3
+	        fi
+	    else #[ $rif_status -eq 0 ] # NOT CONFIGURED/PARTLY CONFIGURED
+	    	# If you are here it means that rif_status == 0, and the return value is evaluated
+	        #     according to the following table ("xx" is any intermediate state):
+	        # __________________________________
+	        # | Node A | Node B | Return value |
+	        # |--------+--------+--------------|
+	        # |   0    |   0    |      1       |
+	        # |--------+--------+--------------|
+	        # |   1    |  xx    | 2 if TS>MAX* |
+	        # |  xx    |   1    | 3 if TS<MAX* |
+	        # |  xx    |  xx    |              |
+	        # |--------+--------+--------------|
+	        # |   0    |   1    |      4       |
+	        # |   1    |   0    |      4       |
+	        # |   0    |   0    |      4       |
+	        # |   0    |  xx    |      4       |
+	        # |  xx    |   0    |      4       |
+	        # |________________________________|
+	        #
+	        # *) TS=timestamp / MAX=MAX_LATENCY_TIME
+
+	        if [ $localNodeStatus -eq 0 ] && [ $remoteNodeStatus -eq 0 ] ; then
+	            returnValue=1
+	        elif ( [ $localNodeStatus -ne 0 ] && [ $remoteNodeStatus -eq 0 ] ) ||\
+			       ( [ $localNodeStatus -eq 0 ] && [ $remoteNodeStatus -ne 0 ] ) ||\
+			       ( [ $localNodeStatus -eq 1 ] && [ $remoteNodeStatus -eq 1 ] ) ; then
+	            returnValue=4
+	        elif [ $localNodeStatus -eq 1  ] && [ $(($timestamp-$remoteNodeTimestamp)) -gt $MAX_LATENCY_TIME ] ; then
+	            returnValue=2
+	        elif [ $remoteNodeStatus -eq 1  ] && [ $(($timestamp-$localNodeTimestamp)) -gt $MAX_LATENCY_TIME ] ; then
+	            returnValue=2
+	        elif [ $(($timestamp-$remoteNodeTimestamp)) -gt $MAX_LATENCY_TIME ] || [ $(($timestamp-$localNodeTimestamp)) -gt $MAX_LATENCY_TIME ] ; then
+	            returnValue=2
+	        else
+	            returnValue=3
+	        fi
+        fi
+    fi
+    INFO  returnValueIs $returnValue
+
+    TRACE_LEAVE $FUNCNAME
+    return $returnValue
+} 
+
+
+##########################################################
+# Function Start_first_config_round
+### Start first round of configuration changes ###############################
+function Start_first_config_round () {
+    TRACE_ENTER $FUNCNAME
+
+    ## All checks are okay, IMM status 1, RIFRM execution
+
+    # add message to log file
+    INFO "$print_rifrmstart, part 1"
+    INFO "RIF COMMON VER  $_RIF_COMMON_VER"
+    INFO "$_RIFRM_VER"
+ 
+    # add message to system log
+    log "$print_rifrmstart, part 1"
+
+    ## Create lock file so only one command instance can be executing
+    lock
+
+    echo -e "\n$print_UpdatingPassive"
+    ## All ok, set teamingStatus to 20
+    #rif_imm_set 20
+
+    ## All ok, set status in apos_rif.conf to 20
+    aposrifconf_update_both 20
+
+    #  Change the VLAN to point to ETH1 NIC
+    rifrm_status=$rifrm_ModifyVLAN_status
+    ModifyVLAN $BOND_NAME $ETH1_NAME
+    result=$?
+     if  [ $result -ne 0 ]; then
+        rifrm_rollback
+        echo -e "\n$rif_defined_string"
+        script_exit $exit_failure
+    fi
+    INFO "ModifyVLAN $BOND_NAME $ETH1_NAME $Done"
+    
+	
+    ## Check if public interface has a VLAN tag set.
+    PublicEth_VLAN_NO=''
+	NETWORK='public'
+	PublicEth_VLAN_NO=$(${CMD_GREP} ^ip $CLUSTER_CONF | ${CMD_GREP} -w $NETWORK | ${CMD_HEAD} -1 | ${CMD_AWK} '{ print $3}' | ${CMD_AWK} -F'.' '{ print $2 }')
+
+	if [ -z $PublicEth_VLAN_NO ] ; then 
+			# If public VLAN is configured, then ModifyVLAN will change
+			# Interface names, IP and MIP from bond1 to eth1
+			# then we skip these steps in such case
+
+			# start of changing non-VLAN configuration
+
+			#  Change the Public network to point to ETH1 IP
+			rifrm_status=$rifrm_ChangeNetwork2intfRNODE_status
+			ChangeNetwork2intf $RNODE $ETH1_NAME
+			result=$?
+			 if  [ $result -ne 0 ]; then
+				rifrm_rollback
+				echo -e "\n$rif_defined_string"
+				script_exit $exit_failure        
+			fi
+			INFO "ChangeNetwork2intf $RNODE $ETH1_NAME $Done"
+
+			rifrm_status=$rifrm_ChangeNetwork2intfLNODE_status
+			ChangeNetwork2intf $LNODE $ETH1_NAME
+			result=$?
+			if  [ $result -ne 0 ]; then
+				rifrm_rollback
+				echo -e "\n$rif_defined_string"
+				script_exit $exit_failure        
+			fi
+			INFO "ChangeNetwork2intf $LNODE $ETH1_NAME $Done"
+
+			## Find the Rule ID for the MIP and Change movable IP for public network to point to eth1:1
+			rifrm_status=$rifrm_ChangeMIP2Alias_status
+			ChangeMIP2Alias $BOND_ALIAS_NAME $ETH1_ALIAS_NAME
+			result=$?
+			if  [ $result -ne 0 ]; then
+				rifrm_rollback
+				echo -e "\n$rif_defined_string"
+				script_exit $exit_failure        
+			fi
+			INFO "ChangeMIP2Alias $Done"
+
+	fi
+			
+			
+	# Informing user we are now creating the bond interfaces
+	rifrm_status=$rifrm_DeleteBond1Alias_status
+	DeleteBond1Alias
+	result=$?
+	if  [ $result -ne 0 ]; then
+		rifrm_rollback
+		echo -e "\n$rif_defined_string"
+		script_exit $exit_failure        
+	fi
+	INFO "DeleteBond1Alias $Done"
+			
+	## ModifyIPTABLES
+	rifrm_status=$rifrm_ModifyIPTABLES_status
+	ModifyIPTABLES $BOND_NAME $ETH1_NAME
+	result=$?
+	if  [ $result -ne 0 ]; then
+		rifrm_rollback
+		echo -e "\n$rif_defined_string"
+		script_exit $exit_failure        
+	fi
+	INFO "ModifyIPTABLES $Done"			
+		
+		
+    rifrm_status=$rifrm_DeleteBond1_status
+    DeleteBond1 # reload cluster
+    result=$?
+    if  [ $result -ne 0 ]; then
+        rifrm_rollback
+        echo -e "\n$rif_defined_string"
+        script_exit $exit_failure        
+    fi
+    INFO "DeleteBond1 $Done"
+
+    # reload paramter configuration
+    rifrm_status=$rifrm_Reload_Network_Conf_status
+    Reload_Network_Conf
+    result=$?
+    if  [ $result -ne 0 ]; then
+        rifrm_rollback
+        echo -e "\n$rif_defined_string"
+        script_exit $exit_failure        
+    fi
+    INFO "Reload_Network_Conf $Done"
+
+    # Reboot passive node
+    rifrm_status=$rifrm_PassiveNodeReboot_status
+    echo -e "\n$print_RebootingPassive"
+    PassiveNodeReboot $PASSIVE_REBOOT_TO_SECS
+    result=$?
+    if  [ $result -ne 0 ]; then
+        rifrm_rollback
+        echo -e "\n$rif_defined_string"
+        script_exit $exit_failure        
+    fi
+    INFO "PassiveNodeReboot $Done"
+    
+    aposrifconf_update_single $RNODE 23
+
+    # Verify new configuration of passive node after reboot
+    rifrm_status=$rifrm_VerifyPassiveAfterReboot_status
+    VerifyPassiveAfterReboot remove
+    result=$?
+    if  [ $result -ne 0 ]; then
+        rifrm_rollback
+        echo -e "\n$rif_defined_string"
+        script_exit $exit_failure        
+    fi
+    INFO "VerifyPassiveAfterReboot $Done"
+
+    ## All ok, set passive status in apos_rif.conf to 0
+    aposrifconf_update_single $RNODE 0
+
+    # Reboot Active node with one minute delay with shutdown -r 1 
+    echo -e "\n$print_UpdatingActive"
+    rifrm_status=$rifrm_RebootActive_status
+	cluster_conf_commit
+    RebootActive
+    result=$?
+    if  [ $result -ne 0 ]; then
+        rifrm_rollback
+        echo -e "\n$rif_defined_string"
+        script_exit $exit_failure        
+    fi
+    INFO "RebootActive $Done"
+
+    ## remove lock file
+    unlock
+
+    ## All ok on first passive node, set teamingStatus to
+    newteaminStatusValue=0
+    rif_imm_set $newteaminStatusValue
+    aposrifconf_update_both $newteaminStatusValue
+
+	
+    # add message to rifrm log:
+    INFO "Removal of RE finished"
+    # add message to system log
+    log "Removal of RE finished."
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+##########################################################
+# Function Eth1InterfaceCheck
+# Check eth1 is working, doesn't have an IP address & config files exist
+function Eth1InterfaceCheck () {
+    TRACE_ENTER $FUNCNAME
+
+    if [ ! -d /etc/cluster/nodes/control/1/interfaces/$ETH1_NAME ] || [ ! -d /etc/cluster/nodes/control/2/interfaces/$ETH1_NAME ] ; then
+        INFO "$LINENO: Network adapter configuration conflict"
+        echo -e "$exit_check_fail_string"
+        exit $exit_check_fail
+    fi
+
+
+    if [ $($CMD_IFCONFIG eth1 | grep -i inet | tr -d ' \n') ] ; then
+        INFO "$LINENO: Eth1 already defined with IP in own node, see cmd ifconfig"
+        echo -e "$exit_check_fail_string"
+        exit $exit_check_fail
+    fi
+
+    if [ $($CMD_IFCONFIG -s eth1 |grep eth1 | awk '{print $12}') != "BMsRU" ]; then
+        INFO "$LINENO: Eth1 is in status down in own node, see cmd ifconfig -s"
+        echo -e "$exit_check_fail_string"
+        exit $exit_check_fail
+    fi
+
+    ssh $RHOST cd /tmp &> /dev/null
+    if [ $? -eq 0 ] ; then
+        if [ $(ssh $RHOST $CMD_IFCONFIG eth1 | grep -i inet | tr -d ' \n')  ] ; then
+            INFO "$LINENO: Eth1 already defined with IP in peer node, see cmd ifconfig"
+            echo -e "$exit_check_fail_string"
+            exit $exit_check_fail
+        fi
+        if [ $(ssh $RHOST $CMD_IFCONFIG -s eth1 |grep eth1 | awk '{print $12}') != "BMsRU" ]; then
+            INFO "$LINENO: Eth1 is in status down in peer node, see cmd ifconfig -s"
+            echo -e "$exit_check_fail_string"
+            exit $exit_check_fail
+        fi
+    else
+        INFO "$LINENO: SSH to other node \"$RHOST\" failed"
+        echo -e "$exit_failure_string"
+        exit $exit_failure
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+##########################################################
+# Function print_incorrect_usage
+function print_incorrect_usage() {
+    TRACE_ENTER $FUNCNAME
+
+    echo -n "Incorrect usage"
+    help
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+
+##############################################################################
+################################ Main Program ################################
+##############################################################################
+
+# Set the interpreter to exit if a non-initialized variable is used.
+set -u
+
+shelf_arch_val=$(get_shelf_architecture_attr)
+
+## New function for virtualization
+if [ $shelf_arch_val -eq 3 ]; then
+	echo -e "$exit_virtual_arch_string"
+	echo -e
+	exit $exit_virtual_arch
+fi
+
+## Inhibit command execution in SMX architecture
+if [ $shelf_arch_val -eq 4 ]; then
+	echo -e "$exit_CableLessDefined_string"
+	echo -e
+	exit $exit_CableLessDefined
+fi
+
+
+# trap keyboard interrupt (control-c)
+trap 'rifrm_abort "CTRL-C"' SIGINT
+
+#####   Initialization of some vars
+initvar
+
+#####   First a bunch of checks:
+
+BunchOfChecks
+# returns rif_status, if it is 1, and if everything else is OK
+
+#### Now to configuration
+is_rifrm_allowed
+case $? in
+	0 ) 
+        # Checking cluster configuration
+        ClusterConfigCheck
+	Start_first_config_round 
+	;;
+	1 )
+	echo -e "$exit_NotDefined_string"
+	# RE not configured ( should have exited scripts earlier )
+	exit $exit_NotDefined
+	;;
+	2 )
+	# RE partly defined and rifrm required ( should have exited scripts earlier )
+	# Call the rifdef_rollback function with the latest possible state 
+	# in order to try to recover an intermediate configuration
+    	rifdef_status=$rifdef_latest_status
+    	rifdef_rollback
+    	#rif_imm_set 0
+	;;
+	3 )
+	echo -e "$exit_rifupdate_fail_string"
+	# RE partly defined and definition ongoing (should have exited scripts earlier )
+	exit $exit_rifupdate_fail
+	;;
+	4 )
+	echo -e "$exit_check_fail_string"
+	# RE unexpected status (should have exited scripts earlier )
+	exit $exit_check_fail
+	;;
+esac
+
+
+##############################################################################
+INFO "$exit_success_string"
+exit $exit_success
+##############################################################################
+#### END OF SCRIPT ### END OF SCRIPT ### END OF SCRIPT ### END OF SCRIPT #####
+##############################################################################
+

@@ -1,0 +1,129 @@
+#!/bin/bash -u
+##
+# -----------------------------------------------------------------------------
+#           Copyright (C) 2012 Ericsson AB. All rights reserved.
+# -----------------------------------------------------------------------------
+##
+# Name:
+#   apos_exports-config
+# Description:
+#   The script will configure /etc/exports file to respect the Backplane
+#   Hardening requirement on NFS protocol according to the APG security needs.
+#   NFS access denial. Only two IPs, for each AP, are enabled to NFS service:
+#   AP1: 169.254.208.1 and 169.254.208.2; AP2: 169.254.208.3 and 169.254.208.4
+# Note:
+#   This script is intended to be deployed to the
+#   /usr/lib/lde/config-management directory.
+#   
+#   It relies on the /opt/ap/apos/conf/apos_common.sh library.
+##
+# Changelog:
+# - Fri Sep 18 2015 - Francesco Rainone (EFRARAI)
+#   Slight rework.
+# - Wed Sep 14 2015 - Francesco Amantea (xfraama)
+#   first version
+##
+# LDE_deployment:
+#       type:      config
+#       priority:  590
+##
+##
+# libraries -------------------------------------------------------------- BEGIN
+if [ -r /opt/ap/apos/conf/apos_common.sh ]; then
+        . /opt/ap/apos/conf/apos_common.sh
+else
+        echo '/opt/ap/apos/conf/apos_common.sh not found or not readable!' >&2
+        exit 1
+fi
+# libraries ---------------------------------------------------------------- END
+##
+
+##
+# functions -------------------------------------------------------------- BEGIN
+function usage(){
+        cat << HEREDOC
+Usage: $0 <action> <phase> [<etc_root>]
+where:
+        <action> can be "start" or "stop" or "config"
+        <phase> can be "init" or "reload"
+        <etc_root> (optional) specifies the base folder where the configuration
+                   will be generated (/etc by default)
+HEREDOC
+}
+#
+function do_start(){
+        # TO-DO: implement the start phase if needed.
+        return
+}
+
+#
+function do_stop(){
+        # TO-DO: implement the stop phase if needed.
+        return
+}
+
+function do_config(){
+  local file=$ETC_ROOT/exports
+  (
+    echo "#"
+    echo "# /etc/exports: nfs configuration"
+    echo "#"
+    echo ""
+    for IP in $(cat /etc/cluster/nodes/all/[1-4]/ip/169.254.208.[1-4]/address); do
+      echo "/.cluster ${IP}(rw,sync,no_subtree_check,no_root_squash)"
+    done
+    echo ""
+    echo "# End of file"
+  ) > $file
+}
+# functions ---------------------------------------------------------------- END
+##
+
+##
+# variables -------------------------------------------------------------- BEGIN
+
+# variables ---------------------------------------------------------------- END
+##
+
+##
+# main ------------------------------------------------------------------- BEGIN
+##
+# LDE config scripts called with the following:
+# param 1: action - start, stop or config
+# param 2: generate phase - init or reload
+# param 3: root path where config should be generated
+
+apos_intro $0
+
+if [ $# -lt 2 ]; then
+        usage
+        apos_abort 'missing parameter'
+fi
+
+if [ $(</etc/cluster/nodes/this/type) != 'control' ]; then
+        apos_abort 'this script must be run ONLY in control nodes'
+fi
+
+ACTION="$1"
+PHASE="$2"
+ETC_ROOT=${3:-"/etc"}
+
+case "$ACTION" in
+        start)
+                do_start
+                ;;
+        stop)
+                do_stop
+                ;;
+        config)
+                do_config
+                ;;
+        *)
+                usage
+                ;;
+esac
+
+apos_outro
+exit $TRUE
+# main --------------------------------------------------------------------- END
+##

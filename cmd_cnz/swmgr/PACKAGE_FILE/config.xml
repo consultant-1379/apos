@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configFile provider="ERICSSON" revision="1.0">
+ <packageInfo> 
+  <name>PATCH_Sw</name> 
+  <version>LSV10</version> 
+  <description>This is LSV10 package</description> 
+ </packageInfo>
+  <import ExecutableFileName="action.py import"/>
+  <activate>
+    <task name="activate_task1" ExecutableFileName="action.py activate"/>
+  </activate>
+  <erase ExecutableFileName="action.py erase"/>
+</configFile>

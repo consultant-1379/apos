@@ -1,0 +1,239 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       clu_ip
+#
+# Description:
+#  This is an internal command invoked from clusterconf tool.
+#  This command is used to validate the input parameters passed to the cluster commands
+##
+# Changelog:
+# - Wed Feb 5 2020 - Yeswanth Vankayala (xyesvan)
+#    IPv6 Impacts for clu command
+# - Tue Dec 10 2013 - Roni Newatia(xronnew)
+#       Updated add_mod funtion  
+# Updated by XPRANSI
+# Date: 27-10-2011
+# Author: Satya Deepthi
+
+# Load the common functions.
+. /opt/ap/apos/bin/clusterconf/clu_sc
+
+#validation for ip address
+validate_ip_target() {
+  ipaddr=${!1}
+  target=${!2}
+  #When target is not a single node, a single IP address cannot be given
+  num=$( echo $target | $CMD_GREP -Eq "^[0-9]+$")
+  chk_num=$?
+  if [ "$chk_num" != 0 ]; then
+    [ "$ipaddr" != "dynamic" ] && return 1
+  else
+     validate_ip $ipaddr || return 1
+  fi
+  echo $ipaddr
+}
+
+
+# validation for interface
+validate_interface() {
+  interface=${!1}
+  target=${!2}
+  if [ -z "$interface" ]; then
+    return 1
+  else
+    flg=0
+    # Interfaces defined for that particular node only can be given
+    #for i in $(cat $clu_Conf_path$clu_Conf_file | grep ^"interface $target" | cut -d ' ' -f 3)
+    for i in $(cat $clu_Conf_path$clu_Conf_file | grep ^"interface " | cut -d ' ' -f 3)
+    do
+      [ "$i" == "$interface" ] && flg=1
+    done
+    [ $flg == 0 ] && return 1
+  fi
+  echo $interface
+}
+
+# Validation for network
+validate_network() {
+  network=${!1}
+  if [ -z "$network" ]; then
+    return 1
+  else
+    flg=0
+    for i in $(cat $clu_Conf_path$clu_Conf_file | grep ^network | cut -d ' ' -f 2)
+    do
+      [ $i == $network ] && flg=1
+    done
+    [ $flg == 0 ] && return 1 
+  fi
+  echo $network
+}
+
+
+# To delete an existing IP rule
+delete() {
+  word=${!1}
+  rule=${!2}
+  rule_num=$(validate_integer rule)
+  if [ $? -ne 0 ]; then
+    help
+    echo "Enter rule number as argument. Empty values not accepted "
+    exit 1
+  fi
+
+  # Calling cluster_parse file to delete rule
+  $clu_file $word --delete $rule_num
+}
+
+# To add/modify an existing IP rule
+add_mod() {
+  word=${!1}
+  arg=${!2}
+  target=${!3}
+  interface=${!4}
+  network=${!5}
+  ip=${!6}
+  st=${!7}
+
+  w1=$(echo $arg | cut -d : -f 2)
+  if [ ! "$w1" == "$word" ]; then
+    echo "Wrong format"
+    help
+    exit 1
+  fi
+        
+  if [ $st == "modify" ]; then
+    rule=$(echo $arg | cut -d: -f 1)
+    rule_num=$(validate_integer rule)
+    if [ $? -ne 0 ]; then
+      help
+      echo "Enter correct format of arguments. "
+      exit 1
+    fi
+  fi
+
+  validate_node $target
+  if [ $? -ne 0 ]; then
+    help
+    echo "Target value should be either node number or node type (control/payload) or all. Empty values not accepted "
+    exit 1
+  fi
+
+  interface_ip=$(validate_interface interface target)
+  if [ $? -ne 0 ]; then
+    help
+    echo "Interface name should match with existing interfaces for the target. Empty values not accepted."
+    exit 1
+  fi
+  
+  nw_ip=$(validate_network network)
+  if [ $? -ne 0 ]; then
+    help
+    echo "Network name should match with existing network names. Empty values not accepted."
+    exit 1
+  fi
+
+  ipaddr_ip=$(validate_ip_target ip target)
+  if [ $? -ne 0 ]; then
+    help
+    echo "IP address should be of IPv4 or IPv6 address format. Empty values not accepted"
+    num=$( echo $target | $CMD_GREP -Eq "^[0-9]+$")
+    chk_num=$?
+    if [ $chk_num != 0 ]; then
+      echo "There cannot be a single IP address for $target nodes. It should be assigned dynamically."
+    fi
+    exit 1
+  fi
+
+  # Calling cluster_parse file to add/modify IP rule
+  rule="$word $target $interface_ip $nw_ip $ipaddr_ip"
+  chk_rule="$word $target $interface_ip $nw_ip"
+  if [ $st == "modify" ]; then
+    $clu_file $word --modify $rule_num $rule $chk_rule
+  else
+    $clu_file $word --add $rule $chk_rule
+  fi
+}
+
+# To display existing rules
+display() {
+  $clu_file $word --display
+}
+
+# To display help
+help(){
+echo "
+Usage: clu_ip <option> <rule>
+
+Options:
+-a|--add 	<New-rule>			To add a new $word rule 
+-d|--delete 	<Existing-rule-number>		To delete an existing $word rule
+-m|--modify 	<rule number>:<new-rule>	To modify an existing $word rule
+-D|--display					To display all the existing rules
+-h|--help					To display help
+
+Rule: ip <target> <interface> <network name> <IP address>
+<target node>           <Node-number|control|all>
+<interface>		Interface the IP address should be assigned to 
+<network name>		Network the IP address belongs to
+<IP address> 		Eg. 172.16.67.45, 2010:ae24:123e::1 
+"
+}
+
+
+#Main
+pwd=`pwd`
+fname="clu_parse"
+clu_file="/opt/ap/apos/bin/clusterconf/$fname"
+word="ip"
+
+if [ -f /cluster/etc/cluster.conf ]; then
+  clu_Conf_path="/cluster/etc/"
+  clu_Conf_file="cluster.conf"
+else
+  echo -e "\n/cluster/etc/cluster.conf file does not exists"
+  exit 1
+fi
+
+if [ -f "$clu_file" ]; then
+  if [ -x "$clu_file" ]; then
+    ch=$1
+    arg=$2
+    arg3=$3
+    arg4=$4
+    arg5=$5
+    arg6=$6
+    case $ch in
+      --add|-a)
+              st="add"
+              add_mod word arg arg3 arg4 arg5 arg6 st
+              ;;
+      --delete|-d)  
+                 delete word arg
+                 ;;
+      --modify|-m)
+                  st="modify"
+                  add_mod word arg arg3 arg4 arg5 arg6 st
+                  ;;
+      --display|-D)
+                  display
+                  ;;
+      --help|-h)
+                help
+                ;;
+      *)echo -e "\nWrong input format, please follow the below format...\n"
+        help
+        ;;
+    esac 
+  else
+    echo -e "\n$clu_file is not executable"
+  fi
+else
+  echo -e "\n$clu_file file does not exists"
+fi
+

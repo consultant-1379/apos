@@ -1,0 +1,641 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       clu_sc
+#
+# Description:
+#       This is an internal command invoked from clusterconf tool.
+#       This command is used to validate the input parameters passed to the cluster commands 
+##
+# Changelog:
+# - Wed Jan 5 2020 - Yeswanth Vankayala (xyesvan)
+#    IPv6 Impacts 
+# - Thu Mar 10 2016 - Pratap Reddy (xpraupp)
+#     updated validate_ipaddr function 
+# - Tue Dec 10 2013 - Roni Newatia(xronnew)
+#   Following new functions are added to validate public network and subnetmask
+#     1. conv_cidrfrmt_to_subnetmask
+#     2. allowed_max_ip
+#     3. validate_ip_nwrange
+# - Fri Sep 14 2012 - Satya Deepthi (XSATDEE)
+#     First version.
+#
+
+# set -x
+
+# script-wide variables
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+CLUSTER_CONF=/cluster/etc/cluster.conf
+nw_internal="internal"
+nw_external="public"
+nw_external_v6="public_v6"
+ip_not_in_nwrange=$FALSE
+ip_min=''
+ip_max=''
+# command-list
+CMD_LOGGER=/bin/logger
+CMD_CLUSTER=/usr/bin/cluster
+CMD_RM=/bin/rm
+CMD_MV=/bin/mv
+CMD_CAT=/bin/cat
+CMD_GREP=/usr/bin/grep
+CMD_AWK=/usr/bin/awk
+CMD_HEAD=/usr/bin/head
+
+# exit flags
+exit_success=0
+exit_failure=1
+
+#----------------------------------------------------------------------------------------
+# function abort the execution if case of error
+function abort(){
+  local PRIO='-p user.err'
+  local MESSAGE="${*:-error}"
+  ${CMD_LOGGER} $PRIO $LOG_TAG "$MESSAGE"
+  exit $exit_failure
+}
+
+#----------------------------------------------------------------------------------------
+# Generic Validation Functions
+#----------------------------------------------------------------------------------------
+# function to validate whether node number is valid
+function validate_node(){
+  local rCode=$exit_success
+  local flag=0
+  target_node=$1
+  if [[ "$target_node" == "control" || "$target_node" == "all" ]]; then
+    flag=1
+  else
+    for v_node in $($CMD_CAT $CLUSTER_CONF | $CMD_GREP ^node | $CMD_AWK '{print $2}')
+    do
+      if [ $v_node == $target_node ]; then
+        flag=1
+        break
+      fi
+    done
+  fi
+  if [ $flag == 0 ]; then
+    rCode=$exit_failure
+    echo -e "Invalid node number. Node $target_node not defined on the cluster."
+  fi
+  return $rCode
+}
+
+#----------------------------------------------------------------------------------------
+# function to validate the rule no to be removed
+function validate_integer() {
+  int=${!1}
+  [ -z "$int" ] && return $exit_failure
+  num=$( echo $int | $CMD_GREP -Eq "^[0-9]+$")
+  chk_num=$?
+  [ $chk_num -eq 1 ] && return $exit_failure
+  echo $int
+}
+
+#----------------------------------------------------------------------------------------
+# function to validate for name
+function validate_name() {
+  name=${!1}
+  [ -z $name ] && return $exit_failure
+  echo $name
+}
+
+#---------------------------------------------------------------------------------------
+function conv_cidrfrmt_to_subnetmask(){
+  local i=""
+  local subnetmask=""
+  local full_octets=$(($1/8))
+  local partial_octet=$(($1%8))
+
+  for ((i=0;i<4;i+=1));
+  do
+    if [ $i -lt $full_octets ]; then
+      subnetmask+=255
+    elif [ $i -eq $full_octets ]; then
+      subnetmask+=$((256 - 2**(8-$partial_octet)))
+    else
+      subnetmask+=0
+    fi
+    [ $i -lt 3 ] && subnetmask+=.
+  done
+
+  echo $subnetmask
+}
+
+#---------------------------------------------------------------------------------------
+function allowed_max_ip(){
+  ip1=$1
+  ip2=$2
+  OIFS=$IFS
+  IFS=.
+  set -- $ip1
+  set -- $ip2
+  ip1=($ip1)
+  ip2=($ip2)
+  IFS=$OIFS
+
+  ipa=$((${ip1[0]}+(255-(${ip1[0]} | ${ip2[0]}))))
+  ipb=$((${ip1[1]}+(255-(${ip1[1]} | ${ip2[1]}))))
+  ipc=$((${ip1[2]}+(255-(${ip1[2]} | ${ip2[2]}))))
+  ipd=$((${ip1[3]}+(255-(${ip1[3]} | ${ip2[3]}))))
+  #Last allowed IP address
+  ip_max=`echo "$ipa.$ipb.$ipc.$(($ipd-1))"`
+
+  return $exit_sucs
+}
+
+#----------------------------------------------------------------------------------------
+function validate_ip_nwrange(){
+  ip1=$ip_min
+  ip2=$ip_max
+  ip3=$1
+  OIFS=$IFS
+  IFS=.
+  set -- $ip1
+  set -- $ip2
+  set -- $ip3
+  ip1=($ip1)
+  ip2=($ip2)
+  ip3=($ip3)
+  IFS=$OIFS
+
+  # check the first, second , third and fourth octects lies within the range of the network.
+  [[ ${ip1[0]} -le ${ip3[0]} && ${ip3[0]} -le ${ip2[0]} ]] && [[ ${ip1[1]} -le ${ip3[1]} && ${ip3[1]} -le ${ip2[1]} ]] &&
+  [[ ${ip1[2]} -le ${ip3[2]} && ${ip3[2]} -le ${ip2[2]} ]] && [[ ${ip1[3]} -le ${ip3[3]} && ${ip3[3]} -le ${ip2[3]} ]] &&
+  ip_not_in_nwrange=$FALSE || ip_not_in_nwrange=$TRUE
+
+  return $exit_sucs
+}
+
+#-------------------------------------------------------------------------------
+function dec_to_bin() {
+  local rCode=$FALSE
+  local dec="$1"
+  local pad=8
+  if [[ $dec =~ ^[0-9]+$ ]] ; then
+    local bin=$(echo "obase=2;$dec" | bc)
+    printf "%0*d\n" $pad $bin
+    rCode=$TRUE
+  fi
+
+  return $rCode
+}
+
+#-------------------------------------------------------------------------------
+function ip_to_bin() {
+  local rCode=$TRUE
+  local ip="$1"
+  local bin=""
+  local ip_components=(${ip//./ })
+  local ip_component
+  local ip_component_bin
+  for ip_component in "${ip_components[@]}" ; do
+    ip_component_bin=$(dec_to_bin "$ip_component")
+    if [ "$ip_component_bin" == "" ] ; then
+      rCode=$exit_success
+      break;
+    fi
+    bin="$bin$ip_component_bin"
+  done
+  [[ rCode -eq $TRUE ]] && echo "$bin"
+  return $rCode
+}
+
+#------------------------------------------------------------------------------
+# usage: expand_ipv6_address
+#        This function is used to expand the IPv6 address in long format.
+#        It takes the input as IPv6 address in short form and returns the
+#        same address in long format.
+#------------------------------------------------------------------------------
+function expand_ipv6_address () {
+  local ip_address=$1
+  if [ "$ip_address" = "::" ]; then
+    ip_address="0::0"
+  fi
+  local last=""
+  local input="$(echo "$ip_address" | tr 'a-f' 'A-F')"
+
+  # While there are fields left to fill with zeroes
+  while [ "$last" != "$input" ]; do
+    last="$input"
+
+    # Zero fill fields with three octets
+    input="$(echo "$input"|sed 's|:\([0-9A-F]\{3\}\):|:0\1:|g')"
+    input="$(echo "$input"|sed 's|:\([0-9A-F]\{3\}\)$|:0\1|g')"
+    input="$(echo "$input"|sed 's|^\([0-9A-F]\{3\}\):|0\1:|g')"
+
+    # Zero fill fields with two octets
+    input="$(echo "$input"| sed 's|:\([0-9A-F]\{2\}\):|:00\1:|g')"
+    input="$(echo "$input"| sed 's|:\([0-9A-F]\{2\}\)$|:00\1|g')"
+    input="$(echo "$input"| sed 's|^\([0-9A-F]\{2\}\):|00\1:|g')"
+
+    # Zero fill fields with one octet
+    input="$(echo "$input"| sed 's|:\([0-9A-F]\):|:000\1:|g')"
+    input="$(echo "$input"| sed 's|:\([0-9A-F]\)$|:000\1|g')"
+    input="$(echo "$input"| sed 's|^\([0-9A-F]\):|000\1:|g')"
+  done
+
+  # now expand the ::
+  local zeroes=""
+  local missing
+
+  echo "$input" | $CMD_GREP -qs "::"
+  if [ $? -eq 0 ]; then
+    local groups="$(echo "$input"|sed  's|[0-9A-F]||g'| wc -m)"
+    groups=$((groups-1)) # carriage return
+    missing=$((8-groups))
+    for i in $(seq 1 $missing); do
+      zeroes="$zeroes:0000"
+    done
+
+    # Note: Be careful where to place the :
+    input="$(echo "$input"| sed 's|\(.\)::\(.\)|\1'$zeroes':\2|g')"
+    input="$(echo "$input"| sed 's|\(.\)::$|\1'$zeroes':0000|g')"
+    input="$(echo "$input"| sed 's|^::\(.\)|'$zeroes':0000:\1|g;s|^:||g')"
+
+  fi
+
+  echo "$input"
+
+}
+
+#-------------------------------------------------------------------------------
+function netbits_ipv6() {
+  local prefix=$2
+  local address=$1
+  bytes=
+  pos=0
+  address=${address//:/}
+  strlen=${#address}
+
+  for i in $(seq 1 $strlen);
+  do
+    bits=
+    val=0x${address:$pos:1}
+    for i in 1 2 3 4
+    do
+      bits=$(( $val - ($val/2*2) ))${bits}
+      val=$(($val/2))
+    done
+    bytes=${bytes}${bits}
+    pos=$(($pos + 1))
+  done
+  echo ${bytes:0:$prefix}
+}
+
+#-------------------------------------------------------------------------------
+# usage: partof_ipv6_subnet
+#        This function checks whether the IPv6 address provided belongs to the
+#        subnet provided.
+#        returns TRUE : If the IPv6 addreess belongs to the provided subnet.
+#        returns FALSE: If the IPv6 addreess does not belong to the provided subnet.
+#-------------------------------------------------------------------------------
+function partof_ipv6_subnet() {
+  local expanded_address=$(expand_ipv6_address $1)
+  local expanded_network_address=$(expand_ipv6_address $2)
+  local network_prefix=$3
+
+  netbits_of_address=$(netbits_ipv6 "$expanded_address" $3)
+  netbits_of_network=$(netbits_ipv6 "$expanded_network_address" $3)
+  if [ "$netbits_of_address" == "$netbits_of_network" ]; then
+    return $TRUE;
+  else
+    return $FALSE;
+  fi
+}
+
+#-------------------------------------------------------------------------------
+# function to validate whether IP address falls within the network given as input
+function validate_ipaddr(){
+  local rCode=$exit_success
+  local ipaddr=$1
+  local network_name=$2
+  local network_id=$($CMD_CAT $CLUSTER_CONF | $CMD_GREP -w ^network | \
+                     $CMD_GREP -w "$network_name" | $CMD_AWK '{print $3}')
+  local cidr_mask=$(echo "$network_id" | $CMD_AWK -F\/ '{print $2}')
+  local network_ip=$(echo "$network_id" | $CMD_AWK -F\/ '{print $1}')
+  if echo "$ipaddr" | $CMD_GREP -E '[0-9a-f]+:+' >/dev/null; then
+    if ! partof_ipv6_subnet $ipaddr $network_ip $cidr_mask; then
+      rCode=$exit_failure
+      echo -e "Invalid IP address.IP address should lie within the network range"
+    fi 
+  else
+    local subnet_mask=$(conv_cidrfrmt_to_subnetmask "$cidr_mask")
+    local new_ip_binary=$(ip_to_bin "$ipaddr")
+    local network_ip_binary=$(ip_to_bin "$network_ip")
+    local subnet_new_ip_firstBits=${new_ip_binary:0:$cidr_mask}
+    local subnet_network_ip_firstBits=${network_ip_binary:0:$cidr_mask}
+    if [[ "$subnet_new_ip_firstBits" != "$subnet_network_ip_firstBits" ]]; then
+      rCode=$exit_failure
+      echo -e "Invalid IP address.IP address should lie within the network range"
+    fi
+  fi
+  
+  return $rCode
+}
+
+#--------------------------------------------------------------------------------------------
+#Check if the ip addr is valid IPv4 or IPv6
+function validate_ip() {
+  local ipaddr=$1
+  local rCode=$exit_success
+  if echo "$ipaddr" | $CMD_GREP -E '[0-9a-f]+:+' >/dev/null; then
+    isValidIPv6 $ipaddr || rCode=$exit_failure
+  else
+    isValidIPv4 $ipaddr || rCode=$exit_failure
+  fi
+
+  return $rCode
+}
+
+#-------------------------------------------------------------------------------
+#validation to check if ip address is in ipv4 format
+function isValidIPv4(){
+  local input_addr=$1
+  local rCode=$exit_success
+  ip_format="\b(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\b"
+  echo "$input_addr" | $CMD_GREP -E "$ip_format" >/dev/null
+  [ $? -ne 0 ] && rCode=$exit_failure
+
+  return $rCode
+}
+
+#-------------------------------------------------------------------------------
+#validation to check if ip address is in ipv6 format
+function isValidIPv6(){
+  local rCode=$exit_success
+  local input_addr=$(echo "$1" | tr 'a-z' 'A-Z')
+  [[ "$input_addr" =~ ^((([0-9A-F]{1,4}:){7}(([0-9A-F]{1,4})|:))|(([0-9A-F]{1,4}:){6}(((:[0-9A-F]{1,4}){1,2})|:))|(([0-9A-F]{1,4}:){5}(((:[0-9A-F]{1,4}){1,3})|:))|(([0-9A-F]{1,4}:){4}(((:[0-9A-F]{1,4}){1,4})|:))|(([0-9A-F]{1,4}:){3}(((:[0-9A-F]{1,4}){1,5})|:))|(([0-9A-F]{1,4}:){2}(((:[0-9A-F]{1,4}){1,6})|:))|(([0-9A-F]{1,4}:)(((:[0-9A-F]{1,4}){1,7})|:)))$ ]] ||  rCode=$exit_failure
+
+  return $rCode
+}
+
+#----------------------------------------------------------------------------------------
+# Sanity Check Functions for Cluster parameters
+#----------------------------------------------------------------------------------------
+function sc_alarm(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------
+function sc_bonding(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------
+function sc_boot(){
+  # boot rule: boot <IP address>
+  ip_addr=$2
+  local ret_status
+  validate_ipaddr $ip_addr $nw_internal
+  ret_status=$?
+  return $ret_status
+}
+
+#---------------------------------------------------------------------------------------
+function sc_coredump(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------
+function sc_dns(){
+  #DNS rule: dns <target> <IP address>
+  node_num=$2
+  ip_addr=$3
+  validate_node $node_num
+  local ret_status=$?
+  if [ $ret_status -eq 0 ]; then
+    validate_ipaddr $ip_addr $nw_external
+    ret_status=$?
+  fi
+  return $ret_status
+}
+
+#----------------------------------------------------------------------------------------
+function sc_host(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------
+function sc_interface(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------
+function sc_ip(){
+  # IP rule: ip <target> <interface> <network name> <IP address>
+  node_num=$2
+  nw_name=$4
+  ip_addr=$5
+  validate_node $node_num
+  local ret_status=$?
+
+  if [ $ret_status -eq 0 ]; then
+    validate_ipaddr $ip_addr $nw_name
+    ret_status=$?
+  fi
+  return $ret_status
+}
+
+#----------------------------------------------------------------------------------------
+function sc_ipmi(){
+  # IPMI rule: ipmi <target> <IP address> <user>
+  node_num=$2
+  ip_addr=$3
+  validate_node $node_num
+  local ret_status=$?
+  if [ $ret_status -eq 0 ]; then
+    validate_ipaddr $ip_addr $nw_internal
+    ret_status=$?
+  fi
+  return $ret_status
+}
+
+#----------------------------------------------------------------------------------------
+function sc_ip6tables(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------
+function sc_iptables(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------
+function sc_keymap(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------
+function sc_loader(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------
+function sc_mip(){
+  # MIP rule: mip <target> <name> <interface> <network> <IP address>
+  node_num=$2
+  nw_name=$5
+  ip_addr=$6
+  validate_node $node_num
+  local ret_status=$?
+  if [ $ret_status -eq 0 ]; then
+    validate_ipaddr $ip_addr $nw_name
+    ret_status=$?
+  fi
+  return $ret_status
+}
+
+#----------------------------------------------------------------------------------------
+function sc_netconsole(){
+  # rule: netconsole <target> <interface> <destination address> <destination port> <destination MAC>
+  node_num=$2
+  ip_addr=$4
+  validate_node $node_num
+  local ret_status=$?
+  if [ $ret_status -eq 0 ]; then
+    validate_ipaddr $ip_addr $nw_external
+    ret_status=$?	
+  fi
+  return $ret_status
+}
+
+#----------------------------------------------------------------------------------------
+function sc_nfs(){
+  # NFS rule: nfs <IP address>
+  ip_addr=$2
+  local ret_status
+  validate_ipaddr $ip_addr $nw_internal
+  ret_status=$?
+  return $ret_status
+}
+
+#----------------------------------------------------------------------------------------
+function sc_network(){
+  return $exit_success
+}
+
+#----------------------------------------------------------------------------------------
+function sc_node(){
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------
+function sc_ntp(){
+  # NTP rule: ntp <IP address | NTP server hostname>
+  ip_addr=$2
+  local ret_status
+  validate_ip $ip_addr
+  ret_status=$?
+  [ $ret_status -ne 0 ] && echo "Invalid IPv4 or IPv6 address"
+  
+  return $ret_status
+}
+#----------------------------------------------------------------------------------------
+function validate_nodegroup(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------
+function sc_quick-reboot(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#---------------------------------------------------------------------------------------
+function sc_route(){
+  # rule: route <target> <network> interface/gateway <interface>/<IP address>
+  local node_num=$2
+  local nw_name=$3
+  [[ "$nw_name" == "default" ]] && nw_name=$nw_external
+  [[ "$nw_name" == "default_v6" ]] && nw_name=$nw_external_v6
+  if [[ "$nw_name" =~ "public_vlan" ]]; then
+    nw_name=`echo $nw_name | $CMD_GREP -o "public_vlan[0-9]*"`
+  fi
+  local ip_addr=$5
+  validate_node $node_num
+  local ret_status=$?
+  if [ $ret_status -eq 0 ]; then
+    if [ "$4" == "gateway" ]; then
+      # validate_ipaddr $ip_addr $nw_name
+        ret_status=0
+     fi
+  fi
+  return $ret_status
+}
+
+#----------------------------------------------------------------------------------------
+function sc_shutdown-timer(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------
+function sc_ssh(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------
+function sc_ssh.rootlogin(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------
+function sc_syslog(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------
+function sc_timezone(){
+  echo ""
+  return 0
+}
+
+#----------------------------------------------------------------------------------------
+function sc_tipc(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------
+function sc_watchdog(){
+  node_num=$2
+  validate_node $node_num
+  return $?	
+}
+
+#----------------------------------------------------------------------------------------

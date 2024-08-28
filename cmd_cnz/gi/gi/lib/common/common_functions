@@ -1,0 +1,250 @@
+#!/bin/bash 
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2016 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       common_functions
+# Description:
+#       A collection of common functions for apos_getinfo framework.
+##
+# Usage:
+# source common_functions
+#
+##
+# Changelog:
+# - Tue Jan 02 2023 - Swapnika Baradi (xswapba)
+#   Fix for TR IA62145
+# - Thu Nov 03 2016 - Antonio Buonocunto (eanbuon)
+#   First Version
+##
+
+# Global Variables ------------------------------------------------------- BEGIN
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+GETINFO_LIB_PATH="/opt/ap/apos/bin/gi/lib"
+GETINFO_FETCH_METHODS_PATH="$GETINFO_LIB_PATH/fetch_methods"
+GETINFO_API_PATH="$GETINFO_LIB_PATH/vendor"
+GETINFO_CACHE_DIR="/dev/shm"
+GETINFO_CACHE_FILE="${GETINFO_CACHE_DIR}/apos_getinfo.cache"
+GETINFO_CACHE_FILE_PERMISSIONS="644"
+GETINFO_CACHE_FIELDS="UUID: PROPERTIES: NETINFO: METADATA:"
+APOS_CONF_PATH="/opt/ap/apos/conf"
+GETINFO_COMMON_PATH="$GETINFO_LIB_PATH/common"
+GETINFO_COMMON="$GETINFO_COMMON_PATH/common_functions"
+GETINFO_INTERNAL_NETWORK_NAME="$GETINFO_COMMON_PATH/"
+# Global Variables ------------------------------------------------------- END
+# Command Variables ------------------------------------------------------ BEGIN
+CMD_LS="/usr/bin/ls"
+CMD_SED="/usr/bin/sed"
+CMD_GREP="/usr/bin/grep"
+CMD_AWK="/usr/bin/awk"
+CMD_DMIDECODE="/usr/sbin/dmidecode"
+CMD_FIND="/usr/bin/find"
+CMD_BASENAME="/usr/bin/basename"
+CMD_READLINK="/usr/bin/readlink"
+CMD_MOUNT="/bin/mount"
+CMD_MKTEMP="/bin/mktemp"
+CMD_CHMOD="/bin/chmod"
+CMD_TOUCH="/usr/bin/touch"
+CMD_ECHO="/bin/echo"
+CMD_PYTHON="/usr/bin/python"
+CMD_CAT="/usr/bin/cat"
+CMD_CUT="/usr/bin/cut"
+CMD_RM="/usr/bin/rm"
+CMD_MOUNTPOINT="/usr/bin/mountpoint"
+CMD_UMOUNT="/usr/bin/umount"
+CMD_TIMEOUT="/usr/bin/timeout"
+CMD_KILL="/bin/kill"
+CMD_MKDIR="/usr/bin/mkdir"
+CMD_LSOF="/usr/bin/lsof"
+CMD_SLEEP="/usr/bin/sleep"
+CMD_SYNC="/usr/bin/sync"
+CMD_CP="/usr/bin/cp"
+# Command Variables ------------------------------------------------------ END
+
+
+#source of apos common
+. /opt/ap/apos/conf/apos_common.sh
+
+function validate_cache_file(){
+  local IS_GETINFO_CACHE_VALID="$TRUE"
+  if [ -s "$GETINFO_CACHE_FILE" ] && [ -r "$GETINFO_CACHE_FILE" ];then
+      for GETINFO_VALIDATE_ITEM in $GETINFO_CACHE_FIELDS;do
+        if ! $CMD_GREP -q "$GETINFO_VALIDATE_ITEM" $GETINFO_CACHE_FILE;then
+          IS_GETINFO_CACHE_VALID="$FALSE"
+        fi
+      done
+  else
+     IS_GETINFO_CACHE_VALID="$FALSE"  
+  fi
+  if [ "$IS_GETINFO_CACHE_VALID" != "$TRUE" ];then
+    apos_log "Invalid cache identified. Removing it"
+    $CMD_RM -f "$GETINFO_CACHE_FILE"
+    if [ $? -ne 0 ];then
+      apos_abort "Failure while removing corrupted cache."
+    fi
+  fi
+}
+
+function create_cache_file(){
+  if [ -e "$GETINFO_CACHE_FILE" ];then
+    $CMD_RM -f "$GETINFO_CACHE_FILE"
+    if [ $? -ne 0 ];then
+      apos_abort "Failure while removing cache file $GETINFO_CACHE_FILE"
+    fi
+  fi
+  $CMD_TOUCH $GETINFO_CACHE_FILE
+  if [ $? -ne 0 ];then
+    apos_abort "Failure while creating cache file $GETINFO_CACHE_FILE"
+  fi
+  $CMD_CHMOD $GETINFO_CACHE_FILE_PERMISSIONS $GETINFO_CACHE_FILE
+  if [ $? -ne 0 ];then
+    apos_abort "Failure while changing permission to cache file $GETINFO_CACHE_FILE"
+  fi
+}
+
+function write_item_to_cache_file(){
+  local CACHE_TYPE="$1"
+  local CACHE_FILE_STRING="$2"
+  if [ -z "$CACHE_TYPE" ] || [ -z "$CACHE_FILE_STRING" ];then
+    apos_abort "Invalid usage of function write_item_to_cache_file"
+  fi
+  $CMD_ECHO "$CACHE_TYPE:$CACHE_FILE_STRING" >> $GETINFO_CACHE_FILE
+  if [ $? -ne 0 ];then
+    apos_abort "Failure while writing to $GETINFO_CACHE_FILE"
+  fi
+}
+
+function mount_cdrom_by_label() {
+  if [ $# -ne 2 ]; then
+    apos_abort "Usage: mount_cdrom_by_label <disk_label> <mount_folder>"
+  fi 
+  
+  # Retrieve the device having the provided label
+  local DISK_LABEL=$1
+  local MOUNT_FOLDER=$2
+  for label in $($CMD_FIND "/dev/disk/by-label" -maxdepth 1 -type l ); do
+    if [ "$($CMD_BASENAME $label)" == "$DISK_LABEL" ]; then
+      if [ -L $label ]; then
+        DEVICE_NAME=$($CMD_READLINK -m $label)
+      fi
+    fi
+  done
+  
+  # In case the device is not found, abort the script
+  [ -z "$DEVICE_NAME" ] && apos_abort 1 "Device with label '$DISK_LABEL' not found!"
+
+  # In case the mount folder is not created, create it  
+  [ ! -d "$MOUNT_FOLDER" ] && $CMD_MKDIR -p "$MOUNT_FOLDER"
+
+  # Check if the mount folder is already mounted: if so, umount it
+  if $CMD_MOUNTPOINT -q "$MOUNT_FOLDER";then
+    apos_log "Folder $MOUNT_FOLDER already mounted."
+    umount_cdrom $MOUNT_FOLDER
+  fi
+
+  # Mount the CD-ROM device with read-only options
+  local OPTS='--options ro'
+  if ! $CMD_MOUNT $OPTS "$DEVICE_NAME" "$MOUNT_FOLDER" 2>/dev/null; then
+    apos_abort 1 "Failed to mount device with label '$DISK_LABEL'!"
+  fi
+}
+
+function mount_cdrom_by_content() {
+  if [ $# -ne 2 ]; then
+    apos_abort "Usage: mount_cdrom_by_content <mount_folder> <file_to_find>"
+  fi 
+  
+  local MOUNT_FOLDER=$1
+  local FILE_TO_FIND=$2
+  
+  # Check if the mount folder is present, otherwise create it
+  if [ ! -d "$MOUNT_FOLDER" ]; then
+    $CMD_MKDIR -p $MOUNT_FOLDER || apos_abort "Failed to create the mount folder '$MOUNT_FOLDER'!"
+  fi
+  
+  # Check if the mount folder is already a mount point. If so, umount the device
+  if $CMD_MOUNTPOINT -q $MOUNT_FOLDER; then
+    apos_log "Folder '$MOUNT_FOLDER' already mounted, umounting it!"
+    umount_cdrom $MOUNT_FOLDER
+  fi
+  
+  # Look for the correct device: loop over the existing CD-ROM devices till the correct one is found
+  local MOUNT_OPTIONS='--options ro'
+  local FILE_FOUND=$FALSE
+  for DEVICE in $($CMD_LS /dev/sr*)
+  do
+    # First, try to mount the device
+    if ! $CMD_MOUNT $MOUNT_OPTIONS $DEVICE $MOUNT_FOLDER &> /dev/null; then
+      apos_log "WARNING: Failed to mount device '$DEVICE', skipping it!"
+      continue
+    fi
+    
+    # Then check if the requested file is available in the current device
+    FIND_RESULT="$($CMD_FIND $MOUNT_FOLDER -type f -name $FILE_TO_FIND )"
+    if [ ! -z "$FIND_RESULT" ]; then
+      apos_log "The device '$DEVICE' contains the '$FILE_TO_FIND' file!"
+      FILE_FOUND=$TRUE
+      break
+    fi
+
+    # The currently mounted device does not contain the requested file, umount and proceed
+    umount_cdrom $MOUNT_FOLDER
+  done
+  
+  # Check that after the loop the needed device was found
+  [[ $FILE_FOUND -ne $TRUE ]] && apos_abort "The '$FILE_TO_FIND' file was not found!"
+}
+
+function umount_cdrom() {
+  if [ $# -ne 1 ]; then
+    apos_abort "Usage: umount_cdrom <mount_folder>"
+  fi
+
+  local MOUNT_FOLDER=$1 
+  local attempts=0
+  local max_attempts=3
+  local SIGINT_TMOUT=2
+  local SIGKILL_TMOUT=4
+  $CMD_TIMEOUT --signal=INT --kill-after=$SIGKILL_TMOUT $SIGINT_TMOUT $CMD_UMOUNT "$MOUNT_FOLDER" &>/dev/null
+  local RETURN_CODE=$?
+  while [[ $RETURN_CODE -ne 0 && $attempts -lt $max_attempts ]]; do
+    apos_log "unable to unmount $MOUNT_FOLDER... retrying"
+    procs=$($CMD_LSOF -Fpc0 $MOUNT_FOLDER 2>/dev/null)
+    apos_log "Active Process on mount point: \"$MOUNT_FOLDER\": $procs"
+    attempts=$(( $attempts + 1 ))
+    # sleeps only if the umount command hasn't timed-out (RETURN_CODE!=124)
+    [ $RETURN_CODE -ne 124 ] && $CMD_SLEEP 0.5
+    # tries to umount once more
+    $CMD_TIMEOUT --signal=INT --kill-after=$SIGKILL_TMOUT $SIGINT_TMOUT $CMD_UMOUNT  "$MOUNT_FOLDER"&>/dev/null
+    RETURN_CODE="$?"
+  done
+  # check if the mount point is unmounted; if not, log error
+  if $CMD_MOUNTPOINT -q $MOUNT_FOLDER; then
+    apos_log "unable to unmount \"$MOUNT_FOLDER\" after $max_attempts attempts!"
+    #Check who are using the mount point
+    procs=$($CMD_LSOF -Fpc0 $MOUNT_FOLDER 2>/dev/null)      
+    if [ ! -z "$procs" ]; then
+      apos_log "Active Process on mount point: \"$MOUNT_FOLDER\": $procs"
+      for proc in $procs; do
+        pid=$($CMD_ECHO $proc | $CMD_AWK -F'c' '{print $1}')
+        pid=${pid:1}
+        pname=$($CMD_ECHO $proc | $CMD_AWK -F'c' '{print $2}')
+        apos_log "Sending SIGKILL to $pname, pid: $pid"
+        $CMD_KILL -s SIGKILL $pid
+      done
+      $CMD_SLEEP 2
+      $CMD_SYNC ; $CMD_SYNC ; $CMD_SYNC
+    fi
+    $CMD_TIMEOUT --signal=INT --kill-after=$SIGKILL_TMOUT $SIGINT_TMOUT $CMD_UMOUNT  "$MOUNT_FOLDER"&>/dev/null
+    RETURN_CODE="$?"
+    if [ $RETURN_CODE -ne 0 ]; then 
+      apos_abort "unable to unmount \"$MOUNT_FOLDER\""
+    else
+      apos_log "\"$MOUNT_FOLDER\" successfully unmounted"
+    fi
+  fi
+}
+

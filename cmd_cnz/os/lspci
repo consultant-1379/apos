@@ -1,0 +1,39 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       lspci
+# Description:
+#       A script to wrap the invocation of lspci by TS user.
+# Note:
+#       None.
+##
+# Usage:
+#       None.
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Thu Nov 08 2013  - Madhu Muthyala (xmadmut)
+#       First version.
+##
+
+function help()
+{
+	echo -e "\nUsage: lspci\n"
+}
+
+if [ $# -gt 0 ] ; then
+	echo -n "Incorrect usage"
+	help
+	exit 2
+else 
+	/usr/bin/sudo /sbin/lspci
+fi
+
+exit $?
+

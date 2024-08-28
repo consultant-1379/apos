@@ -1,0 +1,10 @@
+# Directories
+555:wrapper
+
+# Files
+555:localuseradd
+555:localusermod
+555:localuserlist
+555:localuserdel
+
+555:wrapper/localuser_wrapper

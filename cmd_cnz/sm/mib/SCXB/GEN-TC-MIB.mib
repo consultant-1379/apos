@@ -1,0 +1,779 @@
+-- =====================================================================
+--
+-- %CCaseFile:	GEN-TC-MIB.mib %
+-- %CCaseDocNo:	14/196 03-CRA 119 1365 Ux %
+-- %Rev: B %
+-- Author:	uabhlar
+-- 
+-- =====================================================================
+--
+-- Copyright (C) 2010 by Ericsson AB
+-- S-126 25  STOCKHOLM
+-- SWEDEN, tel int + 46 8 719 0000
+--
+-- This Program may be used and/or copied only with the written 
+-- permission from Ericsson AB, or in accordance with the terms and
+-- conditions stipulated in the agreement/contract under which the 
+-- program has been supplied.
+--
+-- All rights reserved.
+--
+-- =====================================================================
+--
+-- REVISION HISTORY
+--
+-- Rev     Date         Name        What
+-- ===     ==========   ========    ====
+-- PA1     2010-04-19   uabhlar     Initial version
+-- PA2     2010-04-27   uabhlar     Doc number and OID changed 
+-- PA3     2010-04-30   uabhlar	    - SlotValues back to GEN-SHELF-MIB 
+--                                  - ShelfTypes back to GEN-SHELF-MIB
+-- PA4     2010-05-06   uabhlar	    Which sensor ID-s that generates
+--                                  notifications are described in
+--                                  an interface description doc.
+-- A       2010-06-10   uabhlar     MIB in firm revision
+-- PB3	   2010-09-07	uabhlar	    Examples of SensorValues and
+--                                  SensorStates extended
+-- B       2010-09-16   uabhlar     Firm revision after review.
+--                                  - SensorTypeCodeValues updated
+--				    - SensorEventDataValues and 
+--                                    SensorValues example updated.
+-- =====================================================================
+
+
+GEN-TC-MIB  DEFINITIONS ::= BEGIN          
+
+IMPORTS
+	MODULE-IDENTITY	
+		FROM SNMPv2-SMI
+	TEXTUAL-CONVENTION             
+		FROM SNMPv2-TC 
+	Integer32,
+	enterprises	
+		FROM SNMPv2-SMI;
+
+-- *********************************************************************
+genTCMIB MODULE-IDENTITY
+        LAST-UPDATED 
+   		"201009160000Z"
+        ORGANIZATION
+		"Ericsson AB"
+	CONTACT-INFO
+		"E-mail: ingvar.froroth@ericsson.com"       
+	DESCRIPTION
+		"This MIB module defines textual-conventions."
+
+	-- Revision history.	  
+	REVISION
+	   "201009160000Z"
+	DESCRIPTION
+           "See top of document"
+                                                           
+        ::= { enterprises ericsson(193) components(177) 
+              generic(2) equipment(2) genTCMIB(7) }
+
+ 
+-- =====================================================================
+
+SensorTypeValues ::= TEXTUAL-CONVENTION
+    STATUS	current
+    DESCRIPTION
+	"This textual convention describes the general 
+	 sensor types."
+    SYNTAX INTEGER {
+                    temperature	  (1),
+                    voltage	  (2),	
+                    powerSupply	  (8),
+                    frequency    (11),	
+                    systemEvent  (18),
+                    watchdog     (35),	
+                    fruState     (44),	
+                    oemDefined  (192),
+                    unknown     (255)
+                   }
+
+SensorIDValues ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d"
+    STATUS	current
+    DESCRIPTION
+	"This textual convention describes different sensor numbers.
+	SENSOR_ID_TEMP_0                 = 0x00,    /*   0   */
+	SENSOR_ID_TEMP_1                 = 0x01,    /*   1   */
+	SENSOR_ID_TEMP_2                 = 0x02,    /*   2   */
+	SENSOR_ID_VOLTAGE__0             = 0x03,    /*   3   */
+	SENSOR_ID_VOLTAGE__1             = 0x04,    /*   4   */
+	SENSOR_ID_VOLTAGE__2             = 0x05,    /*   5   */
+	SENSOR_ID_VOLTAGE__3             = 0x06,    /*   6   */
+	SENSOR_ID_VOLTAGE__4             = 0x07,    /*   7   */
+	SENSOR_ID_VOLTAGE__5             = 0x08,    /*   8   */
+	SENSOR_ID_VOLTAGE__6             = 0x09,    /*   9   */
+	SENSOR_ID_VOLTAGE__7             = 0x0A,    /*  10   */
+	SENSOR_ID_VOLTAGE__8             = 0x0B,    /*  11   */
+	SENSOR_ID_VOLTAGE__9             = 0x0C,    /*  12   */
+	SENSOR_ID_VOLTAGE_10             = 0x0D,    /*  13   */
+	SENSOR_ID_VOLTAGE_11             = 0x0E,    /*  14   */
+	SENSOR_ID_VOLTAGE_12             = 0x0F,    /*  15   */
+	SENSOR_ID_VOLTAGE_13             = 0x10,    /*  16   */
+	SENSOR_ID_VOLTAGE_14             = 0x11,    /*  17   */
+	SENSOR_ID_VOLTAGE_15             = 0x12,    /*  18   */
+	SENSOR_ID_VOLTAGE_16             = 0x13,    /*  19   */
+	SENSOR_ID_VOLTAGE_17             = 0x14,    /*  20   */
+	SENSOR_ID_VOLTAGE_18             = 0x15,    /*  21   */
+	SENSOR_ID_VOLTAGE_19             = 0x16,    /*  22   */
+	SENSOR_ID_VOLTAGE_20             = 0x17,    /*  23   */
+	SENSOR_ID_VOLTAGE_21             = 0x18,    /*  24   */
+	SENSOR_ID_VOLTAGE_22             = 0x19,    /*  25   */
+	SENSOR_ID_VOLTAGE_23             = 0x1A,    /*  26   */
+	SENSOR_ID_VOLTAGE_24             = 0x1B,    /*  27   */
+	SENSOR_ID_VOLTAGE_25             = 0x1C,    /*  28   */
+	SENSOR_ID_VOLTAGE_26             = 0x1D,    /*  29   */
+	SENSOR_ID_VOLTAGE_27             = 0x1E,    /*  30   */
+	SENSOR_ID_VOLTAGE_28             = 0x1F,    /*  31   */
+	SENSOR_ID_VOLTAGE_29             = 0x20,    /*  32   */
+	SENSOR_ID_VOLTAGE_30             = 0x21,    /*  33   */
+	SENSOR_ID_VOLTAGE_31             = 0x22,    /*  34   */
+	SENSOR_ID_FREQUENCY_0            = 0x23,    /*  35   */
+	SENSOR_ID_FREQUENCY_1            = 0x24,    /*  36   */
+	SENSOR_ID_FREQUENCY_2            = 0x25,    /*  37   */
+	SENSOR_ID_FREQUENCY_3            = 0x26,    /*  38   */
+	SENSOR_ID_FREQUENCY_4            = 0x27,    /*  39   */
+	SENSOR_ID_FREQUENCY_5            = 0x28,    /*  40   */
+	SENSOR_ID_FREQUENCY_6            = 0x29,    /*  41   */
+	SENSOR_ID_FREQUENCY_7            = 0x2A,    /*  42   */
+	SENSOR_ID_FREQUENCY_8            = 0x2B,    /*  43   */
+	SENSOR_ID_FREQUENCY__9           = 0x2C,    /*  44   */
+	SENSOR_ID_FREQUENCY__10          = 0x2D,    /*  45   */
+	SENSOR_ID_FREQUENCY__11          = 0x2E,    /*  46   */
+	SENSOR_ID_FREQUENCY__12          = 0x2F,    /*  47   */
+	SENSOR_ID_FREQUENCY__13          = 0x30,    /*  48   */
+	SENSOR_ID_FREQUENCY__14          = 0x31,    /*  49   */
+	SENSOR_ID_FREQUENCY__15          = 0x32,    /*  50   */
+	SENSOR_ID_48V_SUPPLY             = 0x33,    /*  51   */
+	SENSOR_ID_GLITCH_0               = 0x34,    /*  52   */
+	SENSOR_ID_GLITCH_1               = 0x35,    /*  53   */
+	SENSOR_ID_GLITCH_2               = 0x36,    /*  54   */
+	SENSOR_ID_ALARMS_0               = 0x37,    /*  55   */
+	SENSOR_ID_ALARMS_1               = 0x38,    /*  56   */
+	SENSOR_ID_TEMP_3                 = 0x39,    /*  57   */
+	SENSOR_ID_TEMP_4                 = 0x3A,    /*  58   */
+	SENSOR_ID_TEMP_5                 = 0x3B,    /*  59   */
+	SENSOR_ID_TEMP_6                 = 0x3C,    /*  60   */
+	SENSOR_ID_TEMP_7                 = 0x3D,    /*  61   */
+	SENSOR_ID_TEMP_8                 = 0x3E,    /*  62   */
+	SENSOR_ID_TEMP_9                 = 0x3F,    /*  63   */
+	SENSOR_ID_L2_AVG_TIME            = 0x5A,    /*  90   */
+	SENSOR_ID_L2_MAX_TIME            = 0x5B,    /*  91   */
+	SENSOR_ID_L3_AVG_TIME            = 0x5C,    /*  92   */
+	SENSOR_ID_L3_MAX_TIME            = 0x5D,    /*  93   */
+	SENSOR_ID_IMC_RESET_EVENT        = 0x80,    /* 128   */
+	SENSOR_ID_ANY_VOLTAGE            = 0x81,    /* 129   */
+	SENSOR_ID_ANY_FREQENCY           = 0x82,    /* 130   */
+	SENSOR_ID_GEP_SIDE_LOC_E         = 0x83,    /* 131   */
+	SENSOR_ID_PPC_HEARTBEAT          = 0x84,    /* 132   */
+	SENSOR_ID_INTERNAL_FAULT         = 0x85,    /* 133   */
+	SENSOR_ID_IPMB_A                 = 0x86,    /* 134   */
+	SENSOR_ID_IPMB_B                 = 0x87,    /* 135   */
+	SENSOR_ID_ANY_TEMP               = 0x88,    /* 136   */
+        SENSOR_ID_COMP_FAULT             = 0x89,    /* 137   */
+        SENSOR_ID_PPC_RESET              = 0xA0,    /* 160   */
+        SENSOR_ID_PPC_RESET_CAUSE        = 0xA1,    /* 161   */"
+
+     SYNTAX Integer32 (0..255)
+
+SensorTypeCodeValues ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d"
+    STATUS	current
+    DESCRIPTION
+	"This textual convention describes different types 
+	 of sensor event codes:
+	 SET is an abbreviation for SENSOR_EVENT_TYPE
+
+	 SET_THRESHOLD                        = 0x01,  /*   1 */
+	 SET_DIGITAL_DISCRETE_GOING_ALARM     = 0x04,  /*   4 */
+	 SET_DIGITAL_DISCRETE_GOING_NORMAL    = 0x84,  /* 132 */
+ 	 SET_DISCRETE_GOING_ALARM             = 0x0A,  /*  10 */
+	 SET_DISCRETE_GOING_NORMAL            = 0x8A,  /* 138 */
+	 SET_SENSOR_SPEC_DISCR                = 0x6F,  /* 111 */
+	 SET_OEM_DISCRETE                     = 0x70,  /* 112 */
+	 SET_OEM_SENSOR_VALUE_GOING_ALARM     = 0x71,  /* 113 */
+	 SET_OEM_SENSOR_VALUE_GOING_NORMAL    = 0xF1,  /* 241 */
+	 SENSOR_EVENT_TYPE_UNKNOWN            = 0xFF   /* 255 */"
+     SYNTAX Integer32 (1..255)
+
+
+SensorEventDataValues ::= TEXTUAL-CONVENTION
+    STATUS	current
+    DESCRIPTION
+	"This textual convention describes sensor event data
+	 values.
+
+	 SensorEventDataValues consist of 3 values:
+	 - SensorEventData1
+	 - SensorEventData2 and
+	 - SensorEventData3
+
+	 The SensorEventDataValues are received in the 
+	 sensorStateChange NOTIFICATION.
+
+	 Depending on which sensor, idendified by SensorIDValue,
+	 that was causing the NOTIFICATION to be sent the
+	 SensorEventDataValues have different meanings.
+
+	 Example of SensorIDs:
+
+	 SensorIDValue             SensorEventDataValues
+         -------------             ---------------------
+
+	 SENSOR_ID_48V_SUPPLY      SensorEventData1, AlarmStatus:
+                                     bit 0: MB_48V_SUP_A
+                                     bit 1: MB_48V_SUP_B
+                                     bit 2: DB_48V_SUP_A
+                                     bit 3: DB_48V_SUP_B
+                                     bit 4: DB2_48V_SUP_A
+                                     bit 5: DB2_48V_SUP_B	
+                                     Bit is set when active alarm.
+
+                                     SensorEventData2, AlarmSource:	
+                                       A bit mask (0-5) indicating
+                                       which voltage(s) that has been
+                                       changed since the last time the
+                                       sensorStateChange NOTIFICATION
+                                       was received.
+
+                                      SensorEventData3 = 0xFF
+
+
+	 SENSOR_ID_ANY_TEMP           SensorEventData1:
+                                        0x07: temp non critical (>55
+                                              degrees) going high.  
+                                        0x09: temp critical (>75
+                                              degrees) going high.
+                                        0x0B: temp non recoverable 
+                                              (>80 degrees) going high.
+                                        0x04: temp non recoverable 
+                                              (>80 degrees) going low.
+                                        0x02: temp critical (<70 
+                                              degrees) going low.
+                                        0x00: temp non critical (<50
+                                              degrees) going low.
+
+                                        SensorEventData2/3 = 0xFF
+
+
+	 SENSOR_ID_ANY_VOLTAGE          SensorEventData1:
+                                        Voltage alarm will be indicated
+                                        if voltage is outside of board
+                                        specified or approved ranges.
+
+					  0x06: Voltage going alarm
+					  0x00: Voltage going normal
+					SensorEventData2/3 = 0xFF
+
+
+	 SENSOR_ID_ANY_FREQUENCY        SensorEventData1:
+                                        Frequency alarm will be indicated
+                                        if frequency is outside of board
+                                        specified or approved ranges.
+
+					  0x06: Frequency going alarm
+					  0x00: Frequency going normal
+					SensorEventData2/3 = 0xFF
+
+	 
+	 SENSOR_ID_IMC_RESET_EVENT      SensorEventData1:
+					  0x81: Reset event
+					
+					SensorEventData2:
+					  0x00: Upgradable (UPG) version.
+					  0x01: Fallback (FB) version.	  
+					  
+					SensorEventData3 = 0xFF
+
+	 SENSOR_ID_GEP_SIDE_LOC_E       SensorEventData1: 
+					  0x06: SLE going alarm
+					SensorEventData2/3 = 0xFF
+
+	 
+	 SENSOR_ID_PPC_HEARTBEAT        SensorEventData1:
+					  0x01: PPC heartbeat reset
+					SensorEventData2/3 = 0xFF
+
+	 
+
+         SENSOR_ID_INTERNAL_FAULT       SensorEventData1:
+					  0x85: RAM test failure
+					  0x86: Checksum fault in FB
+					  0x87: Checksum fault in UPG
+					  0x88: Unsupported IPMI 
+                                                HW version
+					  0x89: Checksum fault in
+					        sensor table.
+					  0x8A: Checksum fault in
+					        type table.
+					  0x8B: Checksum fault in
+					        running table.
+				          0x8C: Checksum fault in
+					        PMB table
+						
+					SensorEventData2/3 = 0xFF
+
+	 SENSOR_ID_IPMB_A/               
+	 SENSOR_ID_IPMB_B               SensorEventData1:
+					  Always set to 0x7
+
+					SensorEventData2:
+					  Always set to 0xA0
+
+					Note that the Sensor Type Code Value
+					defines when the sensor indicates
+					going alarm / going normal
+					SET_DIGITAL_DISCRETE_GOING_ALARM /
+					SET_DIGITAL_DISCRETE_GOING_NORMAL
+					        
+   	 SENSOR_ID_COMP_FAULT		SensorEventData1:
+					Component supervision presently
+					supported are:
+					1) -48V FETs at inlet
+					2) DC/DC used on GEP2
+
+                                        Only the first found component
+					fault is indicated.
+
+					  0x81: comp fault going alarm
+					  0x80: comp fault going normal
+
+					SensorEventData2:
+					Component fault:
+					 0x0:  -48V FET for MB-A
+					 0x1:  -48V FET for MB-B
+					 0x2:  -48V FET for DB-A
+					 0x3:  -48V FET for DB-B
+					 0x5:  DC/DC fault on the board
+					 0x6:  Fault on PMBus
+
+	 SENSOR_ID_PPC_RESET_CAUSE      SensorEventData1:
+                                        Reset type:
+					 0x0:  Power on (normal state)
+					 0x4:  NMI 
+					 0x8:  Reset
+					 0xC:  Power cycling (cold reset)
+					 0x10: Power off
+					
+					SensorEventData2:
+					Reset source:
+					 0x1:  PIP i/f
+					 0x2:  IPMB
+					 0x3:  GEP front button
+					 0x4:  CMXB application
+					       reset signal.
+					 0x5:  PIP on debug port, COM0
+					 0x6:  IPMI FW due to glitches
+					 0x7:  IPMI FW due to TEMPSENSE
+					 0x8:  IPMI FW due to 48V
+					 0x9:  IPMI FW due to 
+					       voltage alarm
+					 0x19: S3 pin on GEP"
+
+    SYNTAX OCTET STRING (SIZE (3)) 
+
+
+SensorValues ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d"
+    STATUS	current
+    DESCRIPTION
+	"This textual convention describes sensor values
+         read from sensor table.
+
+         SensorIDValue                  SensorValue
+         -------------                  ----------
+	 SENSOR_ID_TEMP_X               Temperature in Celsius * 256
+	 SENSOR_ID_VOLTAGE_Y            Voltage * 65536
+	 SENSOR_ID_FREQUENCY_Z          Frequency in Hz
+	 SENSOR_ID_48V_SUPPLY           Mother blade (MB) and Daughter
+                                        Blade(s) (DB/DB2) 48V supply.
+					bit 0: MB_48V_SUP_A
+					bit 1: MB_48V_SUP_B
+					bit 2: DB_48V_SUP_A
+					bit 3: DB_48V_SUP_B
+					bit 4: DB2_48V_SUP_A
+					bit 5: DB2_48V_SUP_B
+	 
+	 SENSOR_ID_ANY_TEMP             For each SENSOR_ID_TEMP_0 - 9 
+                                        there is a corresponding bit set 
+                                        in the aggregated value. 
+                                        bits  0- 9: Sensor has caused 
+					an event
+					bits 16-25: Sensor is active
+	 SENSOR_ID_ANY_VOLTAGE          For each: 
+					    SENSOR_ID_VOLTAGE_0 - 31
+                                        there is a corresponding bit 
+					set in the aggregated value 
+					if the sensor
+                                        has caused an event.
+	 SENSOR_ID_ANY_FREQENCY         For each:
+					    SENSOR_ID_FREQENCY_0 - 15 
+                                        there is a corresponding bit 
+					set in the aggregated value if 
+					the sensor has caused an event.
+					bits 0 - 15 is used.
+	 SENSOR_ID_IMC_RESET_EVENT      Indicates which IPMI version 
+                                        is running:
+                                        0: Upgradable (UPG) version.
+					1: Fallback (FB) version.
+	 SENSOR_ID_GEP_SIDE_LOC_E       SLE sensor.
+	                                Indicates if temperature, 
+                                        voltage or frequency alarm 
+                                        is present.
+                                        bits  0- 7: 
+                                            SENSOR_ID_VOLTAGE_8 - 15
+					bits  8-15: 
+                                            SENSOR_ID_VOLTAGE_0 -  7
+					bits 16-23: 
+                                            SENSOR_ID_FREQUENCY_0 - 7
+					bit     24: 
+                                            Therm trip
+					bit     25: 
+                                            Tempsense pin /
+                                            Set when non recoverable 
+                                            state, above 80 degrees C.
+	 
+	 SENSOR_ID_PPC_HEARTBEAT	PPC reset due to heart
+                                        beats missing.
+					0xA0: Reset has not occured
+					0xA1: Reset has occured
+		
+	 SENSOR_ID_INTERNAL_FAULT       3 bytes: Byte1 Byte2 Byte3
+					  Byte1; 
+					    bit 0 = 1: Unsupported IPMI 
+                                                       HW version
+				          Byte2; 
+					    bit 0 = 1: RAM test failure
+
+					  Byte3;
+					    bit 0 = 1: Checksum fault in FB
+					    bit 1 = 1: Checksum fault in UPG
+					    bit 2 = 1: Checksum fault in
+					               sensor table.
+					    bit 3 = 1: Checksum fault in
+					               type table.
+					    bit 4 = 1: Checksum fault in
+					               running table.
+					    bit 5 = 1: Checksum fault in
+					               PMB table.
+	  SENSOR_ID_IPMB_A          IPMI bus A sensor
+				    0xA0: IPMI bus A is ok
+                                    0xA1: IPMI bus A is faulty (hanging)
+
+ 	  SENSOR_ID_IPMB_B          IPMI bus B sensor
+				    0xA0: IPMI bus B is ok
+                                    0xA1: IPMI bus B is faulty (hanging)
+
+          SENSOR_ID_COMP_FAULT      Component fault
+				    4 bytes: Byte1 Byte2 Byte3 Byte4
+				    Byte4; 0xA0: No Component fault
+					   0xA1: Component fault
+				    If component fault then:
+				    (MB=mother board, DB=dauhter board,
+				     PMBus=Power Management bus)
+				    Byte3; 0: -48V FET for MB_A
+				           1: -48V FET for MB_B
+					   2: -48V FET for DB_A
+				           3: -48V FET for DB_B
+					   4: -
+					   5: DC/DC fault on the board
+					   6: Fault on PMBus.
+			            Byte2; always 0
+				    Byte1; I2C address if PMBus fault.
+
+	  SENSOR_ID_PPC_RESET	    Reset sensor
+				    0xA0: Reset has not occurred
+                                    0xA1: Reset has occurred
+						       
+          SENSOR_ID_PPC_RESET_CAUSE  4 bytes: Byte1 Byte2 Byte3 Byte4
+				    Byte1-2: 0
+				    Byte3:
+				      Reset type:
+					 0x0:  Power on (normal state)
+					 0x4:  NMI 
+					 0x8:  Reset
+					 0xC:  Power cycling (cold reset)
+					 0x10: Power off
+			            Byte4:
+				       Reset source:
+				         0x1:  PIP i/f
+					 0x2:  IPMB
+					 0x3:  GEP front button
+					 0x4:  CMXB application
+					       reset signal.
+					 0x5:  PIP on debug port, COM0
+					 0x6:  IPMI FW due to glitches
+					 0x7:  IPMI FW due to TEMPSENSE
+					 0x8:  IPMI FW due to 48V
+					 0x9:  IPMI FW due to 
+					       voltage alarm
+					 0x19: S3 pin on GEP"
+
+     SYNTAX Integer32 
+
+
+SensorStates ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d"
+    STATUS	current
+    DESCRIPTION
+	"This textual convention describes sensor states
+         read from sensor table.
+
+
+         SensorIDValue                  SensorState
+         -------------                  -----------
+	 SENSOR_ID_TEMP_X               0: normal
+	                                1: non critical
+                                        2: critical
+                                        3: non recoverable
+
+	 SENSOR_ID_VOLTAGE_Y            0: normal;  1: alarm
+	 SENSOR_ID_FREQUENCY_Z          0: normal;  1: alarm
+	 SENSOR_ID_48V_SUPPLY           0: normal;  1: alarm
+	 
+	 SENSOR_ID_ANY_TEMP             0: normal;  1: alarm
+	 SENSOR_ID_ANY_VOLTAGE          0: normal;  1: alarm
+	 SENSOR_ID_ANY_FREQENCY         0: normal;  1: alarm
+	 SENSOR_ID_IMC_RESET_EVENT      0; Always returns 0.
+	 SENSOR_ID_GEP_SIDE_LOC_E       0: normal;  1: alarm
+	 SENSOR_ID_PPC_HEARTBEAT	0: normal;  1: alarm
+	 SENSOR_ID_INTERNAL_FAULT       0: normal;  1: alarm
+	 SENSOR_ID_IPMB_A               0: normal;  1: alarm
+	 SENSOR_ID_IPMB_B               0: normal;  1: alarm
+	 SENSOR_ID_COMP_FAULT		0: normal;  1: alarm
+	 SENSOR_ID_PPC_RESET		0: normal;  1: alarm         
+         SENSOR_ID_PPC_RESET_CAUSE      0: normal;  1: alarm"
+     SYNTAX Integer32 
+
+
+PfmFanFlagValues ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d"
+    STATUS      current 
+    DESCRIPTION
+        "Flags related to fan motor control in PFM.
+
+	 The argument is a 32 bit integer where bit 0 is lsb.
+
+	 Common for all flags is that a logical '1' indicates the 
+         error condition and logical '0' the normal operation state. 
+
+         Non-implemented bits are signalled as logical '0'
+ 
+
+         Name     Bit  Description
+         -------------------------
+	 TempA     0   The temperature is above the A-alarm limit 
+		       (65 degrees Celsius).
+
+	 TempB     1   The temperature is above the B-alarm limit 
+		       (55 degrees Celsius).
+
+	 TempSens  2   The rear PBA temperature sensor is 
+                       out of range. 
+
+         Motor     3   The current to one of the fan motors 
+                       is out of range.
+
+         Comerr    4   This flag is activated if the fan is 
+                       configured for cooperation 
+                       (using OTYP_FINFO1 mechanism) with 
+                       another external fan unit and the 
+                       reporting of flags and temperatures 
+                       with that fan units has failed 
+                       (two or more consecutive reports
+		        from one or more FU are missing).
+
+         Regerr    5   Fan motor voltage regulation failure. 
+
+                   6   Unused. Always signalled as logical '0'.
+
+         IntFail   7   This flag indicates a serious 
+                       internal fault."
+
+    SYNTAX Integer32 
+
+
+PfmPowerFlagValues ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d"
+    STATUS	current
+    DESCRIPTION
+	"Flags related to power functionality in PFM.
+
+         The argument is a 32 bit integer where bit 0 is lsb.
+
+	 Common for all flags is that a logical '1' indicates the 
+         error condition and logical '0' the normal operation state. 
+
+         Non-implemented bits are signalled as logical '0'
+
+         Some flags have different meaning depending on
+         type of PFM module device:
+         HOD = High Ohmic Device
+	 LOD = Low Ohmic Device
+         See object pfmModuleDeviceType.
+         
+
+         Name     Bit  Description
+         -------------------------
+	 TempSens  0   The front PBA temperature sensor is
+                       out of range. 
+
+         FeedCabl  1   One or more of the two -48V feeder 
+                       cables are missing. This condition is 
+                       based on the status of the sense pin 
+                       of these connectors.
+
+         FeedVolt  2   Input power is not available on 
+                       exactly 3 inputs 
+
+         OutConn   3   The rear output connector is unconnected. 
+
+         Tripped   4   One or more -48V input circuits 
+                       current limiter (ILIM) blocks have 
+                       been exposed to overcurrent.
+
+         Diode     5   One or more of the input circuits 
+                       diode blocks is faulty.
+
+         Ilim      6   For High Ohmic Device (HOD):
+                       One or more of the input circuits current 
+                       limiter (ILIM) blocks is faulty.
+
+         Cap       6   For Low Ohmic Device (LOD):
+                       The capacitor bank is not connected to
+                       the output voltage of some reason
+                       This means that PFM provides reduced
+                       or no holdup functionality of output
+                       voltage in case of input voltage sags.
+
+         Inactive  7   The PFM does not supply output power 
+                       (due to above faults)"
+
+    SYNTAX Integer32 
+
+PfmInterfaceFlagValues ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d"
+    STATUS	current
+    DESCRIPTION
+        "Flags related to maintenance channel
+         HW interface in PFM.
+
+	 The argument is a 32 bit integer where bit 0 is lsb.
+
+	 Common for all flags is that a logical '1' indicates the 
+         error condition and logical '0' the normal operation state. 
+
+         Non-implemented bits are signalled as logical '0'
+
+         Name     Bit  Description
+         -------------------------
+         A_INV     0   The input voltage on the A-side communication 
+                       interface data input (RX) pin is not correct.
+
+                   1   Unused. Always signalled as logical '0'.
+
+         B_INV     2   The input voltage on the B-side communication 
+                       interface data input (RX) pin is not correct.
+
+                   3   Unused. Always signalled as logical '0'.
+
+         A_48V     4   No power is available at power inlet A. 
+
+         B_48V     5   No power is available at power inlet B.
+
+         A_MSG     6   This message (IFLAGS read request/response) is
+                       handled via the Supervision A interface.
+                       One and only one of A_MSG and B_MSG are 
+                       always active.
+
+         B_MSG     7   This message (IFLAGS read request/response) is 
+                       handled via the Supervision B interface. 
+                       One and only one of A_MSG and B_MSG are 
+                       always active."
+    SYNTAX Integer32 
+
+
+PfmAnalogueValue ::= TEXTUAL-CONVENTION
+    STATUS	current
+    DESCRIPTION
+	"This textual convention describes a read only
+         8 bit signed analogue value.
+
+	 octet 1: Value:   8 bit signed integer value
+	 octet 2: Mult:    8 bit unsigned multiplier
+	 octet 3: Div:	   8 bit unsigned dividend
+	 octet 4: Exp:     8 bit signed integer
+
+	 Read value will be: (Value * Mult)/Div * 10eExp."
+
+    SYNTAX OCTET STRING (SIZE (4)) 
+
+
+CommonLedStates ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d"
+    STATUS	current
+    DESCRIPTION
+	"This textual convention describes the common LED states:
+
+	 The argument is a 32 bit integer where bit 0 is lsb.
+
+	 off (0)		The indicator is OFF
+
+	 on (1)			The indicator i Steady on
+
+	 slowBlink (2)		Blinking at 1Hz; OFF  500 ms  ON 500 ms
+
+	 fastBlink (3)		Blinking at 4Hz; OFF  125 ms  ON 125 ms"
+
+    SYNTAX Integer32 
+
+
+DiagTestResult  ::= TEXTUAL-CONVENTION
+    STATUS	current
+    DESCRIPTION
+	"This textual convention describes the
+         result of a diagnostic test.
+
+         The diagnostic test result will be returned in
+         the following octets where:
+         octet  1    'diagnostic code' as written, 1-31.
+         octet  2    Result size in bytes 
+	 octet  3-N  Result bytes"
+         
+    SYNTAX OCTET STRING (SIZE (64))
+
+WarningLevel ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "This textual convention describes warning level.
+
+        ok(0):       The status of the Compact Flash is OK.
+
+        warning(1):  The Compact Flash on the board has started to
+                     wear out some of its blocks. 
+                     It is thus recommended to have the
+                     degenerating Compact Flash replaced 
+                     as soon as practicable. 
+                     (It may wear out in a few weeks.)
+
+        critical(2): The Compact Flash on the board has degenerated 
+                     further and needs to be replaced without further 
+                     due,in order to avoid a disk crash.
+
+        unknown(3):  No Compact Flash exists, or the Compact Flash 
+                     type is not recognized."
+
+    SYNTAX      INTEGER {
+                   ok (0),
+                   warning (1),
+                   critical (2),
+                   unknown  (3)
+                   }
+
+ 
+END
+   

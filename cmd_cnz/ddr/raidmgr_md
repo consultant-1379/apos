@@ -1,0 +1,1521 @@
+#!/bin/bash 
+#
+# ------------------------------------------------------------------------
+#     Copyright (C) 2011 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+# 	raidmgr
+# Description:
+# 	A script to manage RAID1 from COM-CLI in APG43L
+#
+# Note: 
+#	Most of 'raidmgr' command is followed from 'raidmgmt'
+#	to make both the commands aligned.
+##
+# Usage: raidmgr -a
+#	 raidmgr -c [ -f]
+#	 raidmgr -d [ -f]
+#        raidmgr -e [ -f]
+#        raidmgr -k
+#        raidmgr -m [ -f]
+#        raidmgr -r <diskA/diskB> [ -f]
+#        raidmgr -s
+##
+# Output:
+# 	Command print-out is printed on console.
+##
+# Changelog:
+# - Tue Mar 25 2022 -Dharma Teja (XDHATEJ)
+#   - added fix for TR HZ60443 Improving raidmgr -k option
+# - Mon 03 Jan 2022 - Dharma Teja (xdhatej)
+#     Added performance related logs for "busy filesystem issue"
+# - Fri 03 Sep 2021 - Sweapnika Baradi (xswapba)
+#       Revert the TR fix HY86941
+# - Thu 17 Jun 2021 - Roshini Chilukoti (zchiros)
+#	Fix for TR HY86941 Issue with raidmgr -k option
+# - Mon 29 Jul 2018 - Nazeema Begum (XNAZBEG)
+#	Fix for TR HW79030 (raidmgr -s is throwing error in single disk faulty case)
+# - Wed 05 Jul 2017 - Swapnika Baradi (XSWAPBA)
+#	Fix for TR HV84633(removing partitions in case if used board is used for board replacement)
+# - Fri 11 Nov 2016 - Swapnika Baradi (XSWAPBA)
+#       Fix for TR HU79440(Adding ETX character at confirmation)
+# - Tue 18 Jun 2013 - Krishna Chaitanya (xchakri)
+#	Modified the code for the TR: HR41154
+# - Tue 28 May 2013 - Krishna Chaitanya (xchakri)
+#	Modified the code for TR's:HR40128,HR36198
+#	Modified the code to handle the case where
+#	new disk without partitions is inserted.
+# - Thu 28 Feb 2013 - Pratap Reddy (xpraupp)
+#       Added '-a' and '-k' options
+# - Fri 01 Feb 2013 - Malangsha Shaik (xmalsha)
+#	Removed raidmgr unmount option
+# - Tue 22 Jan 2013 - Malangsha Shaik (xmalsha)
+#       Changed '-s' printout and
+#	Remaned <Disk A/Disk B> with <diskA/diskB>
+# - Tue 25 Sep 2012 - Eswar B
+#	Added '-d' option
+# - Tue 07 Aug 2012 - Malangsha Shaik (xmalsha)
+#	Added '-u' unmount option
+# - Sat Jul 21 2012 - Malangsha Shaik (xmalsha)
+# 	Added '-e' enlarge option
+# - Tue Jun 26 2012 - Malangsha Shaik (xmalsha)
+#       First version.
+##
+
+# paths and files variables
+SCRIPT_NAME="raidmgr"
+LOG_TAG='raidmgr'
+LOG_INFO=raidmgr.stdout
+LOG_ERR=raidmgr.stderr
+LOG_DIR=/tmp/raidmgr
+RAID_DEVICE="/dev/md0"
+ETC_DIR="/etc"
+BLK_DIR="/sys/class/block"
+MOUNT_POINT="/data"
+MDSTAT=/proc/mdstat
+RHOST=''
+[ -f /etc/cluster/nodes/peer/hostname ] && RHOST=$(</etc/cluster/nodes/peer/hostname)
+
+# os command-list
+CMD_AWK=/usr/bin/awk
+CMD_BASENAME=/usr/bin/basename
+CMD_BLOCKDEV=/sbin/blockdev
+CMD_CAT=/bin/cat
+CMD_CHMOD=/bin/chmod
+CMD_CONFIGAP=/usr/bin/configap 
+CMD_CUT=/usr/bin/cut
+CMD_DD=/bin/dd
+CMD_DIRNAME=/usr/bin/dirname
+CMD_DMIDECODE=/usr/sbin/dmidecode
+CMD_FDISK=/sbin/fdisk
+CMD_FIND=/usr/bin/find
+CMD_FUSER=/bin/fuser
+CMD_GETOPT=/usr/bin/getopt
+CMD_GREP=/usr/bin/grep
+CMD_IMMLIST=/usr/bin/immlist
+CMD_KILL=/bin/kill
+CMD_LOGGER=/bin/logger
+CMD_LS=/bin/ls
+CMD_MDADM=/sbin/mdadm
+CMD_MKDIR=/bin/mkdir
+CMD_MKFS_EXT3=/sbin/mkfs.ext3
+CMD_MOUNT=/bin/mount
+CMD_PARTPROBE=/usr/sbin/partprobe
+CMD_PIDOF=/sbin/pidof
+CMD_PS=/bin/ps
+CMD_QUOTACHECK=/sbin/quotacheck
+CMD_QUOTAOFF=/sbin/quotaoff
+CMD_QUOTAON=/sbin/quotaon
+CMD_RESIZE2FS=/sbin/resize2fs
+CMD_READLINK=/usr/bin/readlink
+CMD_RM=/bin/rm
+CMD_SED=/usr/bin/sed
+CMD_SYSCTL=/sbin/sysctl
+CMD_TAIL=/usr/bin/tail
+CMD_TR=/usr/bin/tr
+CMD_UDEVADM=/sbin/udevadm
+CMD_UMOUNT=/bin/umount
+CMD_WC=/usr/bin/wc
+CMD_E2FSCK=/sbin/e2fsck
+CMD_SSH=/usr/bin/ssh
+# ap command-list
+CMD_CONFIGAP=/usr/bin/configap
+CMD_VDIRCONF=/opt/ap/apos/conf/apos_vdirconf.sh
+CMD_SMARTCTL=/usr/sbin/smartctl
+CMD_HWTYPE='/opt/ap/apos/conf/apos_hwtype.sh'
+
+# scrpt-wide variables
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+DDA='/dev/eri_diskA'
+DDA_DATA='/dev/eri_diskA_data'
+DDA_META='/dev/eri_diskA_meta'
+DDB='/dev/eri_diskB'
+DDB_DATA='/dev/eri_diskB_data'
+DDB_META='/dev/eri_diskB_meta'
+SCRIPT_OPTS=
+REBUILD=$FALSE
+RECREATE=$FALSE
+STATUS=$FALSE
+LIST=$FALSE
+CREATE=$FALSE
+FORCE=$FALSE
+CHECK=$FALSE
+HEALTH=$FALSE
+FOLDERS=$FALSE
+ENLARGE=$FALSE
+OPT_ARG_DISK=''
+OPT_BITMAP=$FALSE
+OPT_PART=$FALSE
+MESSAGE=
+ACTIVE=1
+PASSIVE=2
+NODE_STATE=''
+RAID_DISKS_VERBOSE=''
+RAID_PARTITIONS=''
+DISK_A=''
+DISK_B=''
+PART_A=''
+PART_B=''
+F_INFO=''
+F_ERR=''
+FSTAB_OPTIONS='rw,grpjquota=aquota.group,jqfmt=vfsv0'
+FSTAB_LINE="$RAID_DEVICE $MOUNT_POINT ext3 $FSTAB_OPTIONS 0 0"
+is_swm_2_0="/cluster/storage/system/config/apos/swm_version"
+BUSYFS_LOG="/var/log/acs/tra/logging/apos_raid.log"
+# list-of exit codes
+exit_sucs=0
+exit_fail=1
+exit_usge=2
+exit_cmnd_abrt=3
+exit_rbld_eror=4
+exit_size_eror=5
+exit_raid_munt=6
+exit_part_eror=7
+exit_madm_eror=8
+exit_invd_node=10
+exit_dsze_eror=11
+exit_fsrz_eror=12
+exit_grow_eror=13
+exit_dskA_eror=20
+exit_dskB_eror=21
+exit_raid_eror=30
+exit_disk_eror=31
+exit_ssux_eror=32
+exit_fold_eror=33
+exit_vdir_eror=34
+
+#----------------------------------------------------------------------------------------
+function is_alive(){
+local NODE="${1}"
+        [[ -z "${NODE}" ]] && return 1
+                /bin/ping -q -i 1 -w 1 -W 1 -c 1 "${NODE}" &> /dev/null
+                local RETURN_CODE=$?
+                if [ $RETURN_CODE -eq 0 ]; then
+                        return 0
+                else
+                        return 1
+                fi
+}
+
+#----------------------------------------------------------------------------------------
+function log(){
+	local PRIO='-p user.notice'
+	local MESSAGE="${*:-notice}"
+	${CMD_LOGGER} $PRIO $LOG_TAG "$MESSAGE"
+}
+
+#----------------------------------------------------------------------------------------
+
+function busyfs_log(){
+        echo "[$(date --utc)] $@" >> $BUSYFS_LOG
+}
+
+#----------------------------------------------------------------------------------------
+function log_error(){
+	local PRIO='-p user.err'
+	local MESSAGE="${*:-error}"
+	${CMD_LOGGER} $PRIO $LOG_TAG "$MESSAGE"
+	ERR "$MESSAGE"
+}
+
+#----------------------------------------------------------------------------------------
+function INFO(){
+	echo "[$(date --utc +'%Y-%m-%d %H:%M:%S')] $@" >>$F_INFO
+}
+
+#----------------------------------------------------------------------------------------
+function ERR(){
+	echo "[$(date --utc +'%Y-%m-%d %H:%M:%S')] $@" >>$F_ERR
+}
+
+#----------------------------------------------------------------------------------------
+function abort(){
+	console_print "Error when executing (general fault)\n"
+	log_error "ABORTING: <"$1">"
+	exit $exit_fail
+}
+
+#----------------------------------------------------------------------------------------
+function console_print(){
+	echo -e
+	echo -e "$1"
+	echo -e
+}
+
+#----------------------------------------------------------------------------------------
+function console_abort(){
+	console_print "$1"
+	echo -e "Failed to complete the operation.\n"
+	log_error "ABORTING: <"$1">"
+	exit $2
+}
+
+#----------------------------------------------------------------------------------------
+function trace_enter(){
+	INFO "$1() >>"
+}
+
+#----------------------------------------------------------------------------------------
+function trace_leave(){
+	INFO "$1() <<"
+}
+
+#----------------------------------------------------------------------------------------
+function confirm(){
+
+	CMD=""
+	local rCode
+	while [ "$CMD" != "y" ] && [ "$CMD" != "n" ]; do
+		echo -e "Execute raidmgr with these parameters:"
+		echo -e "$SCRIPT_OPTS"
+		echo -en "[y=yes, n=no]?\003:"
+		read CMD
+	done
+
+	if [ "$CMD" == "y" ]; then
+		rCode=0
+	else
+		rCode=1
+	fi
+	
+	return $rCode
+}
+
+#----------------------------------------------------------------------------------------
+function isactive(){
+	trace_enter $FUNCNAME
+	
+	local rCode
+
+	# check if we are running on 'active-node'
+        node_id=$(</etc/cluster/nodes/this/id)
+	if [ -f $is_swm_2_0 ]; then
+	        $(${CMD_IMMLIST} -a saAmfSISUHAState "safSISU=safSu=SC-$node_id\,safSg=2N\,safApp=ERIC-apg.nbi.aggregation.service,safSi=apg.nbi.aggregation.service-2N-1,safApp=ERIC-apg.nbi.aggregation.service" &>/dev/null)
+	else
+		$(${CMD_IMMLIST} -a saAmfSISUHAState "safSISU=safSu=$node_id\,safSg=2N\,safApp=ERIC-APG,safSi=AGENT,safApp=ERIC-APG" &>/dev/null)
+	fi		
+        rCode=$?
+        [ $rCode -ne 0 ] && return $FALSE
+	if [ -f $is_swm_2_0 ]; then
+		NODE_STATE=$(${CMD_IMMLIST} -a saAmfSISUHAState "safSISU=safSu=SC-$node_id\,safSg=2N\,safApp=ERIC-apg.nbi.aggregation.service,safSi=apg.nbi.aggregation.service-2N-1,safApp=ERIC-apg.nbi.aggregation.service" | ${CMD_CUT} -d = -f2)
+	else
+		NODE_STATE=$(${CMD_IMMLIST} -a saAmfSISUHAState "safSISU=safSu=$node_id\,safSg=2N\,safApp=ERIC-apg.nbi.aggregation.service,safSi=apg.nbi.aggregation.service-2N-1,safApp=ERIC-apg.nbi.aggregation.service" | ${CMD_CUT} -d = -f2)
+	fi
+	#[ "$NODE_STATE" == "$PASSIVE" ] && STATE=$PASSIVE
+	[ "$NODE_STATE" != "$ACTIVE"  ] && return $FALSE
+
+	trace_leave $FUNCNAME
+	return $TRUE
+}
+
+# The function checks if files and folders exist.
+#----------------------------------------------------------------------------------------
+function sanity_check(){
+	
+	F_INFO=$LOG_DIR/$LOG_INFO
+	F_ERR=$LOG_DIR/$LOG_ERR
+	[ ! -d $LOG_DIR         ] && ${CMD_MKDIR} -p $LOG_DIR
+	[ ! -d $BLK_DIR         ] && abort "Folder $BLK_DIR not found!"
+	[ ! -d $ETC_DIR         ] && abort "Folder $ETC_DIR not found!"
+	[ ! -d $MOUNT_POINT     ] && ${CMD_MKDIR} -p $MOUNT_POINT && INFO "Created folder: \"$MOUNT_POINT\""
+	[ -f $F_INFO 		] && ${CMD_RM} -f $F_INFO
+	[ -f $F_ERR  		] && ${CMD_RM} -f $F_ERR
+
+	# giving full access to LOG_DIR as this command can be launced
+	# by ldap user as well as trouble shooting user.
+	${CMD_CHMOD} 777 -R $LOG_DIR
+}
+
+#----------------------------------------------------------------------------------------
+# This function, returns hardware type if the user invoked this command
+function GetHwType() {
+        local HW_TYPE=$(${CMD_HWTYPE}  --verbose | $CMD_AWK -F"=" '/hw-type/{print $2}')
+        echo $HW_TYPE
+}
+
+
+#----------------------------------------------------------------------------------------
+function cleanup_logs(){
+
+	# if the command is executed successfully, remove all the
+	# temporary logs.
+	[ -f $F_INFO ] && ${CMD_RM} -f $F_INFO
+	[ -f $F_ERR  ] && ${CMD_RM} -f $F_ERR
+
+	return $exit_sucs	
+}
+
+#----------------------------------------------------------------------------------------
+function usage(){
+
+$CMD_CAT << USAGE
+Usage: $SCRIPT_NAME -a
+       $SCRIPT_NAME -c [ -f]
+       $SCRIPT_NAME -d [ -f]
+       $SCRIPT_NAME -e [ -f]
+       $SCRIPT_NAME -k
+       $SCRIPT_NAME -m [ -f]
+       $SCRIPT_NAME -r <diskA/diskB> [ -f]
+       $SCRIPT_NAME -s
+USAGE
+}
+
+#----------------------------------------------------------------------------------------
+function usage_error(){
+	log_error "Incorrect usage!"
+	echo -e
+	echo -e "Incorrect usage!"
+	usage
+	echo -e
+	exit $exit_usge
+}
+
+#----------------------------------------------------------------------------------------
+function parse_args(){
+
+	# check if the command is invoked with-out any paramter.
+	[ $# -eq 0 ] && usage_error "Incorrect usage!"
+
+	SCRIPT_OPTS="$SCRIPT_NAME $*"
+	ARGS=""
+
+	is_option_c=$FALSE
+	is_option_f=$FALSE
+	is_option_e=$FALSE
+	is_option_d=$FALSE
+	is_option_m=$FALSE
+	is_option_r=$FALSE
+	is_option_s=$FALSE
+	is_option_a=$FALSE
+	is_option_k=$FALSE
+
+	for ARG in $*
+	do
+		if [ $is_option_r -eq $TRUE ]; then
+			if [ ${ARG:0:1} = '-' ]; then
+				usage_error "Incorrect device name"
+			fi	
+			ARGS="${ARGS} ${ARG}"
+			is_option_r=$FALSE
+			continue
+		fi
+
+		case "$ARG" in
+			'-e')
+				[ $is_option_e -eq $TRUE ] && usage_error "Incorrect usage!"
+				is_option_e=$TRUE
+				ARGS="${ARGS} ${ARG}"
+			;;
+			'-d')
+				[ $is_option_d -eq $TRUE ] && usage_error "Incorrect usage!"
+				is_option_d=$TRUE
+                                ARGS="${ARGS} ${ARG}"				
+                        ;;
+			'-m')
+				[ $is_option_m -eq $TRUE ] && usage_error "Incorrect usage!"
+				is_option_m=$TRUE
+				ARGS="${ARGS} ${ARG}"		
+			;;
+			'-r')
+				[[ $is_option_r -eq $TRUE || $# -eq 1 ]] && usage_error "Incorrect usage!"
+				is_option_r=$TRUE
+				ARGS="${ARGS} ${ARG}"
+			;;
+			'-s')
+				[ $is_option_s -eq $TRUE ] && usage_error "Incorrect usage!"
+				is_option_s=$TRUE
+				ARGS="${ARGS} ${ARG}"
+			;;
+			'-a')
+				[ $is_option_a -eq $TRUE ] && usage_error "Incorrect usage!"
+				is_option_a=$TRUE
+				ARGS="${ARGS} ${ARG}"
+			;;
+			'-k')
+				[ $is_option_k -eq $TRUE ] && usage_error "Incorrect usage!"
+				is_option_k=$TRUE
+				ARGS="${ARGS} ${ARG}"
+			;;
+			'-c')
+				[ $is_option_c -eq $TRUE ] && usage_error "Incorrect usage!"
+				is_option_c=$TRUE
+				ARGS="${ARGS} ${ARG}"
+			;;
+			'-f')
+				[ $is_option_f -eq $TRUE ] && usage_error "Incorrect usage!"
+				is_option_f=$TRUE
+				ARGS="${ARGS} ${ARG}"
+			;;
+			*)
+				usage_error "Incorrect usage!"
+			;;
+		esac
+	done
+
+	eval set -- $ARGS
+	VALID_OPTS="-e -d -m -r: -s -c -f -a -k"
+	OPTNS=$( echo "$VALID_OPTS" | $CMD_TR -d '-' | tr -d ' ')
+
+	while getopts $OPTNS OPTN
+	do
+		case $OPTN in
+			e)
+				ENLARGE=$TRUE
+			;;
+      d)
+       FOLDERS=$TRUE				
+      ;;                      
+			m)
+				REBUILD=$TRUE
+			;;
+			r)
+				RECREATE=$TRUE
+				OPT_ARG_DISK=$OPTARG
+			;;
+			s)
+				STATUS=$TRUE
+			;;
+			a)
+				HEALTH=$TRUE
+			;;
+			k)
+				CHECK=$TRUE
+			;;
+			c)
+				CREATE=$TRUE
+			;;
+			f)
+				FORCE=$TRUE
+			;;
+			*)
+				usage_error "Incorrect usage!"
+			;;
+		esac
+	done
+
+	# implementing mutual exclusion between incompatible options
+	local SUM=$(( $REBUILD + $RECREATE + $CREATE + $STATUS + $ENLARGE + $FOLDERS + $HEALTH + $CHECK ))
+	[ ! $SUM -eq 7 ] && usage_error "incompatible options specified"
+
+	# check if status is invoked with force.
+	[[ $STATUS -eq $TRUE && $FORCE -eq $TRUE ]] && usage_error "Incorrect usage!"
+
+	# check if disk status is invoked with force.
+	[[ $HEALTH -eq $TRUE && $FORCE -eq $TRUE ]] && usage_error "Incorrect usage!"
+
+	# check if disk status is invoked with force.
+	[[ $CHECK -eq $TRUE && $FORCE -eq $TRUE ]] && usage_error "Incorrect usage!"
+
+	# validate input paramters
+	[ $RECREATE -eq $TRUE ] && [[ $OPT_ARG_DISK != 'diskA' && $OPT_ARG_DISK != 'diskB' ]] &&
+	usage_error "Incorrect usage!"
+	OPT_ARG_DISK=$( echo "$OPT_ARG_DISK" | $CMD_TR '[:lower:]' '[:upper:]')
+
+	return $exit_sucs	
+}
+
+#----------------------------------------------------------------------------------------
+function launchCommand(){
+	trace_enter $FUNCNAME
+
+	[[ $FORCE -eq $FALSE && ! $STATUS -eq $TRUE && ! $CHECK -eq $TRUE  && ! $HEALTH -eq $TRUE ]] && 
+	if ! confirm; then
+		console_abort "Command aborted by user" $exit_cmnd_abrt
+	fi
+
+	[ $STATUS   -eq $TRUE ] && raid_status
+	[ $REBUILD  -eq $TRUE ] && raid_rebuild
+	[ $RECREATE -eq $TRUE ] && raid_recreate
+	[ $CREATE   -eq $TRUE ] && raid_create
+	[ $FOLDERS  -eq $TRUE ] && raid_folders
+	[ $ENLARGE  -eq $TRUE ] && raid_enlarge
+	[ $HEALTH   -eq $TRUE ] && raid_disk_health
+	[ $CHECK    -eq $TRUE ] && raid_fs_check
+
+	trace_leave $FUNCNAME
+	return $exit_sucs
+}
+
+#----------------------------------------------------------------------------------------
+# The function checks for a valid RAID.
+# exit codes of the $CMD_MDADM --detail $RAID_DEVICE --test command:
+#  0: The array is functioning normally.
+#  1: The array has at least one failed device.
+#  2: The array has multiple failed devices such that it is unusable.
+#  4: There was an error while trying to get information about the device.
+# Return: the exit status is $TRUE in case it finds a valid RAID array, $FALSE otherwise.
+function raid_exists(){
+	trace_enter $FUNCNAME
+
+        $CMD_MDADM --detail $RAID_DEVICE --test --verbose >>$F_INFO 2>>$F_ERR
+        local EXIT_CODE=$?
+        local EXISTS=$FALSE
+        case $EXIT_CODE in
+                0|1|2)
+                        MESSAGE="RAID device found."
+                        EXISTS=$TRUE
+                ;;
+                4)
+                        MESSAGE="No RAID found. Exit status: $EXIT_CODE"
+                ;;
+                *)
+                        abort "unhandled return code found: $EXIT_CODE"
+        esac
+        INFO "$MESSAGE"
+
+	trace_leave $FUNCNAME
+        return $EXISTS
+}
+
+
+#----------------------------------------------------------------------------------------
+function raid_status(){
+	# The function prints status information about the existing RAID.
+	trace_enter $FUNCNAME	
+
+	local rCode
+	local MESSAGE="DEGRADED"
+	local DEGRADED=$FALSE
+	local A_MESSAGE='Faulty Disk'
+
+	$($CMD_MDADM --detail $RAID_DEVICE --test --verbose >$F_INFO 2>$F_ERR)
+	rCode=$?	
+	if [ $rCode -eq 0 ]; then
+		disk_finder
+		local TOKEN='Raid Devices'
+		local DEVICES_COUNT=$( $CMD_MDADM --detail $RAID_DEVICE 2>/dev/null | $CMD_GREP -E "^[[:space:]]*$TOKEN : " | $CMD_SED 's@^.*: @@g' )
+		if [ $DEVICES_COUNT -ne 2 ];then
+			if [ -z $DISK_A ];then
+				fDisk='diskA'
+				MESSAGE="$MESSAGE\n$A_MESSAGE: $fDisk"
+			else
+				$( $CMD_MDADM --detail $RAID_DEVICE 2>/dev/null | $CMD_GREP "$DISK_A" >$F_INFO 2>$F_ERR)
+				EXT_CODE=$?
+				[ $EXT_CODE -ne 0 ] && {
+					 fDisk='diskA'
+					 MESSAGE="$MESSAGE\n$A_MESSAGE: $fDisk"
+				}
+			fi
+			
+			if [ -z $DISK_B ];then
+				fDisk='diskB'
+				MESSAGE="$MESSAGE\n$A_MESSAGE: $fDisk"
+			else
+				$( $CMD_MDADM --detail $RAID_DEVICE 2>/dev/null | $CMD_GREP "$DISK_B" >$F_INFO 2>$F_ERR)
+				EXT_CODE=$?
+				[ $EXT_CODE -ne 0 ] && {
+					fDisk='diskB'
+                        	        MESSAGE="$MESSAGE\n$A_MESSAGE: $fDisk"
+				}
+			fi
+		else
+			MESSAGE="UP"
+		fi
+
+	elif [ $rCode -eq 1 ]; then
+		PROGRESS=$(cat $MDSTAT | grep recovery | awk '{ print $4}')
+		if [ -z $PROGRESS ]; then
+			DEGRADED=$TRUE	
+		else
+			local TOKEN='Rebuild Status'
+			local REBUILD_STATUS=$( $CMD_MDADM --detail $RAID_DEVICE 2>/dev/null | $CMD_GREP -E "^[[:space:]]*$TOKEN : " | $CMD_SED 's@^.*: @@g' )
+			MESSAGE="Raid status: DEGRADED (rebuild: ${REBUILD_STATUS})"
+		fi
+	else
+		MESSAGE="DOWN"
+	fi
+	
+	[ $DEGRADED -eq $TRUE ] && {
+		disk_finder
+		dState=$($CMD_MDADM --detail $RAID_DEVICE --test --verbose 2>$F_ERR | grep $DISK_A  2>/dev/null | awk '{print $5}' | head -1)
+		[[ "$dState" == "active" ]] && fDisk='diskB'
+		[[ "$dState" == "faulty" || -z $dState || "$dState" == "spare" ]] && fDisk='diskA'
+
+		MESSAGE="$MESSAGE\n$A_MESSAGE: $fDisk"
+		INFO "$MESSAGE"
+	}
+
+	console_print "$MESSAGE"
+
+	trace_leave $FUNCNAME
+	return $rCode
+}
+
+function phy2dev(){
+	for LINK in $(find /dev/ -maxdepth 1 -name 'eri_phy[0-9]-disk[AB]' -type l); do
+		PHY=$(basename $LINK)
+		PHY=${PHY##eri_}
+		PHY=${PHY%%-*}
+		DEV=/dev/$($CMD_READLINK $LINK)
+		echo "$PHY:$DEV "
+	done
+	return $TRUE
+}
+
+#----------------------------------------------------------------------------------------
+function disk_finder(){
+  trace_enter $FUNCNAME
+  local count=0
+  while [ $count -lt 10 ]; do
+        if [[ "$($CMD_READLINK $DDA)" != "" ]] && [[ "$($CMD_READLINK $DDA_DATA)" != "" ]]&& [[ "$($CMD_READLINK $DDB)" != "" ]]&& [[ "$($CMD_READLINK $DDB_DATA)" != "" ]]; then
+          break
+        else
+          sleep 1
+          ((count++))
+          continue
+        fi
+  done
+	local DEV_A=/dev/$($CMD_READLINK $DDA)
+	local DEV_A_DATA=/dev/$($CMD_READLINK $DDA_DATA)
+	local DEV_B=/dev/$($CMD_READLINK $DDB)
+	local DEV_B_DATA=/dev/$($CMD_READLINK $DDB_DATA)
+	DISK_A="$DEV_A"
+        PART_A="$DEV_A_DATA"
+        DISK_B="$DEV_B"
+        PART_B="$DEV_B_DATA"
+        RAID_DISKS="$DEV_A $DEV_B"
+	RAID_DISKS_COUNT=$(echo "$RAID_DISKS" | $CMD_WC -w)
+	RAID_PARTITIONS="$DEV_A_DATA $DEV_B_DATA"		
+	RAID_DISKS_VERBOSE="$(phy2dev)"
+	return $TRUE
+}
+
+# The function will print on stdout the state of the device specified as
+#  parameter.
+# Syntax: get_disk_state <device>
+#----------------------------------------------------------------------------------------
+function get_disk_state(){
+        local DISK=${1:-''}
+        if [ -n "$DISK" ]; then
+                echo "$($CMD_MDADM --detail $RAID_DEVICE | $CMD_SED -e '1,/^\ *Number\ *Major\ *Minor\ *RaidDevice\ *State/d' | $CMD_GREP $DISK\$)"
+                return $TRUE
+        else
+                return $FALSE
+        fi
+}
+
+#----------------------------------------------------------------------------------------
+function do_list(){
+	trace_enter $FUNCNAME $*
+        local MESSAGE=''
+        disk_finder
+        if raid_exists; then
+                # Line1: RAID status
+                local TOKEN='State'
+                local RAID_STATE="$( $CMD_MDADM --detail $RAID_DEVICE 2>/dev/null | $CMD_GREP -E ^[[:space:]]*$TOKEN\ :\  | $CMD_SED 's@^.*: @@g' )"
+                TOKEN='Rebuild Status'
+                local REBUILD_STATUS=$( $CMD_MDADM --detail $RAID_DEVICE 2>/dev/null | $CMD_GREP -E "^[[:space:]]*$TOKEN : " | $CMD_SED 's@^.*: @@g' )
+                if [ -n "$REBUILD_STATUS" ]; then
+                        MESSAGE="Raid status: ${RAID_STATE} (rebuild: ${REBUILD_STATUS})"
+                else
+                        MESSAGE="Raid status: ${RAID_STATE}"
+                fi
+                INFO "$MESSAGE"
+								echo -e "$MESSAGE"
+
+                # Line2 and Line3: disks status
+                local D=''
+                local COMPONENTS="$($CMD_MDADM --detail $RAID_DEVICE | $CMD_SED -e '1,/^\ *Number\ *Major\ *Minor\ *RaidDevice\ *State/d' | $CMD_GREP -v ^$ | grep '/dev/' | $CMD_AWK '{ print $NF }')"
+								echo COMPONENTS:$COMPONENTS
+                for D in $COMPONENTS; do
+                        COMPONENT_STATE=$(get_disk_state $D)
+												echo COMPONENT_STATE:$COMPONENT_STATE
+                        if [ "$COMPONENT_STATE" ]; then
+                                ID="$(echo $COMPONENT_STATE | $CMD_AWK '{ print $1 }')"
+                                COL_NUM=$(echo $COMPONENT_STATE | $CMD_WC -w)
+                                COLS=$( for ((i=5; i<=$COL_NUM-1; i++)); do echo -n "\$${i}\" \""; done)
+                                STATE="$(echo $COMPONENT_STATE | $CMD_AWK "{ print ${COLS} }")"
+                                local DISK_STATE=''
+                                local BASE_D=$($CMD_BASENAME $D)
+                                MESSAGE="$ID: $BASE_D $STATE"
+                                INFO "$MESSAGE"
+                                # MESSAGE="$ID: $BASE_D $DISK_STATE"
+																echo -e "$MESSAGE"
+                        fi
+                done
+        else
+                MESSAGE="Raid status: not found"
+                INFO "$MESSAGE"
+				echo -e "$MESSAGE"
+        fi
+        trace_leave $FUNCNAME
+}
+	
+#----------------------------------------------------------------------------------------
+function raid_rebuild(){
+	trace_enter $FUNCNAME
+
+	# this is to check if the command is launched on active-node
+	if ! isactive; then
+		console_abort "The command must be run on the active node" $exit_invd_node
+	fi	
+
+        local MESSAGE=''
+        $CMD_MDADM $RAID_DEVICE --remove faulty >>$F_INFO 2>>$F_ERR || abort 'Failure while trying to remove faulty disks' 
+        $CMD_MDADM $RAID_DEVICE --remove failed >>$F_INFO 2>>$F_ERR || abort 'Failure while trying to remove failed disks'
+        local WORKING=$(do_list | $CMD_TAIL -n +2 | $CMD_AWK '{print $2}')
+        disk_finder
+        local RECOVERED=$FALSE
+        for D in $RAID_PARTITIONS; do
+                local FAULTY=$TRUE
+                for W in $WORKING; do
+                        if [ $($CMD_BASENAME $D) == $W ]; then
+                                FAULTY=$FALSE
+                        fi
+                done
+                if [ $FAULTY -eq $TRUE ]; then
+                        RECOVERED=$TRUE
+                        MESSAGE="re-adding the \"$(disk_mapping "$D")\" disk..."
+                        INFO "$MESSAGE"
+                        $CMD_MDADM --manage $RAID_DEVICE --re-add $D >>$F_INFO 2>>$F_ERR 
+                        local RC=$?
+                        if [ $RC -eq $FALSE ]; then
+				MESSAGE='re-add failed, going for zero-superblock then add'
+                               	INFO "$MESSAGE"
+                               	$CMD_MDADM --zero-superblock $D || abort "Failure while trying to zero-superblock the \"$(disk_mapping "$D")\" disk"
+                               	$CMD_MDADM --manage $RAID_DEVICE --add $D || console_abort "Failure while trying to add the disk in RAID Array" $exit_rbld_eror
+                        fi
+                        MESSAGE="done"
+                        INFO "$MESSAGE"
+                fi
+        done
+
+        if [ $RECOVERED -eq $TRUE ]; then
+                MESSAGE="Disk mirror rebuild success!"
+       	else 
+                MESSAGE="Disk mirror rebuild is in progress/up to date!"
+        fi
+        INFO "$MESSAGE"
+	console_print "$MESSAGE"
+
+	trace_leave $FUNCNAME
+}
+
+#----------------------------------------------------------------------------------------
+# The function checks if the device passed as argument contains a valid raid
+#  partition.
+# Return: $TRUE in case of no-raid-partition, $FALSE if a valid raid partition
+#  is found.
+function do_check(){
+        trace_enter $FUNCNAME $*
+        local EXIT_CODE=''
+        local MESSAGE=''
+        if [ -b "$1" ]; then
+                $CMD_MDADM --examine "$1" >>$F_INFO 2>>$F_ERR
+                EXIT_CODE=$?
+        else
+                abort "Please specify a valid block-device name"
+        fi
+        if [ $EXIT_CODE -eq $TRUE ]; then
+                MESSAGE="$1 has a valid raid partition"
+                EXIT_CODE=$FALSE
+        else
+                MESSAGE="$1 has no raid partition"
+                EXIT_CODE=$TRUE
+        fi
+
+        INFO "$MESSAGE"
+
+        trace_leave $FUNCNAME
+        return $EXIT_CODE
+}
+
+#----------------------------------------------------------------------------------------
+# The function checks if the device passed as argument contains a valid raid
+#  partition.
+# Return: $FALSE in case of no-raid-partition, $TRUE if a valid raid partition
+#  is found.
+
+function has_partition(){
+	trace_enter $FUNCNAME $*
+	local EXIT_CODE=''
+	local MESSAGE=''
+	if [ -b "$1" ]; then
+		$CMD_FDISK -l $1 | $CMD_GREP "$1"1 &> /dev/null 
+		EXIT_CODE=$?
+ 	else
+		abort "Please specify a valid block-device name"
+ 	fi
+
+	local part_count=$($CMD_FDISK -l $1 | $CMD_GREP -E ^"$1" | wc -l &> /dev/null)
+        local part_second=$($CMD_FDISK -l $1 | $CMD_GREP "$1"2 | awk '{print $5}')
+        if [ "$part_second" == "128M" ] && [ "$EXIT_CODE" == "$TRUE" ] && [ "$part_count" == "2" ]; then
+		MESSAGE="$1 has a valid  partition"
+		EXIT_CODE=$TRUE
+	else
+		MESSAGE="$1 has no partition"
+		EXIT_CODE=$FALSE
+	fi
+
+	INFO "$MESSAGE"
+
+	trace_leave $FUNCNAME
+	return $EXIT_CODE
+}
+
+#----------------------------------------------------------------------------------------
+function raid_recreate(){
+	trace_enter $FUNCNAME
+
+	# this is to check if the command is launched on active-node
+	if ! isactive; then
+		console_abort "The command must be run on the active node" $exit_invd_node
+	fi	
+
+	local MESSAGE=''
+	local PART=''
+	local hDISK=''
+	local nDISK=''
+	local DISK=''
+	OPT_PART=$TRUE
+
+	disk_finder
+	[ "$OPT_ARG_DISK" == "DISKA" ] && {
+		PART=$PART_A
+		DISK=$DISK_A
+		hDISK='diskB' 
+		nDISK='diskA'
+	}
+	[ "$OPT_ARG_DISK" == "DISKB" ] && {
+		PART=$PART_B 
+		DISK=$DISK_B
+		hDisk='diskA'
+		nDISK='diskB'
+	}
+	[[ -z $PART &&  $nDISK == 'diskA' ]] && console_abort "Datadisk A not present" $exit_dskA_eror
+	[[ -z $PART &&  $nDISK == 'diskB' ]] && console_abort "Datadisk B not present" $exit_dskB_eror
+
+        ! raid_exists && console_abort '$hDISK is not in correct status, command aborted' $exit_raid_eror
+
+	$CMD_MDADM $RAID_DEVICE --remove faulty >>$F_INFO 2>>$F_ERR || abort 'Failure while trying to remove faulty disks'
+	$CMD_MDADM $RAID_DEVICE --remove failed >>$F_INFO 2>>$F_ERR || abort 'Failure while trying to remove failed disks'
+	
+	local dState=$($CMD_MDADM --detail $RAID_DEVICE --test --verbose 2>$F_ERR | grep $PART  2>/dev/null | awk '{print $5}')
+	
+	if [ "$dState" == "spare" ]; then 
+		$CMD_MDADM $RAID_DEVICE --fail $PART >>$F_INFO 2>>$F_ERR
+		sleep 4
+	fi
+	
+	DISK_STATE=$(get_disk_state $PART)
+        [ -n "$DISK_STATE" ] && console_abort "$nDISK already belongs to RAID Array" $exit_disk_eror
+
+	if ! has_partition $DISK; then
+		do_part $DISK
+	fi
+
+	local RAID_SIZE=$(</sys/class/block/$($CMD_BASENAME $RAID_DEVICE)/size)
+	local DISK_SIZE=$(</sys/class/block/$($CMD_BASENAME $PART)/size)
+	if [ "$DISK_SIZE" -ge "$RAID_SIZE" ]; then
+		$CMD_MDADM $RAID_DEVICE --add $PART >>$F_INFO 2>>$F_ERR
+		[ $? -ne $TRUE ] && {
+			$CMD_MDADM --zero-superblock $PART || abort "Failure while trying to zero-superblock the \"$PART\" disk"
+			$CMD_MDADM --manage $RAID_DEVICE --add $PART &>/dev/null || console_abort "Failure while adding $nDISK to the RAID Array" $exit_madm_eror
+		}
+		local TOKEN='Total Devices'
+		local DEVICES_COUNT=$( $CMD_MDADM --detail $RAID_DEVICE 2>/dev/null | $CMD_GREP -E "^[[:space:]]*$TOKEN : " | $CMD_SED 's@^.*: @@g' )
+		if [ $DEVICES_COUNT -lt 2 ]; then 
+			$CMD_MDADM $RAID_DEVICE --grow --raid-devices=$(($DEVICES_COUNT)) >>$F_INFO 2>>$F_ERR
+			[ $? -ne $TRUE ] && abort "Failure while growing RAID device"
+		fi
+	else
+		console_abort "Only a Disk with a size greater or equal to '$hDISK' can be added" $exit_size_eror
+	fi
+	MESSAGE="'$nDISK' Successfully added to RAID Array!"
+	INFO "$MESSAGE"
+	console_print "$MESSAGE"
+	
+	trace_leave $FUNCNAME
+	return $exit_sucs
+}
+
+
+#----------------------------------------------------------------------------------------
+# The function will return $TRUE if $RAID_DEVICE is found mounted. $FALSE
+#  otherwise.
+function is_mounted(){
+        local EXIT_CODE=$TRUE
+        local MESSAGE=''
+        if [ -z "$( $CMD_MOUNT | $CMD_GREP -E ^$RAID_DEVICE\ on\ $MOUNT_POINT )" ]; then
+                EXIT_CODE=$FALSE
+        fi
+        return $EXIT_CODE
+}
+
+#----------------------------------------------------------------------------------------
+# The function will collect all the memory and cpu utilization during umount failure case.
+# 
+function busyfs_data(){
+local cpu_count=3
+
+busyfs_log 'Collecting the necessary information for the process utilization'
+for ((i = 1; i <= cpu_count; i++))
+        do
+                echo "" >> $BUSYFS_LOG
+                CPU_USAGE=$(top -b -n2 -p 1 | grep -F "Cpu(s)" | tail -1 | awk -F'id,' -v prefix="$prefix" '{ split($1, vs, ","); v=vs[length(vs)]; sub("%", "", v); printf "%s%.1f%%\n", prefix, 100 - v }')
+                DATE=$(date "+%Y-%m-%d %H:%M:")
+                CPU_USAGE="$DATE CPU: $CPU_USAGE"
+                echo "" >> $BUSYFS_LOG
+                echo $CPU_USAGE >> $BUSYFS_LOG
+                echo "" >> $BUSYFS_LOG
+                echo "Process that hold high CPU" >> $BUSYFS_LOG
+                echo "**************************" >> $BUSYFS_LOG
+                ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%cpu | head >> $BUSYFS_LOG
+                echo "" >> $BUSYFS_LOG
+                echo "Process that hold high Mem" >> $BUSYFS_LOG
+                echo "**************************" >> $BUSYFS_LOG
+                ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%mem | head >> $BUSYFS_LOG
+                echo "" >> $BUSYFS_LOG
+       done
+
+        echo "CPU to IO utilisation in percentage (CPU.IO) for last 01 Minute : " >> $BUSYFS_LOG
+        cat /proc/loadavg |awk {'print $1'} /proc/loadavg >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        echo "CPU to IO utilisation in percentage (CPU.IO) for last 05 Minute : " >> $BUSYFS_LOG
+        cat /proc/loadavg |awk {'print $2'} >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        echo "CPU to IO utilisation in percentage (CPU.IO) for last 15 Minute : " >> $BUSYFS_LOG
+        cat /proc/loadavg |awk {'print $3'} >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        echo "iostat with 2 sec interval for $cpu_count" >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        iostat 2 $cpu_count -h >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        echo "vmstat with 2 sec interval for $cpu_count" >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        vmstat -a 2 $cpu_count -S m >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        echo "mpstat with 2 sec interval for $cpu_count" >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        mpstat 2 $cpu_count >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        echo ------------------------------------------------------------------------------ >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+
+        echo "" >> $BUSYFS_LOG
+
+
+}
+
+#----------------------------------------------------------------------------------------
+# This function mounts the $RAID_DEVICE to the $MOUNT_POINT folder, using
+#  $FSTAB_OPTIONS as mount options.
+function do_mount(){
+        trace_enter $FUNCNAME $*
+        local MESSAGE=''
+        if ! is_mounted; then
+                $CMD_MOUNT -o "$FSTAB_OPTIONS" "$RAID_DEVICE" "$MOUNT_POINT" >>$F_INFO 2>>$F_ERR
+                [ $? -ne $TRUE ] && abort 'RAID mount failed'
+                MESSAGE="RAID device successfully mounted to $MOUNT_POINT"
+                INFO "$MESSAGE"
+                echo -e "$MESSAGE"
+        else
+                MESSAGE="RAID device ALREADY mounted to $MOUNT_POINT"
+                INFO "$MESSAGE"
+                echo -e "$MESSAGE"
+        fi
+
+        trace_leave $FUNCNAME
+        return $TRUE
+}
+
+#-------------------INFO -----------------------------------------------------------------
+function disk_mapping() {
+	
+	local ERROR="DISK NOT FOUND"
+	OPT_ARG_MAP=$1
+	local DISK_A=$($CMD_READLINK /dev/eri_diskA)
+	local DISK_B=$($CMD_READLINK /dev/eri_diskB)
+	local MAP_DEVICE=$( echo $OPT_ARG_MAP | $CMD_AWK -F"/" '{print $3}' | $CMD_CUT -c 1-3)
+
+	if [ "$MAP_DEVICE" == "$DISK_A" ]; then
+		DISK=diskA;echo "$DISK"
+	elif [ "$MAP_DEVICE" == "$DISK_B" ]; then
+		DISK=diskB;echo "$DISK"
+	else
+		DISK="$ERROR"
+		echo "$DISK"
+	fi
+
+	return $TRUE
+}
+
+#-------------------INFO -----------------------------------------------------------------
+# this function checks the health of disks using 'smartctl' command
+# if SMART health status is OK, then disk is healthy
+function raid_disk_health(){
+	trace_enter $FUNCNAME $*
+	
+	[ ! -f $CMD_SMARTCTL ] && abort "smartctl command not found"
+	
+	local count=2	
+	disk_finder
+	if [[ -z $DISK_A && -z $DISK_B ]];then
+		MESSAGE="Both Disks are NOT OK"
+	elif [ -z $DISK_A ];then
+		fdisk=diskA
+		MESSAGE="$fdisk NOT OK"
+	elif [ -z $DISK_B ];then
+		fdisk=diskB
+		MESSAGE="$fdisk NOT OK"
+	else
+		for DEVICE in $RAID_DISKS;do
+			STATUS=$($CMD_SMARTCTL --all $DEVICE 2>>$F_ERR | $CMD_AWK '/Health/{print $4}')
+			if [ "$STATUS" != "OK" ];then
+				((count --))
+				fdisk=$(disk_mapping "$DEVICE")
+			fi
+		done
+
+		if [ $count == 2 ];then
+			MESSAGE="Both Disks are OK"
+		elif [ $count == 1 ];then
+			MESSAGE="$fdisk NOT OK"
+		else
+			MESSAGE="Both Disks are NOT OK"
+		fi
+	fi
+	
+	console_print "$MESSAGE"
+	
+	trace_leave $FUNCNAME
+}
+
+#-------------------INFO -----------------------------------------------------------------
+# This function is to check a linux ext2/ext3/etx4 file system
+
+function raid_fs_check(){
+        trace_enter $FUNCNAME $*
+        # this is to check if the command is launched on active-node
+        isactive
+        if [ "$NODE_STATE" == "$PASSIVE" ];then
+                console_abort "The command must be run on the active node" $exit_invd_node
+        fi
+        echo
+        echo -n  "File system check..."
+        local launchcommand
+        local corrupt_file
+        local fs_count_cluster=0
+        local fs_count_data=0
+        local fs_count_rcluster=0
+        local fs_dmesg_cluster=0
+        local fs_dmesg_data=0
+        local fs_dmesg_rdata=0
+        local fs_dmesg_rcluster=0
+            for path in data cluster
+            do
+              corrupt_file=""
+              launchcommand="ls -lR /$path 2> /dev/null | grep \"\?\" | awk '{print \$NF}' |tr '\n' ',' | sed 's/.$//'"
+              corrupt_file=$(eval $launchcommand)
+              if [ "$corrupt_file" != "" ]; then
+        #        echo -e "\nDisk Corruption detected, partition $path. Contact next level of support"
+                [ "$path" == "cluster" ] && fs_count_cluster=1
+                [ "$path" == "data" ] && fs_count_data=1
+              fi
+              if [ "$path" == "cluster" ]; then  # check health of remote node
+                  # Launch command on remote node
+                   if is_alive "$RHOST";then
+                        # peer node is up
+                    corrupt_file=$($CMD_SSH $RHOST $launchcommand 2>/dev/null)
+                  fi
+                  if [ "$corrupt_file" != "" ]; then
+                    fs_count_rcluster=1
+                  fi
+                fi
+            done
+        HW_TYPE=$(GetHwType)
+        local fs_dmesg=$( echo $(dmesg -T | grep -i "EXT4-fs error" | awk '{print substr($0,index($0,"device")+7,4)}'))
+        if [[ $HW_TYPE == 'VM' || $HW_TYPE =~ 'GEP5' || $HW_TYPE =~ 'GEP7' ]];then
+                [ "$fs_dmesg" == "dm-0" ] && fs_dmesg_data=1
+        fi
+        if [[ $HW_TYPE == 'VM' || $HW_TYPE =~ 'GEP5' || $HW_TYPE =~ 'GEP7' ]];then
+                [ "$fs_dmesg" == "dm-1" ] && fs_dmesg_cluster=1
+        fi
+
+        if [[ $HW_TYPE == 'GEP1' || $HW_TYPE == 'GEP2' ]] ;then
+                [ "$fs_dmesg" == "dm-0" ] && fs_dmesg_cluster=1
+        fi
+        if [[ $HW_TYPE == 'GEP1' || $HW_TYPE == 'GEP2' ]] ;then
+                [[ "$fs_dmesg" =~ "md0" ]] && fs_dmesg_data=1
+        fi
+
+        local fs_rdmesg=$( echo $($CMD_SSH $RHOST dmesg -T | grep -i "EXT4-fs error" | awk '{print substr($0,index($0,"device")+7,4)}'))
+        if [[ $HW_TYPE == 'VM' || $HW_TYPE =~ 'GEP5' || $HW_TYPE =~ 'GEP7' ]];then
+                [ "$fs_rdmesg" == "dm-0" ] && fs_dmesg_rdata=1
+        fi
+        if [[ $HW_TYPE == 'VM' || $HW_TYPE =~ 'GEP5' || $HW_TYPE =~ 'GEP7' ]];then
+                [ "$fs_rdmesg" == "dm-1" ] && fs_dmesg_rcluster=1
+        fi
+
+        if [[ $HW_TYPE == 'GEP1' || $HW_TYPE == 'GEP2' ]] ;then
+                [ "$fs_rdmesg" == "dm-0" ] && fs_dmesg_rcluster=1
+        fi
+        if [[ $HW_TYPE == 'GEP1' || $HW_TYPE == 'GEP2' ]] ;then
+                [[ "$fs_rdmesg" =~ "md0" ]] && fs_dmesg_data=1
+        fi
+        [[ $fs_count_cluster == 1 || $fs_dmesg_cluster == 1 ]] && echo -e "\nDisk Corruption detected, partition cluster. Contact next level of support"
+        [[ $fs_count_rcluster == 1 || $fs_dmesg_rcluster == 1 ]] && echo -e "\nDisk Corruption detected on peer($RHOST), partition Cluster. Contact next level of support"
+        [[ $fs_count_data == 1 || $fs_dmesg_data == 1 || $fs_dmesg_rdata == 1 ]] && echo -e "\nDisk Corruption detected, partition Data. Contact next level of support"
+        [[ $fs_count_cluster == 0 && $fs_count_data == 0 && $fs_dmesg_cluster == 0 && $fs_count_rcluster == 0 && $fs_dmesg_rcluster && $fs_dmesg_data == 0 && $fs_dmesg_rdata == 0 ]] && echo -e "\nNo disk corruption detected."
+
+        echo
+        trace_leave $FUNCNAME
+}
+
+
+#-------------------INFO -----------------------------------------------------------------
+function do_part(){
+        trace_enter $FUNCNAME $*
+        local MESSAGE=''
+	local ERROR='HW-TYPE NOT FOUND'
+	OPT_PART_ARG=$1
+	
+	local TOKEN='Total Devices'
+        local DEVICES_COUNT=$( $CMD_MDADM --detail $RAID_DEVICE 2>/dev/null | $CMD_GREP -E "^[[:space:]]*$TOKEN : " | $CMD_SED 's@^.*: @@g' )
+	isactive
+	if [ "$NODE_STATE" == "$PASSIVE" ];then
+		console_abort "The command must be run on the active node" $exit_invd_node
+	fi
+	if [ ! -z $DEVICES_COUNT  ]; then
+		if [ $DEVICES_COUNT -gt 1 ]; then
+			raid_exists
+			RAID=$?
+			[ $RAID -eq $TRUE ] && abort "RAID device is already active"
+		fi
+	fi
+
+        if [ "$OPT_PART_ARG" != "BOTH" ]; then
+                if [ -b "$OPT_PART_ARG" ]; then
+                        RAID_DISKS=$(echo "$OPT_PART_ARG" | $CMD_CUT -d 1 -f1)
+                        RAID_PARTITIONS=$OPT_PART_ARG
+                        RAID_DISKS_COUNT=1
+                else
+                        abort "$(disk_mapping "$OPT_PART_ARG") does not refers to a valid block device"
+                fi
+	else
+		disk_finder
+        fi
+	
+        for DEVICE in $RAID_PARTITIONS; do
+                do_check "$DEVICE"
+                if [[ $? -eq $FALSE ]]; then
+                        MESSAGE="$(disk_mapping "$DEVICE") already has a raid-partition. Proceeding anyway."
+			INFO "$MESSAGE"
+                fi
+                MESSAGE="zeroing the superblock of \"$(disk_mapping "$DEVICE")\"... "
+               	INFO "$MESSAGE"
+               	echo -en "$MESSAGE"
+               	$CMD_MDADM --zero-superblock "$DEVICE" >>$F_INFO 2>>$F_ERR
+               	MESSAGE="done"
+               	INFO "$MESSAGE"
+               	echo -e "$MESSAGE"
+        done
+
+	if [ "$OPT_PART_ARG" == "BOTH" ]; then
+        	is_mounted && do_unmount
+        	raid_exists && do_disable
+	fi
+
+        local DD=''
+        for DD in $RAID_DISKS; do
+                MESSAGE="performing \"$(disk_mapping "$DD")\" partitioning... "
+                INFO "$MESSAGE"
+                echo -en "$MESSAGE"
+
+                $CMD_DD if=/dev/zero of=$DD bs=512 count=1 >>$F_INFO 2>>$F_ERR || abort "Failure while erasing the partition table of \"$(disk_mapping "$DD")\""
+
+                $CMD_FDISK $DD >>$F_INFO 2>>$F_ERR << COMMANDS
+n
+p
+2
+
++128M
+t
+da
+n
+p
+1
+
+
+t
+1
+da
+w
+COMMANDS
+                [ $? -ne 0 ] && console_abort "$(disk_mapping "$DD") partitioning failed" $exit_part_eror
+
+                $CMD_PARTPROBE $DD >>$F_INFO 2>>$F_ERR
+                sync >>$F_INFO 2>>$F_ERR
+                $CMD_BLOCKDEV --rereadpt $DD >>$F_INFO 2>>$F_ERR
+                MESSAGE="done"
+                INFO "$MESSAGE"
+                echo -e "$MESSAGE"
+        done
+
+        disk_finder
+	[ "$OPT_PART_ARG" == "BOTH" ] && raid_creation
+        trace_leave $FUNCNAME
+}
+
+
+#----------------------------------------------------------------------------------------
+function raid_creation(){
+        RAID_BITMAP=''
+        [ $OPT_BITMAP -eq $TRUE ] && RAID_BITMAP='--bitmap=internal'
+
+        INFO "$CMD_MDADM --create $RAID_DEVICE --metadata=1.0 --assume-clean --force $RAID_BITMAP --level=raid1 --raid-devices=$RAID_DISKS_COUNT $RAID_PARTITIONS --run"
+        $CMD_MDADM --create $RAID_DEVICE --metadata=1.0 --assume-clean --force $RAID_BITMAP --level=raid1 --raid-devices=$RAID_DISKS_COUNT $RAID_PARTITIONS --run >>$F_INFO 2>>$F_ERR
+        local EXIT_CODE=$?
+        if [ $EXIT_CODE -ne 0 ]; then
+                abort 'raid creation failed'
+        else
+		INFO 'raid creation successful'
+		echo -e 'raid creation successful'
+        fi
+	return $exit_sucs
+}
+
+#----------------------------------------------------------------------------------------
+# This function prints a list of pids:commands that have handles open on the
+#  raid device.
+function get_pids(){
+        local PIDS=''
+        PIDS=$($CMD_FUSER -m $MOUNT_POINT $RAID_DEVICE 2>/dev/null)
+        if [ -n "$PIDS" ]; then
+                PIDS="$(echo $PIDS | $CMD_TR '[:space:]' '\n' | $CMD_AWK ' !x[$0]++')"
+                for P in $PIDS; do
+                        echo -e "$P:\"$($CMD_PS -p $P -o cmd h)\""
+                done
+        fi
+}
+
+#----------------------------------------------------------------------------------------
+# The function unmounts a mounted raid array.
+function do_unmount(){
+        trace_enter $FUNCNAME $*
+        if is_mounted; then
+	log "Executing Umount Operation on data mount point.."
+        $CMD_UMOUNT "$MOUNT_POINT" >>$F_INFO 2>>$F_ERR        
+	if [ $? -ne 0 ]; then
+                        busyfs_data
+                        local PIDS="$(get_pids)"
+                        INFO "here a list of pids:commands having open handles on the raid device:"
+                        while read P; do
+                                INFO "$P"
+                        done < <(echo "$PIDS")
+                        abort "Umount failed! Busy filesystem?"
+                fi
+                busyfs_log 'RAID device unmounted successfully...'
+        else
+                echo "RAID device already unmounted"
+        fi
+
+        trace_leave $FUNCNAME
+}
+
+#----------------------------------------------------------------------------------------
+# The function will stop/disable the raid.
+function do_disable(){
+        trace_enter $FUNCNAME $*
+
+        $CMD_MDADM --stop $RAID_DEVICE >>$F_INFO 2>>$F_ERR
+        local EXIT_CODE=$?
+        if [ $EXIT_CODE -eq $TRUE ]; then
+                local MESSAGE="RAID device successfully disabled"
+                INFO "$MESSAGE"
+                echo -e "$MESSAGE"
+        else
+                abort "Unable to disable the raid."
+        fi
+
+        trace_leave $FUNCNAME
+}
+
+#----------------------------------------------------------------------------------------
+# The function will build a linux ext3 filesystem (formatting) on the raid
+#  device.
+function do_format(){
+        trace_enter $FUNCNAME $*
+        local MESSAGE=''
+        raid_exists
+        local VALID_RAID=$?
+        if [ $VALID_RAID -eq $TRUE ]; then
+                if ! is_mounted; then
+                        MESSAGE='formatting in progress...'
+                        INFO "$MESSAGE"
+                        echo -e "$MESSAGE"
+                        #local OPT='-q'
+                        local OPT=''
+				$CMD_MKFS_EXT3 $OPT $RAID_DEVICE  >>$F_INFO 2>$F_ERR
+                        [ $? -ne $TRUE ] && abort 'formatting failed' 
+                        MESSAGE='formatting done'
+                        INFO "$MESSAGE"
+                        echo -e "$MESSAGE"
+                else
+                        console_abort "The RAID device is mounted, formatting not allowed." $exit_raid_munt
+                fi
+        else
+                abort "No Active RAID device to format found"
+        fi
+
+        trace_leave $FUNCNAME
+}
+
+#----------------------------------------------------------------------------------------
+# The function will grow the raid array and the above filesystem but only if it
+# finds the raid array to be running on a disks greater in size than the
+# current raid device.
+
+function raid_enlarge(){
+	trace_enter $FUNCNAME
+	local MESSAGE=''
+
+	! raid_exists && abort 'no active raid devices found'
+        disk_finder
+        local RAID_SIZE=$(</sys/class/block/$($CMD_BASENAME $RAID_DEVICE)/size)
+        local DISK_1=$(echo $RAID_PARTITIONS | $CMD_AWK '{ print $1 }')
+        local DISK_1_SIZE=$(</sys/class/block/$($CMD_BASENAME $DISK_1)/size)
+        local DISK_2=$(echo $RAID_PARTITIONS | $CMD_AWK '{ print $2 }')
+        local DISK_2_SIZE=$(</sys/class/block/$($CMD_BASENAME $DISK_2)/size)
+
+        local BITMAP=$TRUE
+        local D=''
+        for D in $RAID_PARTITIONS; do
+                $CMD_MDADM --examine-bitmap $D >>$F_INFO 2>>$F_ERR
+                [ $? -ne $TRUE ] && BITMAP=$FALSE
+        done
+
+        if [[ "$DISK_1_SIZE" -gt "$RAID_SIZE" && "$DISK_2_SIZE" -gt "$RAID_SIZE" ]]; then
+                MESSAGE='raid enlarge in progress...'
+                log "$MESSAGE"
+                echo -e "$MESSAGE"
+                [ $BITMAP -eq $TRUE ] && $CMD_MDADM --grow $RAID_DEVICE --bitmap=none >>$F_INFO 2>>$F_ERR
+                $CMD_MDADM --grow $RAID_DEVICE --size=max --assume-clean >>$F_INFO 2>>$F_ERR
+                [ $? -ne $TRUE ] &&  console_abort 'Failure during enlarge operation' $exit_grow_eror
+		$CMD_MDADM --wait $RAID_DEVICE >>$F_INFO
+                [ $BITMAP -eq $TRUE ] && $CMD_MDADM --grow $RAID_DEVICE --bitmap=internal >>$F_INFO 2>>$F_ERR
+                MESSAGE='raid enlarge done'
+                log "$MESSAGE"
+                echo -e "$MESSAGE"
+
+                MESSAGE='filesystem enlarge in progress...'
+                log "$MESSAGE"
+                echo -e "$MESSAGE"
+                $CMD_RESIZE2FS $RAID_DEVICE  >>$F_INFO 2>>$F_ERR
+                if [ $? -ne $TRUE ]; then
+			console_abort 'Failure during filesystem resize operation' $exit_fsrz_eror
+		fi
+                MESSAGE='filesystem enlarge done'
+                log "$MESSAGE"
+		#console_print "$MESSAGE"
+                echo -e "$MESSAGE \n"
+
+		# Ok. RAID enlarge is done. Inform the same to SSU
+		# so that, SSU would work on modifying the quota details
+		# if needed.
+		# 1. Fetch SSU pid (pidof command)
+		# 2. Figure out the signal to be sent to SSU
+		#    This signal shall be a hand-shake signal 
+		#    between RAID module(this module) and SSU.
+		# 3. send signal using kill command.
+		# 
+		# Note: Enable following code, After SSU is ready to handle 
+		# our invitation.
+		# local SSU_BIN='acs_ssumonitord'
+		# local SSU_PID=''
+		# SSU_PID=$CMD_PIDOF $SSU_BIN	
+		# [ -z $SSU_PID ] && console_abort "SSU Application is not running on the node. Could not send singal to SSU" $exit_ssux_eror
+		#
+		# local SSU_UPDT_QUOTA=(( SIGRTMIN + 1	))
+		# $CMD_KILL -s $SSU_UPDT_QUOTA $SSU_PID
+		# [ $? -ne 0 ] && console_abort "SSU Application is not running on the node. Could not send singal to SSU" $exit_ssux_eror
+		# MESSAGE="Successfully sent message to SSU to update Quota settings."
+		# INFO "$MESSAGE"
+
+		MESSAGE="Command executed Successfully!"
+		INFO "$MESSAGE"
+        else
+                MESSAGE="Disk sizes not suitable for enlarge: $RAID_DEVICE:${RAID_SIZE:-0} $DISK_1:${DISK_1_SIZE:-0} $DISK_2:${DISK_2_SIZE:-0}"
+                log "$MESSAGE"
+                console_abort "$MESSAGE" $exit_dsze_eror
+        fi
+	
+	trace_leave $FUNCNAME
+}
+
+#----------------------------------------------------------------------------------------
+function raid_create(){
+	trace_enter $FUNCNAME
+	local MESSAGE=''
+
+	OPT_ARG_DISK="BOTH"
+	OPT_PART=$TRUE
+	do_part $OPT_ARG_DISK 	&& 
+	do_format 		&& 
+	do_mount
+	
+	MESSAGE="Command executed Successfully!"
+	INFO "$MESSAGE"
+	#console_print "$MESSAGE"
+
+	trace_leave $FUNCNAME
+}
+
+#--------------------------------------------------------------------------------------
+function raid_folders(){
+	trace_enter $FUNCNAME
+	local MESSAGE=''
+
+	# create folder structure first.
+	#echo -n "Creating directory structure on RAID "
+	$( $CMD_CONFIGAP -d &>/dev/null)
+	[ $? -ne 0 ] && console_abort "Error creating folder structure." $exit_fold_eror
+	#echo '..success'
+
+	# create virtual directory structure.
+	#echo -n "Creating virtual directory structure "
+	$( $CMD_VDIRCONF &>/dev/null)
+	[ $? -ne 0 ] && console_abort "Error creating virtual folder structure." $exit_vdir_eror
+	#echo '..success'
+
+	MESSAGE="Command executed Successfully!"
+	INFO "$MESSAGE"
+	console_print "$MESSAGE"
+	
+	trace_leave $FUNCNAME
+}
+
+#----------------------------------------------------------------------------------------
+
+# _____________________ 
+#|    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |
+#|_____________________|
+# Here begins the "main" function...
+
+# Set the interpreter to exit if a non-initialized variable is used.
+set -u
+#set -x
+
+# Log the parameters in the system log
+log "START: <$0 $*>"
+
+# sanity check to see if things are in place
+sanity_check
+
+# parse the command-line paramters
+parse_args $*
+
+# Launch command
+launchCommand
+
+# cleanup logs if command is succeded
+cleanup_logs
+
+log "END: <$0 $*>"
+
+#  the script returns the status of the last invoked function
+exit $exit_sucs
+

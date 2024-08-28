@@ -1,0 +1,20 @@
+csm-version: '1.0'
+components:
+- uid: apos.osext
+  name: apos-osext
+  description: APOS OSEXT component
+  availability-manager: NONE
+  software:
+    sdp: ERIC-APOS_OSEXTBIN-CXC1371500
+  supersedes:
+  - software: ERIC-APOS_OSEXTBIN-CXC1371500
+  constraints:
+    plugin: plugin/apos.osext
+  meta-data:
+    component-version: 19.0.0-4
+    deliverable:
+      deployment-package: apos_osext-19.0.0-4-deployment-CXC1371500.tar.gz
+      runtime-package: apos_osext-19.0.0-4-runtime-CXC1371500.tar.gz
+    software:
+    - file-name: APOS_OSEXTBIN-CXC1371500_19-R1A04.x86_64.sdp
+      bundle-name: ERIC-APOS_OSEXTBIN-CXC1371500_19-R1A04

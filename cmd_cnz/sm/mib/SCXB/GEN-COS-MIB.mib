@@ -1,0 +1,372 @@
+-- ============================================================================
+--
+-- %CCaseFile:	GEN-COS-MIB.mib %
+-- %CCaseRev:	/main/R1A/1 %
+-- %CCaseDocNo:	4/196 03-CRA 119 1365 Ux %
+-- Author:	esetwik
+--
+--
+-- =============================================================================
+--
+-- Copyright (C) 2009-2010 by Ericsson AB
+-- S-126 25  STOCKHOLM
+-- SWEDEN, tel int + 46 8 719 0000
+--
+-- This Program may be used and/or copied only with the written permission
+-- from Ericsson AB, or in accordance with the terms and
+-- conditions stipulated in the agreement/contract under which the program
+-- has been supplied.
+--
+-- All rights reserved.
+--
+-- =============================================================================
+--
+-- REVISION HISTORY
+--
+-- Rev        Date         Name        What
+-- ========   ==========   ========    ========
+-- PA1        2009-09-16   esetwik     Generic CoS mib 
+-- PA2	      2009-09-22   esetwik     Updated according to review
+-- PA3	      2009-09-30   esetwik     Split dyn and stat in conf groups
+-- A          2010-02-12   qsangov     Firm revision of GEN-COS-MIB
+-- A          2010-08-27   uabpnil     New document number
+-- =============================================================================
+
+
+GEN-COS-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY,
+    OBJECT-TYPE,
+    Unsigned32,
+    enterprises
+        FROM SNMPv2-SMI
+
+    OBJECT-GROUP,             
+    MODULE-COMPLIANCE       
+        FROM SNMPv2-CONF;
+
+genTransportCoS MODULE-IDENTITY
+           LAST-UPDATED 
+	       "200909160000Z"
+	   ORGANIZATION
+	       "Ericsson AB - EAB/FTI/IE"
+	   CONTACT-INFO
+	       "E-mail: ingvar.froroth@ericsson.com"       
+	   DESCRIPTION
+	       "This MIB module defines objects for configuring CoS parameters
+                for Common Component Switch Board."
+ 
+	    -- Revision history.	 
+	    REVISION
+	       "200909160000Z"
+	   DESCRIPTION
+               "See top of document"  
+ 
+    ::= { enterprises ericsson(193) component(177) generic(2) transport(1) 5 }
+
+
+-- ============================================================================
+-- Definitions of objects
+-- ============================================================================
+
+--ericsson		OBJECT IDENTIFIER ::= {enterprises 193}
+--component		OBJECT IDENTIFIER ::= {ericsson 177}
+--generic		OBJECT IDENTIFIER ::= {component 2}
+--transport		OBJECT IDENTIFIER ::= {generic 1}
+--genTransportCoS      	OBJECT IDENTIFIER ::= {transport 5}
+
+-- -------------------------------------------------------------
+
+-- cosNotifications        OBJECT IDENTIFIER ::= { genTransportCoS 0 }
+-- cosNotificationObjects  OBJECT IDENTIFIER ::= { genTransportCoS 1 }
+cosCommonObjects        OBJECT IDENTIFIER ::= { genTransportCoS 2 }
+cosIfTCObjects		OBJECT IDENTIFIER ::= { genTransportCoS 3 }
+
+cosConformance          OBJECT IDENTIFIER ::= { genTransportCoS 4 }
+cosGroups               OBJECT IDENTIFIER ::= { cosConformance 1 }
+--cosCompliance           OBJECT IDENTIFIER ::= { cosConformance 2 }
+
+-- ============================================================================
+-- Textual conventions
+-- ============================================================================
+
+-- -------------------------------------------------------------
+-- cosNotifications  OBJECT IDENTIFIER ::= { genTransportCoS 0 }
+-- -------------------------------------------------------------
+
+-- -------------------------------------------------------------
+-- cosNotificationObjects  OBJECT IDENTIFIER ::= { genTransportCoS 1 }
+-- -------------------------------------------------------------
+
+-- -------------------------------------------------------------
+-- cosCommonObjects OBJECT IDENTIFIER ::= { genTransportCoS 2 }
+-- -------------------------------------------------------------
+
+cosQMmuCapabilities OBJECT-TYPE
+    SYNTAX	BITS {
+                   dynamicBufferAlloc(0),
+		   staticBufferAlloc(1)
+		   }
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Indicates capabilities related to frame buffer allocation, that are implemented by
+	this device and manageable through this MIB.
+
+   	dynamicBufferAlloc(0)	supports mechanisms for dynamic frame buffer allocation
+				and management thereof.
+   	staticBufferAlloc(1)	supports mechanisms for static frame buffer allocation
+				and management thereof."
+    ::= { cosCommonObjects 1 }
+
+cosQCellSize OBJECT-TYPE
+    SYNTAX	Unsigned32
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Frame buffer granularity (cell size) in bytes for this device.
+
+	In case a GET of this object returns e.g. 128, that indicates that the device will
+	allocate buffer for each frame as a multiple of 128 bytes. Thus, frames sized between
+	64-128 bytes will consume 128 bytes (one cell) of buffer memory, while frames sized
+	between 129-256 bytes will consume 256 bytes (two cells) and so forth."
+    ::= { cosCommonObjects 2 }
+
+cosQTotalNumOfCells OBJECT-TYPE
+    SYNTAX	Unsigned32
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Total number of cells available for frame buffering on this device."
+    ::= { cosCommonObjects 3 }
+
+cosQNumOfStatAllocCells OBJECT-TYPE
+    SYNTAX	Unsigned32
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Total number of statically configured frame buffer cells."
+    ::= { cosCommonObjects 4 }
+
+cosQNumOfSharedCells OBJECT-TYPE
+    SYNTAX	Unsigned32
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Total number of shared frame buffer cells available for dynamic allocation."
+    ::= { cosCommonObjects 5 }
+
+-- ----------------------------------------------------------------------------
+-- cosIfTCObjects OBJECT IDENTIFIER ::= { genTransportCoS 3 }
+-- ----------------------------------------------------------------------------
+
+cosIfTCStatAllocTable OBJECT-TYPE
+    SYNTAX       SEQUENCE OF CosIfTCStatAllocEntry
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "A list of Interfaces and Trafic classes and the allocation of
+	static buffers."
+    ::= { cosIfTCObjects 1 }
+
+cosIfTCStatAllocEntry OBJECT-TYPE
+    SYNTAX       CosIfTCStatAllocEntry
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "An entry containing allocation information applicable for
+         indicated port and queue."
+    INDEX       { cosIfIndexStat, cosTrafficClassStat }
+    ::= { cosIfTCStatAllocTable 1 }
+
+CosIfTCStatAllocEntry ::=
+    SEQUENCE {
+              -- cosTableIndexStat		Unsigned32,
+              cosIfIndexStat		Unsigned32,
+              cosTrafficClassStat	Unsigned32,
+              cosNumOfCellsStat		Unsigned32
+             }
+
+--cosTableIndexStat OBJECT-TYPE
+--    SYNTAX  	 Unsigned32 (0..100)
+--    MAX-ACCESS   not-accessible
+--    STATUS       current
+--    DESCRIPTION
+--        "The index identifier of the cosIfTCStatAllocTable."
+--    ::= { cosIfTCStatAllocEntry 1 }
+
+cosIfIndexStat OBJECT-TYPE
+    SYNTAX       Unsigned32
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "Interface index, corresponding to a physical port on this device."
+    ::= { cosIfTCStatAllocEntry 2 }
+
+cosTrafficClassStat OBJECT-TYPE
+    SYNTAX       Unsigned32 (0..7)
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+	"Traffic class identifier, identifying an egress queue instance for this physical port."
+    ::= { cosIfTCStatAllocEntry 3 }
+
+cosNumOfCellsStat OBJECT-TYPE
+    SYNTAX       Unsigned32
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+	"The number of cells statically allocated for this egress queue instance of this port,
+	on this device."
+    ::= { cosIfTCStatAllocEntry 4 }
+
+-- -------------------------------------------------------------
+
+cosIfTCDynAllocTable OBJECT-TYPE
+    SYNTAX       SEQUENCE OF CosIfTCDynAllocEntry
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "A list of Interfaces and Trafic classes and the allocation of
+	dynamic buffers."
+    ::= { cosIfTCObjects 2 }
+
+cosIfTCDynAllocEntry OBJECT-TYPE
+    SYNTAX       CosIfTCDynAllocEntry
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "An entry containing allocation information applicable for
+         indicated port and queue dynamically."
+    INDEX       { cosIfIndexDyn, cosTrafficClassDyn }
+    ::= { cosIfTCDynAllocTable 1 }
+
+CosIfTCDynAllocEntry ::=
+    SEQUENCE {
+              -- cosTableIndexDyn		Unsigned32,
+              cosIfIndexDyn		Unsigned32,
+              cosTrafficClassDyn	Unsigned32,
+	      cosDynPrivLevel		Unsigned32
+             }
+
+--cosTableIndexDyn OBJECT-TYPE
+--    SYNTAX  	 Unsigned32 (0..100)
+--    MAX-ACCESS   not-accessible
+--    STATUS       current
+--    DESCRIPTION
+--        "The index identifier of the cosIfTCDynAllocTable."
+--    ::= { cosIfTCDynAllocEntry 1 }
+
+cosIfIndexDyn OBJECT-TYPE
+    SYNTAX       Unsigned32
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "Interface index, corresponding to a physical port on this device."
+    ::= { cosIfTCDynAllocEntry 2 }
+
+cosTrafficClassDyn OBJECT-TYPE
+    SYNTAX       Unsigned32
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+	"Traffic class identifier, identifying an egress queue instance for this physical port."
+    ::= { cosIfTCDynAllocEntry 3 }
+
+cosDynPrivLevel OBJECT-TYPE
+    SYNTAX       Unsigned32 (0..9)
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+	"The relative privilege level for dynamic frame buffer allocation for this traffic class/queue
+	of this port, on this device.
+
+	The privilege level defines how aggressive this egress queue instance is allowed to be, in
+	terms of temporarily allocating cells out of a shared memory bank. I.e. a high privilege level
+	allows the queue instance to allocate a relatively large part of the available shared buffer
+	memory, while a low privilege level will only allow a smaller part of the available shared buffer
+	to be allocated to the queue.
+
+	The higher the setting of this object, the higher the relative privilege level will be for this
+	egress queue instance.
+
+	Note: 	Since this object is for tuning multiple resource users' access to a limited shared
+		resource, great care should be taken to ensure the desired objectives are achieved.
+		The resulting system behaviour with a specific setting of this object, is likely to be 
+		heavily depending of traffic patterns and may be far from intuitive."
+    ::= { cosIfTCDynAllocEntry 4 }
+
+-- ----------------------------------------------------------------------------
+-- cosConformance OBJECT IDENTIFIER ::= { genTransportCoS 4 }
+-- ----------------------------------------------------------------------------
+
+-- ----------------------------------------------------------------------------
+-- cosGroups OBJECT IDENTIFIER ::= { cosConformance 1 }
+-- ----------------------------------------------------------------------------
+
+cosCommonGroup OBJECT-GROUP
+    OBJECTS {
+       cosQMmuCapabilities,
+       cosQCellSize,
+       cosQTotalNumOfCells,
+       cosQNumOfStatAllocCells,
+       cosQNumOfSharedCells
+       }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding object descriptions."
+    ::= { cosGroups 1 }
+
+cosIfIndexTCStatGroup OBJECT-GROUP
+    OBJECTS {
+       --cosIfIndexStat,
+       --cosTrafficClassStat,
+       cosNumOfCellsStat
+       }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding object descriptions."
+    ::= { cosGroups 2 }
+
+cosIfIndexTCDynGroup OBJECT-GROUP
+    OBJECTS {
+       --cosIfIndexDyn,
+       --cosTrafficClassDyn,
+       cosDynPrivLevel
+       }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding object descriptions."
+    ::= { cosGroups 3 }
+
+
+
+-- -------------------------------------------------------------
+-- cosComplianceGroup OBJECT IDENTIFIER ::= { cosConformance 2 }
+-- -------------------------------------------------------------
+
+cosComplianceGroup MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+	"The compliance statement for SNMP entities supported
+	 by this MIB"
+    MODULE -- this module
+
+    GROUP cosCommonGroup
+    DESCRIPTION 
+        "Implementation of this group is optional"
+
+    GROUP cosIfIndexTCStatGroup
+    DESCRIPTION
+        "Implementation of this group is optional"
+
+    GROUP cosIfIndexTCDynGroup
+    DESCRIPTION
+        "Implementation of this group is optional"
+
+    ::= { cosConformance 2 }
+
+END
+
+

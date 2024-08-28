@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?><!-- 
+  Copyright (c) 2011 Ericsson AB.
+  All rights reserved
+
+  DX ECIM Tool-chain generated this file on Dec 23, 2011 9:52:27 AM using 
+    * coremw.m2m (1.4.4.201109271606)
+    * coremw.m2t (1.4.4.201109271606)
+    * coremw.dsl (1.4.4.201109271606)
+    * coremw.imm (1.4.4.201109271606)
+--><imm:IMM-contents xmlns:imm="http://www.saforum.org/IMMSchema" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.saforum.org/IMMSchema SAI-AIS-IMM-XSD-A.01.01.xsd">
+    <class name="NetworkConfiguration">
+        <category>SA_CONFIG</category>
+        <rdn>
+            <name>networkConfigurationId</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_INITIALIZED</flag>
+        </rdn>
+    </class>
+    <class name="NorthBound">
+        <category>SA_CONFIG</category>
+        <rdn>
+            <name>northBoundId</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_INITIALIZED</flag>
+        </rdn>
+        <attr>
+            <name>clusterIpAddress</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+        </attr>
+        <attr>
+            <name>nodeAIpAddress</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+        </attr>
+        <attr>
+            <name>nodeBIpAddress</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+        </attr>
+        <attr>
+            <name>gatewayIpAddress</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+            <flag>SA_MULTI_VALUE</flag>
+        </attr>
+        <attr>
+            <name>netmask</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+        </attr>
+        <attr>
+            <name>nodeAName</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+        </attr>
+        <attr>
+            <name>nodeBName</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+        </attr>
+        <attr>
+            <name>teamingStatus</name>
+            <type>SA_INT32_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+        </attr>
+        <attr>
+            <name>physicalSeparationStatus</name>
+            <type>SA_INT32_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+        </attr>
+    </class>
+</imm:IMM-contents>

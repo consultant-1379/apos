@@ -1,0 +1,131 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2015 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#      node1_VM_postinstall
+# Description:
+#       A script to perform post installation activities on node SC-2-2.
+# Note:
+#       This script is executed as a post activity during the
+#       installation of COM with Automatic Installation Tool (AIT).
+##
+# Usage:
+#       Used during vAPG maiden installation.
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Fri Jul 24 2020 - M Anjali (xanjali)
+#     Removal of tsuser_properties
+# - Wed Apr 17 2019 - Dharma Teja (XDHATEJ)
+#   TR HX53929: Increased the ts_user expiry from 1 to 2 
+# - Mon Nov 30 2015 - Nikhila Sattala (XNIKSAT)
+#   First version.
+
+. ${PLUGIN_SCRIPTS_ROOT}/non_exec-common_functions
+
+# common variables
+CMD_ECHO='/bin/echo'
+
+#-------------------------------------------------------------------------------
+function is_compute_resource_class_exist(){
+  local CMD_RESULT=$( kill_after_try 1 1 2 /usr/bin/immfind crMgmtId=1,AxeEquipmentequipmentMId=1 2>/dev/null)
+  local RCODE=$?
+  if [[ -n "$CMD_RESULT" && $RCODE -eq 0 ]]; then
+    return $TRUE
+  fi
+  return $FALSE
+}
+
+#------------------------------------------------------------------------
+function create_cr_class(){
+
+  $CMD_ECHO "--- create_cr_class() begin"
+  if ! is_compute_resource_class_exist; then
+    kill_after_try 5 5 6 "/usr/bin/immcfg -c AxeEquipmentCrMgmt crMgmtId=1,AxeEquipmentequipmentMId=1 -u"
+    [ $? -ne 0 ] && abort 'Failure while creating parent class [crMgmtId=1,AxeEquipmentequipmentMId=1]'
+  else
+    $CMD_ECHO "--- crMgmtId=1,AxeEquipmentequipmentMId=1 already exist"
+  fi
+
+  $CMD_ECHO "--- create_cr_class() end"
+}
+
+#------------------------------------------------------------------------
+function node_status(){
+  $CMD_ECHO "--- node_status() begin"
+
+  local CMD_CMW_STATUS='/opt/coremw/bin/cmw-status'
+  $CMD_CMW_STATUS node | grep -q "Status OK"
+  [ $? -ne 0 ] && abort "NODE STATUS is NOT healthy"
+
+  $CMD_ECHO "--- node_status() end"
+}
+
+#-------------------------------------------------------------------------------
+function set_tsuser_properties() {
+  local SSH_LOGIN_FILE='/cluster/etc/login.allow'
+  local expiry=2
+  local TS_USER='ts_user'
+
+  if [ -x /opt/ap/apos/bin/usermgmt/usermgmt ]; then
+    USERADD="/opt/ap/apos/bin/usermgmt/usermgmt user add --global"
+    USERMOD="/opt/ap/apos/bin/usermgmt/usermgmt user modify"
+  else
+    abort "usermgmt not found executable"
+  fi
+
+  # verify, if ts_user is already defined or not on the node
+  /usr/bin/getent passwd $TS_USER &>/dev/null
+  if [ $? -ne 0 ]; then
+    apos_abort "ts_user does not exist on the node"
+  fi
+
+  # setting default password to "ts_user1@"
+  echo  "$TS_USER:ts_user1@" | /usr/sbin/chpasswd 2>/dev/null
+  if [ $? -eq 0 ]; then
+    /usr/bin/passwd -e "$TS_USER" 2>/dev/null || apos_abort "Failed to force ts_user to set new password"
+  fi
+
+  # set account expiry to 1 day
+  local old_date=$(date +"%y-%m-%d %H:%M:%S")
+  local new_date=$(date -d "$old_date $expiry day" +%y-%m-%d)
+  /usr/bin/chage -E $new_date "$TS_USER" || apos_abort "Failed to set expiry information for ts_user"
+
+  # Adding ts_user to login.allow file
+  echo "$TS_USER all" >>${SSH_LOGIN_FILE}
+}
+
+#------------------------------------------------------------------------
+function rootfs_fix(){
+  # Small patch begin  
+  ssh SC-2-1 "rm -f /boot/os_rpm_install"
+  ssh SC-2-1 "cluster rootfs -c -f -n 1"
+  ssh SC-2-2 "rm -f /boot/os_rpm_install"
+  ssh SC-2-2 "cluster rootfs -c -f -n 2"
+  # patch end
+}
+
+### M A I N ###
+main() {
+  $CMD_ECHO "--- main() begin"
+
+  # execute node status
+  node_status
+
+  # small fix to make make clean_rootfs zero
+  rootfs_fix
+
+  $CMD_ECHO "--- main() end"
+}
+
+$CMD_ECHO "## node2_vm_postinstall ##"
+
+main "@"
+
+exit $TRUE 
+

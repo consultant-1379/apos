@@ -1,0 +1,423 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#   Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#     non_exec-common_functions
+# Description:
+#     A script providing common functions.
+# Note:
+#     Sourced via apos_import_factoryparam
+#     for vAPG
+##
+# Usage:
+#     Used during vAPG maiden installation.
+##
+# Output:
+#     None.
+##
+# Changelog:
+# - Fri July 13 2018 - Pranshu Sinha (xpransi)
+#       First version.
+##
+
+# Global
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+MI_STATUS_LOG="status.log"
+BRF_CONF_PATH="system/config/lotc-ana90139"
+BRF_SOFT_PATH="system/software/lotc-ana90139"
+
+CMD_ECHO="/bin/echo"
+CMD_CP="/bin/cp"
+CMD_RM="/bin/rm"
+CMD_MV="/bin/mv"
+CMD_GREP="/usr/bin/grep"
+CMD_AWK="/usr/bin/awk"
+CMD_INSTALL="/usr/bin/install"
+CMD_DMIDECODE='/usr/sbin/dmidecode'
+
+MI_PATH="/cluster/mi"
+MI_LOGS="$MI_PATH/logs"
+APG_CONF="APG.conf"
+NODE_NAME=$(</etc/cluster/nodes/this/hostname)
+
+#------------------------------------------------------------------------ 
+function abort(){
+  local ERROR_STRING=""
+
+  if [ "$1" ]; then
+    ERROR_STRING="ERROR: $1"
+    echo "$ERROR_STRING"
+    status_error_append $ERROR_STRING 
+  fi
+  echo "Aborting"
+  echo ""
+  exit 1
+}
+
+#------------------------------------------------------------------------ 
+function warning(){
+  if [ "$1" ]; then
+    echo "WARNING: $1"
+  fi
+}
+
+#------------------------------------------------------------------------ 
+function trim(){
+  echo $1;
+}
+
+#------------------------------------------------------------------------
+function force_prompt(){
+  echo -n "$1"
+}
+
+#------------------------------------------------------------------------
+function get_boot_ip() {
+  $CMD_GREP -o ' ip=[^ ]*' /proc/cmdline | sed 's| ip=||g' | tr ':' ' '
+}
+
+#------------------------------------------------------------------------
+function get_boot_mac() {
+  $CMD_GREP -o ' BOOTIF=01-[^ ]*' /proc/cmdline | sed 's| BOOTIF=01-||g' | tr '[:lower:]-' '[:upper:]:'
+}
+#------------------------------------------------------------------------
+function get_interface_from_mac() {
+  local MAC="$1"
+  local FILE=$($CMD_GREP -il "^$MAC\$" /sys/class/net/eth*/address)
+  if [ -z "$FILE" ]; then
+    return 1
+  fi
+  local IF=$(basename $(dirname $FILE))
+  if [ -z "$IF" ]; then
+    return 1
+  fi
+  echo "$IF"
+}
+
+#------------------------------------------------------------------------
+function status_update(){
+  if [ ! -d $MI_PATH/$MI_LOGS ]; then
+    mkdir -p $MI_PATH/$MI_LOGS
+  fi
+  pushd "$MI_PATH/$MI_LOGS" > /dev/null 2>&1
+  echo "$*" > $MI_STATUS_LOG
+  popd > /dev/null 2>&1
+}
+
+#------------------------------------------------------------------------
+function status_error_append(){
+  if [ -d $MI_PATH/$MI_LOGS ]; then
+    pushd "$MI_PATH/$MI_LOGS" > /dev/null 2>&1
+    if [ ! -s $MI_STATUS_LOG ]; then
+      echo "Unknown status!" > $MI_STATUS_LOG
+    fi
+    echo "$*" >> $MI_STATUS_LOG
+    popd > /dev/null 2>&1
+  fi
+}
+
+#------------------------------------------------------------------------
+function copy_log_files(){
+  $CMD_ECHO "--- copy_log_files() begin"
+
+  [ ! -d $MI_LOGS ] && mkdir -p $MI_LOGS
+
+  pushd $MI_LOGS > /dev/null 2>&1
+  [ ! -d $NODE_NAME ] && mkdir -p $NODE_NAME
+  pushd $NODE_NAME > /dev/null 2>&1
+  $CMD_CP /root/*.log $MI_LOGS/$NODE_NAME/
+  popd > /dev/null 2>&1; popd > /dev/null 2>&1
+
+  $CMD_ECHO "--- copy_log_files() end"
+}
+
+#------------------------------------------------------------------------
+function save_repo_path(){
+  mkdir -p /etc/cluster/installation
+  echo $DEST_PATH > /etc/cluster/installation/repository
+}
+
+#------------------------------------------------------------------------
+function identify_backup_brf(){
+  local backup_file=$1
+  # Check for BRF identifiers
+  for type in software config; do
+    if ! tar tf $backup_file | $CMD_GREP -q "${type}.tar.gz$"; then
+      return 1
+    fi
+  done
+  return 0
+}
+
+#------------------------------------------------------------------------
+function identify_backup(){
+  local supported_types="brf"
+  local backup_file=$1
+  for backup_type in $supported_types; do
+    if identify_backup_$backup_type $backup_file; then
+      echo $backup_type
+      return
+    fi
+  done
+  echo "Unknown file, supported backup types: $supported_types" >&2
+  echo "unknown"
+  return
+}
+
+#------------------------------------------------------------------------ 
+function setup_network(){
+  # Extract network boot information
+  local BOOT_MAC=$(get_boot_mac)
+  local BOOT_IF=$(get_interface_from_mac $BOOT_MAC)
+  local BOOT_IP=($(get_boot_ip))
+
+  local BOOT_LOCAL_IP=${BOOT_IP[0]}
+  local BOOT_SERVER_IP=${BOOT_IP[1]}
+  local BOOT_GATEWAY=${BOOT_IP[2]}
+  local BOOT_NETMASK=${BOOT_IP[3]}
+
+  if [ ! "$BOOT_MAC" ] || [ ! "$BOOT_LOCAL_IP" ]; then
+    return 1
+  fi
+
+  echo "Network configuration: $BOOT_IF $BOOT_LOCAL_IP netmask $BOOT_NETMASK"
+  echo "Installation server: $BOOT_SERVER_IP"
+  echo "Default Gateway: $BOOT_GATEWAY"
+  # Configure network interface
+  ip addr add $BOOT_LOCAL_IP/$BOOT_NETMASK dev $BOOT_IF
+  ip link set up dev $BOOT_IF
+
+  if [ "$BOOT_GATEWAY" != "0.0.0.0" ]; then
+    ip route add default via $BOOT_GATEWAY
+  fi
+
+  # Let the interface come up
+  sleep 5
+}
+
+#------------------------------------------------------------------------
+function shutdown_network(){
+  # Extract network boot information
+  local BOOT_MAC=$(get_boot_mac)
+  local BOOT_IF=$(get_interface_from_mac $BOOT_MAC)
+  local BOOT_IP=($(get_boot_ip))
+
+  local BOOT_LOCAL_IP=${BOOT_IP[0]}
+  local BOOT_NETMASK=${BOOT_IP[3]}
+
+  if [ ! "$BOOT_NETMASK" ] || [ ! "$BOOT_LOCAL_IP" ] || [ ! "$BOOT_IF" ]; then
+    return 1
+  fi
+
+  ip addr del $BOOT_LOCAL_IP/$BOOT_NETMASK dev $BOOT_IF
+  ip link set down dev $BOOT_IF
+}
+
+#------------------------------------------------------------------------
+function try_mount_media(){
+  MEDIA=/dev/$1
+  VOLNAME=$(volname $MEDIA 2> /dev/null)
+  local try=3
+
+  force_prompt "."
+
+  #if [[ "$VOLNAME" =~ ^$MEDIA_NAME_PREFIX\ $(</etc/cluster/product/id)\ $(</etc/cluster/product/version) ]]; then
+    echo ""
+    echo "Installation media found on $MEDIA, $VOLNAME"
+    while ! mount -t iso9660 -o ro $MEDIA /mnt &> /tmp/mountout;
+    do
+      if [[ $try -le 0 ]]; then
+        cat /tmp/mountout
+        abort "Failed to mount installation media"
+      fi
+      ((try--))
+    done
+
+    # Ok, installation media mounted
+    return 0
+  #fi
+}
+
+#------------------------------------------------------------------------
+function try_mount_usb_media(){
+  MEDIA=/dev/$1
+  VOLNAME=$(e2label $MEDIA 2> /dev/null)
+
+  force_prompt "."
+
+  if [[ "$VOLNAME" =~ ^$MEDIA_NAME_PREFIX_EXT2 ]]; then
+    echo ""
+    echo "Installation media found on $MEDIA, $VOLNAME"
+    if ! mount -t ext2 -o ro $MEDIA /mnt; then
+      echo "Failed to mount installation media"
+      exit 1
+    fi
+
+    # Ok, installation media mounted
+    return 0
+  fi
+
+  return 1
+}
+
+#------------------------------------------------------------------------
+function mount_media(){
+  force_prompt "Searching for installation media (press Shift-A to abort)"
+  echo ""
+
+  while true; do
+    if [ -f /proc/sys/dev/cdrom/info ]; then
+      for DEVICE in $($CMD_GREP 'drive name:' /proc/sys/dev/cdrom/info | cut -d: -f2); do
+        if try_mount_media $DEVICE; then
+          echo ""
+          return
+        fi
+      done
+    fi
+
+    # In Xen, the cdrom might not show up as a cdrom
+    for DEVICE in $(ls -1 /sys/block | $CMD_GREP -v loop); do
+      if try_mount_media $DEVICE; then
+        echo ""
+        return
+      fi
+    done
+
+    for DEVICE in $(ls -1 /sys/block | $CMD_GREP -v loop); do
+      if try_mount_usb_media $DEVICE; then
+        echo ""
+        return
+      fi
+      for PART in $(ls -1 /sys/block/$DEVICE | $CMD_GREP $DEVICE ); do
+      if try_mount_usb_media $PART; then
+        echo ""
+        return
+      fi
+      done
+    done
+
+    # Wait 10 seconds and re-scan (abort if Shift-A is pressed)
+    read -s -t 10 -n 1
+    if [ "$REPLY" == "A" ]; then
+      echo ""
+      echo "Search aborted (Shift-A pressed)"
+      exit 1
+    fi
+  done
+}
+
+#------------------------------------------------------------------------
+function umount_media(){
+  umount /mnt
+}
+
+#------------------------------------------------------------------------
+function create_repo_from_media(){
+  local REPO_PATH=$2
+
+  mount_media
+
+  mkdir -p ${REPO_PATH}/ait
+
+  if [ -f /mnt/repo/DEPLOYMENT.ready ]; then
+    if ! cp -fr /mnt/repo/DEPLOYMENT.ready ${REPO_PATH}/ait; then
+      echo "Failed to copy DEPLOYMENT.ready file to $REPO_PATH"
+      exit 1
+    fi
+  else
+    echo "unable to find DEPLOYMENT.ready file"
+    exit 1
+  fi
+  umount_media
+  save_repo_path
+}
+
+#------------------------------------------------------------------------
+function identify_backup_brf(){
+  local backup_file=$1
+  # Check for BRF identifiers
+  for type in software config; do
+    if ! tar tf $backup_file | $CMD_GREP -q "${type}.tar.gz$"; then
+      return 1
+    fi
+  done
+  return 0
+}
+ 
+#------------------------------------------------------------------------
+function identify_backup(){
+  local supported_types="brf"
+  local backup_file=$1
+  for backup_type in $supported_types; do
+    if identify_backup_$backup_type $backup_file; then
+      echo $backup_type
+      return
+    fi
+  done
+  echo "Unknown file, supported backup types: $supported_types" >&2
+  echo "unknown"
+  return
+}
+
+#------------------------------------------------------------------------ 
+# Public function that will be called by the install script
+function create_installation_repo(){
+  # Parse parameters to set TYPE,SRC_PATH and DEST_PATH
+  local TYPE
+  local SRC_PATH
+  local DEST_PATH="/tmp/installation_repo"
+
+  if [ -z "$1" ]; then
+    if ! setup_network; then
+      TYPE="media"
+      SRC_PATH="media"
+    else
+      TYPE="pxe"
+      SRC_PATH="pxe"
+    fi
+  else
+    SRC_PATH=$1
+    if [ -d $SRC_PATH ]; then
+      TYPE="drbd"
+    elif [ -f $SRC_PATH ]; then
+      TYPE=$(identify_backup $SRC_PATH)
+      if [ "$TYPE" == "unknown" ]; then
+        return 1
+      fi
+    else
+      echo "Invalid value $SRC_PATH"
+      return 1
+    fi
+
+    if [ ! -z "$2" ]; then
+      DEST_PATH=$2
+    fi
+  fi
+
+  mkdir -p $DEST_PATH
+  if [ ! -d $DEST_PATH ]; then
+    echo "$DEST_PATH doesn't exist or can't be created"
+    return 1
+  fi
+
+  DEST_PATH=$( cd $DEST_PATH; pwd )
+
+  rm -f $DEST_PATH/*.rpm
+  rm -f $DEST_PATH/etc/{installation.conf,cluster.conf}
+  rm -f $DEST_PATH/hooks/*
+
+  #create_repo_from_$TYPE $SRC_PATH $DEST_PATH
+  return $?
+}
+
+#------------------------------------------------------------------------
+function is_simulated() {
+  local count=$(find /tmp/installation -mindepth 1 -maxdepth 1 -name 'simulated_*'  2>/dev/null | wc -l)
+  [[ -n "$count" && $count -gt 0 ]] && return $TRUE
+  return $FALSE
+}
+

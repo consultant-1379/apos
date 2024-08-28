@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+	Copyright (c) 2020 Ericsson AB.
+	All rights reserved
+
+	DX ECIM Tool-chain generated this file on Dec 8, 2020 11:45:31 PM using:
+	* com.ericsson.ecim.coremw.m2m 3.13.0.202006261811
+	* com.ericsson.ecim.coremw.dsl 3.13.0.202006261811
+	* com.ericsson.ecim.coremw.imm 3.13.0.202006261811
+--><imm:IMM-contents xmlns:imm="http://www.saforum.org/IMMSchema" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.saforum.org/IMMSchema SAI-AIS-IMM-XSD-A.01.01.xsd">
+    <class name="AxeFunctions">
+        <category>SA_CONFIG</category>
+        <rdn>
+            <name>axeFunctionsId</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_INITIALIZED</flag>
+        </rdn>
+        <attr>
+            <name>systemType</name>
+            <type>SA_INT32_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+        </attr>
+        <attr>
+            <name>axeApplication</name>
+            <type>SA_INT32_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+        </attr>
+        <attr>
+            <name>apgShelfArchitecture</name>
+            <type>SA_INT32_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+        </attr>
+        <attr>
+            <name>apzProtocolType</name>
+            <type>SA_INT32_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+        </attr>
+        <attr>
+            <name>apNodeNumber</name>
+            <type>SA_INT32_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+        </attr>
+        <attr>
+            <name>apHwVersion</name>
+            <type>SA_INT32_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+        </attr>
+        <attr>
+            <name>ap</name>
+            <type>SA_INT32_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+            <default-value>1</default-value>
+        </attr>
+        <attr>
+            <name>dataDiskReplicationType</name>
+            <type>SA_INT32_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+            <default-value>1</default-value>
+        </attr>
+        <attr>
+            <name>apgOamAccess</name>
+            <type>SA_INT32_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+            <default-value>0</default-value>
+        </attr>
+    </class>
+    <class name="SecurityHandling">
+        <category>SA_CONFIG</category>
+        <rdn>
+            <name>securityHandlingId</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_INITIALIZED</flag>
+        </rdn>
+        <attr>
+            <name>welcomeMessage</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+            <default-value>IF YOU ARE NOT AN AUTHORIZED USER, PLEASE EXIT IMMEDIATELY.</default-value>
+        </attr>
+    </class>
+    <class name="SystemHandling">
+        <category>SA_CONFIG</category>
+        <rdn>
+            <name>systemHandlingId</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_INITIALIZED</flag>
+        </rdn>
+    </class>
+    <class name="SupervisionHandling">
+        <category>SA_CONFIG</category>
+        <rdn>
+            <name>supervisionHandlingId</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_INITIALIZED</flag>
+        </rdn>
+    </class>
+    <class name="DataOutputHandling">
+        <category>SA_CONFIG</category>
+        <rdn>
+            <name>dataOutputHandlingId</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_INITIALIZED</flag>
+        </rdn>
+    </class>
+    <class name="SystemComponentHandling">
+        <category>SA_CONFIG</category>
+        <rdn>
+            <name>systemComponentHandlingId</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_INITIALIZED</flag>
+        </rdn>
+    </class>
+</imm:IMM-contents>

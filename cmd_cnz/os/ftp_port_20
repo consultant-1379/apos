@@ -1,0 +1,200 @@
+
+#!/bin/bash
+# ------------------------------------------------------------------------
+#     Copyright (C) 2015 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       ftp_port_20
+# Description:
+#       A script to chnage the ftp mode.
+# Note:
+#       None.
+##
+# Usage:
+#       Usage: ftp_port_20 --<mode>
+#	where:<mode> can be:
+#	active
+#	passive
+#	status
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Thu Aug 15 2015  - Dharma Teja (xdhatej)
+#       First version.
+##
+
+
+#Commands
+ECHO=/bin/echo
+SED=/bin/sed
+CAT=/bin/cat
+GREP=/bin/grep
+AWK=/usr/bin/awk
+RHOST=$(</etc/cluster/nodes/peer/hostname)
+FILE="/opt/ap/apos/conf/vsftpd/vsftpd.conf"
+CURRENT_NODE_ID_FILE="/etc/cluster/nodes/this/id"
+DIRECTORY="/data/opt/ap/internal_root"
+
+EXIT_GENERAL_FAULT=1
+EXIT_INCORRECT_USAGE=2
+EXIT_FTP_NOT_ALLOW=3
+EXIT_FILE_NOT_EXIST=4
+EXIT_NOT_ACTIVE=5
+EXIT_CFILE_NOT_EXIST=6
+
+if [ -r /opt/ap/apos/conf/apos_common.sh ]; then
+        . /opt/ap/apos/conf/apos_common.sh
+else
+        ${ECHO} '/opt/ap/apos/conf/apos_common.sh not found or not readable!' >&2
+        ftp_exit $EXIT_GENERAL_FAULT
+fi
+
+
+function usage(){
+${CAT} << HEREDOC
+Usage: ftp_port_20 --<mode>
+where:<mode> can be:
+active
+passive
+status
+
+HEREDOC
+}
+
+
+function ftp_exit(){
+        local exitCode=$1
+        case $exitCode in
+        $EXIT_GENERAL_FAULT )            ${ECHO} -e "Error when executing (general fault)" >&2
+					 apos_abort "$FILE file not readable"
+                       ;;
+        $EXIT_INCORRECT_USAGE )            usage
+                        ;;
+	$EXIT_FTP_NOT_ALLOW )	      ${ECHO} -e "Operation failed\nFTP protocol is blocked on the node" >&2
+			;;
+        $EXIT_NOT_ACTIVE )            ${ECHO} -e "Command is allowed only from active node\n" >&2
+                        ;;
+        $EXIT_FILE_NOT_EXIST )        ${ECHO} -e  "Configuration Fault\n" >&2
+				      apos_abort "$FILE file does not exist"
+                        ;;
+	$EXIT_CFILE_NOT_EXIST )       ${ECHO} -e "Configuration Fault\n" >&2
+				      apos_abort " /cluster/storage/system/config/apos/ftp_state.conf file is missing" >&2
+
+         esac
+
+        exit $exitCode
+}
+
+function ftp_exitnotactive() {
+        if [ ! -d  "$DIRECTORY" ] ; then
+                ftp_exit $EXIT_NOT_ACTIVE
+        fi
+}
+
+
+function status_ftp(){
+       	FTP_STATUS=`csadm -s | ${GREP} -wi "ftp" | ${AWK} 'BEGIN {FS = "[ ]"} {print $2}'`
+  	if [ "$FTP_STATUS" != "ALLOW" ];then
+		ftp_exit $EXIT_FTP_NOT_ALLOW
+	fi
+	if [ ! -f $FILE ];then
+                ftp_exit $EXIT_FILE_NOT_EXIST
+        fi
+
+ 
+        if [ ! -r $FILE ];then
+		ftp_exit $EXIT_GENERAL_FAULT
+        fi
+
+      	if [ ! -f "/cluster/storage/system/config/apos/ftp_state.conf" ];then
+	        ftp_exit $EXIT_CFILE_NOT_EXIST
+	fi
+
+        ${CAT} /opt/ap/apos/conf/vsftpd/vsftpd.conf | ${GREP} -i "connect_from_port_20=yes" &>/dev/null
+        status_ftp_port=$?
+	ssh $RHOST ${CAT} /opt/ap/apos/conf/vsftpd/vsftpd.conf | ${GREP} -i "connect_from_port_20=yes" &>/dev/null
+	status_ftp_port_other=$?
+}
+
+
+function do_active(){
+                if [ $status_ftp_port == 1 ] || [ $status_ftp_port_other == 1 ];then
+			apos_log "Changing FTP mode to active"
+                       [ $status_ftp_port == 1 ] && `${SED} -i '/pasv_max_port=30100/a connect_from_port_20=YES' $FILE &>/dev/null`
+			[ $status_ftp_port_other == 1 ] && `ssh $RHOST ${SED} -i '/pasv_max_port=30100/a\connect_from_port_20=YES' $FILE &>/dev/null`
+			apos_log "Modified the vsftpd.conf file"
+                        apos_log "Changing status file in cluster location"
+			`${ECHO} "1" > /cluster/storage/system/config/apos/ftp_state.conf`
+			 apos_log "FTP mode has been changed to active"
+                elif [ $status_ftp_port == 0 ] && [ $status_ftp_port_other == 0 ];then
+                        ${ECHO} -e "FTP is already in active mode\n"
+                else
+                        ftp_exit $EXIT_GENERAL_FAULT
+                fi
+}
+
+function do_passive(){
+                if [ $status_ftp_port == 0 ] || [ $status_ftp_port_other == 0 ];then
+			apos_log "Changing FTP mode to passive"
+                        [ $status_ftp_port == 0 ] && `${SED} -i '/connect_from_port_20=YES/d' $FILE &>/dev/null`
+			[ $status_ftp_port_other == 0 ] && `ssh $RHOST ${SED} -i '/connect_from_port_20=YES/d' $FILE &>/dev/null`
+			apos_log "Modified the vsftpd.conf file"
+                        apos_log "Changing status file in cluster location"
+			`${ECHO} "0" > /cluster/storage/system/config/apos/ftp_state.conf`
+			apos_log "FTP mode has been changed to passive"
+                elif [ $status_ftp_port == 1 ] && [ $status_ftp_port_other == 1 ];then
+                        ${ECHO} -e "FTP is already in passive mode\n"
+                else
+                        ftp_exit $EXIT_GENERAL_FAULT
+                fi
+
+}
+
+function do_status(){
+apos_log "Checking FTP mode status"
+if [ $status_ftp_port ==  $status_ftp_port_other ];then
+	[ $status_ftp_port == 1 ] && ${ECHO} -e "Mode : Passive\n"
+	[ $status_ftp_port == 0 ] && ${ECHO} -e "Mode : Active\n"
+elif [ $status_ftp_port != $status_ftp_port_other ];then
+	${ECHO} -e "FTP mode is not same in both the nodes\nExecute 'ftp_port_20' command to change the FTP mode\n"
+fi
+
+}
+
+apos_log "ftp_port_20 command execution started on the node"
+ftp_exitnotactive
+
+
+if [ $# -lt 1 ]; then
+        ftp_exit $EXIT_INCORRECT_USAGE
+fi
+if [ $# -gt 1 ]; then
+        ftp_exit $EXIT_INCORRECT_USAGE
+fi
+
+status_ftp
+mode="$1"
+
+case "$mode" in
+        --active)
+                do_active
+                ;;
+        --passive)
+                do_passive
+                ;;
+	--status)
+		do_status
+		;;
+        *)
+                usage
+                ;;
+esac
+
+exit $TRUE
+
+
+
+

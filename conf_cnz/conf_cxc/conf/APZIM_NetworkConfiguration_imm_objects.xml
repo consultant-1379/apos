@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?><!-- 
+  Copyright (c) 2011 Ericsson AB.
+  All rights reserved
+
+  DX ECIM Tool-chain generated this file on Dec 23, 2011 9:52:29 AM using 
+    * coremw.m2m (1.4.4.201109271606)
+    * coremw.m2t (1.4.4.201109271606)
+    * coremw.dsl (1.4.4.201109271606)
+    * coremw.imm (1.4.4.201109271606)
+--><imm:IMM-contents xmlns:imm="http://www.saforum.org/IMMSchema" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.saforum.org/IMMSchema SAI-AIS-IMM-XSD-A.01.01.xsd">
+    <object class="NetworkConfiguration">
+        <dn>networkConfigurationId=1</dn>
+    </object>
+    <object class="NorthBound">
+        <dn>northBoundId=1,networkConfigurationId=1</dn>
+        <attr>
+            <name>clusterIpAddress</name>
+            <value>0.0.0.0</value>
+        </attr>
+        <attr>
+            <name>netmask</name>
+            <value>255.255.255.0</value>
+        </attr>
+        <attr>
+            <name>nodeAIpAddress</name>
+            <value>0.0.0.0</value>
+        </attr>
+        <attr>
+            <name>nodeAName</name>
+            <value>SC-2-1</value>
+        </attr>
+        <attr>
+            <name>nodeBIpAddress</name>
+            <value>0.0.0.0</value>
+        </attr>
+        <attr>
+            <name>nodeBName</name>
+            <value>SC-2-2</value>
+        </attr>
+        <attr>
+            <name>physicalSeparationStatus</name>
+            <value>0</value>
+        </attr>
+        <attr>
+            <name>gatewayIpAddress</name>
+            <value>0.0.0.0</value>
+        </attr>
+        <attr>
+            <name>teamingStatus</name>
+            <value>0</value>
+        </attr>
+    </object>
+</imm:IMM-contents>

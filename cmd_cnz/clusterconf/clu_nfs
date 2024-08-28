@@ -1,0 +1,197 @@
+#!/bin/bash
+# Author: Satya Deepthi
+
+# Changelog
+# Updated by XPRANSI
+# Date: 27-10-2011
+
+# Functions
+
+# User-Input validations	
+
+#validation for IP address
+ validate_ip() {
+		ip_format="\b(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\b"
+		ipaddr=${!1}
+		chk=$(echo $ipaddr | egrep $ip_format)
+		if [ $? -ne 0 ]
+			then return 1
+		fi
+		echo $ipaddr
+	}
+
+ validate_integer() {
+                        int=${!1}
+                        if [ -z $int ] ; then
+                                return 1
+                        else
+                        num=$( echo $int | grep -Eq "^[0-9]+$")
+                        chk_num=$?
+                                if [ $chk_num -eq 1 ] ; then
+                                return 1
+                                fi
+                        fi
+                        echo $int
+        }
+
+# To delete an existing NFS rule
+ delete() {
+        word=${!1}
+        rule=${!2}
+        rule_num=`validate_integer rule`
+        if [ $? -ne 0 ]
+        then
+                help
+                echo "Enter rule number as argument. Empty values not accepted "
+                exit 1
+        fi
+
+        # Calling cluster_parse file to delete boot rule
+	$clu_file $word --delete $rule_num
+	}
+
+# To add/modify an existing NFS rule
+  add_mod() {
+        word=${!1}
+        arg=${!2}
+        ipaddr_new=${!3}
+        st=${!4}
+
+        w1=$(echo $arg | cut -d : -f 2)
+        if [ "$w1" != "$word" ]
+         then
+                echo "Wrong format"
+                help
+                exit 1
+        fi
+
+	if [ $st == "modify" ]
+	then 
+		rule=$(echo $arg | cut -d: -f 1)
+        	rule_num=`validate_integer rule`
+	        if [ $? -ne 0 ]
+        	then
+                	help
+	                echo "Enter correct format of arguments. "
+        	        exit 1
+        	fi
+	fi
+
+        ipaddr_ip_new=`validate_ip ipaddr_new`
+        if [ $? -ne 0 ]
+        then
+                help
+                echo "IP address should be of the format 172.16.67.45 Empty values not accepted "
+                exit 1
+        fi
+
+        # Calling cluster_parse file to add/modify rule
+	rule="nfs $ipaddr_ip_new"
+	chk_rule="nfs "
+	if [ $st == "modify" ]
+	then 
+        	$clu_file $word --modify $rule_num $rule $chk_rule
+	else
+        	$clu_file $word --add $rule $chk_rule
+	fi
+        }
+
+# To display existing rules
+ display() {
+        $clu_file $word --display
+	}
+
+# To display help
+help()
+{
+echo "
+Usage: clu_nfs <option> <rule>
+
+Options:
+-a|--add 	<New-rule>			To add a new NFS rule 
+-d|--delete 	<Existing-rule number>		To delete an existing NFS rule
+-m|--modify 	<rule number>:<new-rule>	To modify an existing NFS rule
+-D|--display					To display all the existing rules
+-h|--help					To display help
+
+Rule: nfs <IP address>
+<IP address> 		Eg. 172.16.67.45
+"
+}
+
+#Main
+
+pwd=`pwd`
+fname="clu_parse"
+#clu_file="$pwd/$fname"
+clu_file="/opt/ap/apos/bin/clusterconf/$fname"
+word="nfs"
+
+if [ -f /cluster/etc/cluster.conf ];then
+        clu_Conf_path="/cluster/etc/"
+        clu_Conf_file="cluster.conf"
+else
+        echo -e "\n/cluster/etc/cluster.conf file does not exists"
+        exit 1
+fi
+
+        if [ -f $clu_file ];then
+                if [ -x $clu_file ];then
+                 ch=$1
+		 arg3=$3
+		 arg2=$2
+
+		  case $ch in
+			--add|-a)
+				st="add"
+				if [ $# -gt 3 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					add_mod word arg2 arg3 st
+		   	   	fi
+				;;
+			--delete|-d)
+				if [ $# -gt 2 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else  
+					delete word arg2
+		   	   	fi
+				;;
+			--modify|-m)
+				st="modify"
+				if [ $# -gt 3 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					add_mod word arg2 arg3 st
+		   	   	fi
+				;;
+			--display|-D) 
+				if [ $# -gt 1 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					display
+		   	   	fi
+				;;
+			--help|-h)
+				if [ $# -gt 1 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else 
+					help
+				fi
+				;;
+			*) 	echo -e "\nWrong input format, please follow the below format...\n"
+				help
+				;;
+		  esac 
+	else
+                        echo -e "\n$clu_file is not executable"
+                fi
+        else
+                echo -e "\n$clu_file file does not exists"
+        fi
+

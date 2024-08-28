@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+	Copyright (c) 2016 Ericsson AB. 
+	All rights reserved 
+
+	DX ECIM Tool-chain generated this file on Dec 1, 2016 10:32:10 AM using:
+	* com.ericsson.ecim.coremw.m2m 3.2.0.201605130716
+	* com.ericsson.ecim.coremw.dsl 3.2.0.201605130716
+	* com.ericsson.ecim.coremw.imm 3.2.0.201605130716
+--><imm:IMM-contents xmlns:imm="http://www.saforum.org/IMMSchema" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.saforum.org/IMMSchema SAI-AIS-IMM-XSD-A.01.01.xsd">
+    <class name="AxeInfo">
+        <category>SA_CONFIG</category>
+        <rdn>
+            <name>axeInfoId</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_INITIALIZED</flag>
+        </rdn>
+        <attr>
+            <name>value</name>
+            <type>SA_STRING_T</type>
+            <category>SA_CONFIG</category>
+            <flag>SA_WRITABLE</flag>
+        </attr>
+    </class>
+</imm:IMM-contents>

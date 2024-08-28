@@ -1,0 +1,18 @@
+Usage:  bspmngr get rtfdflag [--verbose] [--help] <board>
+
+Retrieve the RtfdStartedFlag status of the specified board (only apub boards are
+supported).
+			
+<board>                 represents the board the command will operate on. It
+                        can assume one of the following values:				                
+		                <board_name>
+		                <slot_number>
+				
+<board_name>            can assume one of the following values (the supported
+                        logical names are found in the lib/common/slot_by_name.dat
+                        under the bspmngr root directory):
+	                        apub_a, apa
+		                apub_b, apb		                
+
+<slot_number>           must be an unsigned integer mapped to one of the apub
+                        boards in the lib/common/slot_by_name.dat file.

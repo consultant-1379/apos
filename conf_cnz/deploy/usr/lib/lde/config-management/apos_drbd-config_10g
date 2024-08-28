@@ -1,0 +1,273 @@
+#!/bin/bash
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       apos_drbd-config
+# Description:
+#       A script to create DRBD configuration for DRBD resource1.
+#
+# Note:
+##
+# This script is intended to be deployed to the
+# /usr/lib/lde/config-management/directory.
+##
+# Output:
+#       drbd1.res is created /etc/drbd.d/
+##
+# LDE_deployment:
+#       type:           config
+#       priority:       560
+##
+# Changelog:
+# - Mon Sep 05 2016 - Alessio Cascone (ealocae)
+#       Updated max-buffers & max-epoch-size values for HV21955 fixing.
+# - Mon Nov 16 2015 - PratapReddy Uppada(XPRAUPP)
+# 			TR fix: HU34736
+# - Tue Mar 19 2013 - Tanu Aggarwal (xtanagg)
+#       First version.
+##
+
+
+#exit code
+exit_sucs=0
+
+#paths and file variables.
+ETC_DIR=/etc
+DRBD_CONF=$ETC_DIR/drbd.conf
+DRBD_CONF_DIR=$ETC_DIR/drbd.d
+DRBD_RESOURCE=drbd1
+RES_CONF=$DRBD_CONF_DIR/${DRBD_RESOURCE}.res
+SYNC_TYPE=''
+DRBD_VERSION=$(/sbin/drbdadm -V | grep DRBDADM_VERSION= | cut -d = -f 2)
+
+
+##
+# libraries -------------------------------------------------------------- BEGIN
+if [ -r /opt/ap/apos/conf/apos_common.sh ]; then
+    . /opt/ap/apos/conf/apos_common.sh
+else
+    echo '/opt/ap/apos/conf/apos_common.sh not found or not readable!' >&2
+    exit 1
+fi
+# libraries ---------------------------------------------------------------- END
+##
+
+
+##
+# functions -------------------------------------------------------------- BEGIN
+function usage(){
+    cat << HEREDOC
+Usage: $0 <action> <phase> [<etc_root>]
+where:
+    <action> can be "start" or "stop" or "config"
+    <phase> can be "init" or "reload"
+    <etc_root> (optional) specifies the base folder where the configuration
+               will be generated (/etc by default)
+HEREDOC
+}
+
+
+function do_start(){
+    # TO-DO: implement the start phase if needed.
+    return
+}
+
+function do_stop(){
+    # TO-DO: implement the stop phase if needed.
+    return
+}
+
+function do_config(){
+    #Invoke generate resource file to create the resource.
+    generate_resource_file $DRBD_RESOURCE
+}
+
+#This function is used to determine the synchronization type.
+function determine_sync_type() {
+    # Variable sync type is introduced in 8.3.10 and is default in 8.4 onwards
+    # syncer section is not available in 8.4
+    OLD_DRBD_VERSION=8.3.9
+    COMPARE_VERSIONS=$(echo -e "$DRBD_VERSION\n$OLD_DRBD_VERSION" | sort --version-sort | head -1)
+
+    if [ "$DRBD_VERSION" == "$OLD_DRBD_VERSION" -o "$DRBD_VERSION" == "$COMPARE_VERSIONS" ]; then
+        echo fixed
+    else
+        echo variable
+    fi
+}
+
+#This function is used to generate the drbd1.res for
+#configuring DRBD resource 1.
+function generate_resource_file() {
+	local TYPE='control'
+    local THIS_HOSTNAME=$(hostname)
+    local THIS_IP_ADDRESS=169.254.208.1
+    local PEER_HOSTNAME=dummy
+    local PEER_IP_ADDRESS=169.254.208.2
+    local PORT=7790
+    local DETACHED_MODE_PORT=7791
+    local SYNC_TYPE=$(determine_sync_type)
+    local DRBD_RES=$1
+    local THIS_NODE_ID=''
+    local PEER_NODE_ID=''
+    local NODE1=1
+    local NODE2=2
+
+    local THIS_NODE_ID=`cat /etc/opensaf/slot_id`
+    if [ $THIS_NODE_ID -eq $NODE1 ]; then
+        PEER_NODE_ID=$NODE2
+    else
+        PEER_NODE_ID=$NODE1
+    fi
+
+	if [[ -f /etc/cluster/nodes/this/type ]]; then
+        TYPE=$( cat /etc/cluster/nodes/this/type)
+	elif [[ -f /etc/cluster/options/type ]]; then
+		TYPE=$(cat /etc/cluster/options/type)
+        # This will generally only happen during installation
+        if [[ "$TYPE" == "install" || "$TYPE" == "repair" ]]; then
+                TYPE=control
+        fi
+    else
+        TYPE=undef
+	fi
+
+
+    if [ -d $ETC_DIR/cluster/nodes/this ]; then
+            THIS_HOSTNAME=$(<$ETC_DIR/cluster/nodes/this/hostname)
+            THIS_IP_ADDRESS=$(<$ETC_DIR/cluster/nodes/this/networks/internal_10g/primary/address)
+    fi
+
+	if [[ -d $ETC_DIR/cluster/nodes/peer && "$TYPE" == "control" ]]; then   
+            PEER_HOSTNAME=$(<$ETC_DIR/cluster/nodes/peer/hostname)
+            PEER_IP_ADDRESS=$(<$ETC_DIR/cluster/nodes/peer/networks/internal_10g/primary/address)
+	elif [ "$TYPE" == "detached" ]; then
+            PEER_IP_ADDRESS=192.0.2.1  # Dummy address, see RFC3330
+    fi
+	
+	if [ "$TYPE" == "detached" ]; then
+        PORT=$DETACHED_MODE_PORT
+    fi
+    # Create /etc/drbd.d/$DRBD_RES.res
+(
+        echo "#"
+        echo "# $ETC_DIR/drbd.d/$DRBD_RES.res: $DRBD_RES resource configuration"
+        echo "#"
+        echo ""
+        echo "resource $DRBD_RES {"
+        echo ""
+        echo "        startup {"
+        echo "                wfc-timeout       20;"
+        echo "                degr-wfc-timeout  10;"
+        echo "        }"
+        echo ""
+        if [ "$SYNC_TYPE" == "fixed" ]; then
+            echo "        syncer {"
+            echo "                rate              8M;"
+            echo "        }"
+            echo ""
+        fi
+        echo "        disk {"
+        echo "                on-io-error       detach;"
+        if [ "$SYNC_TYPE" == "variable" ]; then
+                echo "                c-plan-ahead      20;"
+                echo "                resync-rate       1024M;"
+                echo "                c-min-rate        0;"
+                echo "                c-max-rate        3072M;"
+                echo "                c-fill-target     50M;"
+        fi
+        echo "        }"
+        echo ""
+        echo "        net {"
+        echo "                timeout           30;"
+        echo "                max-epoch-size    20000;"
+        echo "                max-buffers       60000;"
+        echo "                sndbuf-size       0;"
+        echo "                connect-int       6;"
+        echo "                ping-int          6;"
+        echo "                after-sb-0pri discard-zero-changes;"
+        echo "                after-sb-1pri discard-secondary;"
+        echo "                after-sb-2pri disconnect;"
+        echo "                protocol                  C;"
+        echo "                always-asbp      yes;"
+        echo "                allow-two-primaries no;"
+        echo "        }"
+        echo ""
+        echo "        on $THIS_HOSTNAME {"
+        if [ "$THIS_HOSTNAME" == "SC-2-1" ]; then
+        echo "                node-id           0; "
+        elif [ "$THIS_HOSTNAME" == "SC-2-2" ]; then
+        echo "                node-id           1; "
+        fi
+        echo "                device            /dev/$DRBD_RES;"
+        echo "                disk              /dev/eri-data-vg/eri-data-lv;"
+        echo "                meta-disk         /dev/eri-meta-part [0];"
+        echo "                address           $THIS_IP_ADDRESS:$PORT;"
+        echo "        }"
+        echo ""
+        echo "        on $PEER_HOSTNAME {"
+        if [ "$PEER_HOSTNAME" == "SC-2-1" ]; then
+        echo "                node-id           0; "
+        elif [ "$PEER_HOSTNAME" == "SC-2-2" ]; then
+        echo "                node-id           1; "
+        fi
+        echo "                device            /dev/$DRBD_RES;"
+        echo "                disk              /dev/eri-data-vg/eri-data-lv;"
+        echo "                meta-disk         /dev/eri-meta-part [0];"
+        echo "                address           $PEER_IP_ADDRESS:$PORT;"
+        echo "        }"
+
+        echo "          connection-mesh {"
+        if [ "$THIS_HOSTNAME" == "SC-2-1" ]; then
+        echo "                  hosts SC-2-1 SC-2-2;"
+        elif [ "$THIS_HOSTNAME" == "SC-2-2" ]; then
+        echo "                  hosts SC-2-2 SC-2-1;"
+        fi
+        echo "          }"
+
+        echo "}"
+        echo ""
+        echo "# End of file"
+        ) > $RES_CONF
+}
+
+##
+# main ------------------------------------------------------------------- BEGIN
+##
+# LDE config scripts called with the following:
+# param 1: action - start, stop or config
+# param 2: generate phase - init or reload
+# param 3: root path where config should be generated
+
+apos_intro $0
+
+if [ $# -lt 2 ]; then
+    usage
+    apos_abort 'missing parameter'
+fi
+
+ACTION="$1"
+PHASE="$2"
+ETC_DIR=${3:-"/etc"}
+
+case "$ACTION" in
+    start)
+            do_start
+            ;;
+    stop)
+            do_stop
+                ;;
+    config)
+            do_config
+            ;;
+    *)
+            usage
+            ;;
+esac
+
+apos_outro
+exit $TRUE
+#End of file
+

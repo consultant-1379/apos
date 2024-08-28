@@ -1,0 +1,20 @@
+csm-version: '1.0'
+components:
+- uid: apos.oscmd
+  name: apos-oscmd
+  description: APOS OSCMD component
+  availability-manager: NONE
+  software:
+    sdp: ERIC-APOS_OSCMDBIN-CXC1371498
+  supersedes:
+  - software: ERIC-APOS_OSCMDBIN-CXC1371498
+  constraints:
+    plugin: plugin/apos.oscmd
+  meta-data:
+    component-version: 19.0.0-2
+    deliverable:
+      deployment-package: apos_oscmd-19.0.0-2-deployment-CXC1371498.tar.gz
+      runtime-package: apos_oscmd-19.0.0-2-runtime-CXC1371498.tar.gz
+    software:
+    - file-name: APOS_OSCMDBIN-CXC1371498_19-R1A02.x86_64.sdp
+      bundle-name: ERIC-APOS_OSCMDBIN-CXC1371498_19-R1A02

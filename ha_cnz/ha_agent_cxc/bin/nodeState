@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# AGENT status on the node would be treated node state
+
+SLOT_ID=`cat /etc/opensaf/slot_id`
+is_swm_2_0="/cluster/storage/system/config/apos/swm_version"
+if [ -f $is_swm_2_0 ]; then
+	nodeA="safSISU=safSu=SC-1\,safSg=2N\,safApp=ERIC-apg.nbi.aggregation.service,safSi=apg.nbi.aggregation.service-2N-1,safApp=ERIC-apg.nbi.aggregation.service"
+	nodeB="safSISU=safSu=SC-2\,safSg=2N\,safApp=ERIC-apg.nbi.aggregation.service,safSi=apg.nbi.aggregation.service-2N-1,safApp=ERIC-apg.nbi.aggregation.service"
+else
+	nodeA="safSISU=safSu=1\,safSg=2N\,safApp=ERIC-APG,safSi=AGENT,safApp=ERIC-APG"
+	nodeB="safSISU=safSu=2\,safSg=2N\,safApp=ERIC-APG,safSi=AGENT,safApp=ERIC-APG"
+fi
+
+AdminState=`amf-state node | grep SC-$SLOT_ID -A 2 | grep saAmfNodeAdminState | cut -d = -f2 | cut -d "(" -f1`
+
+if [ $AdminState != "UNLOCKED" ]; then
+	echo "Node State: Undefined"
+	exit 1
+fi
+
+OperState=`amf-state node | grep SC-$SLOT_ID -A 2 | grep saAmfNodeOperState | cut -d = -f2 | cut -d "(" -f1`
+
+if [ "$OperState" != "ENABLED" ]; then
+	echo "Node State: Undefined"
+	exit 1
+fi
+
+case $SLOT_ID in
+        1)
+        echo "Current Node State: `amf-state siass ha "$nodeA" | grep saAmfSISUHAState | cut -d"=" -f2 | cut -d "(" -f1`"
+                ;;
+        2)
+        echo "Current Node State: `amf-state siass ha "$nodeB" | grep saAmfSISUHAState | cut -d"=" -f2 | cut -d "(" -f1`"
+                ;;
+        *)
+		echo "Node Sate: Undefined. slot received ($SLOT_ID)"
+                exit 1
+esac
+
+exit 0
+
+

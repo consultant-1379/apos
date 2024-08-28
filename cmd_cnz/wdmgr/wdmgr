@@ -1,0 +1,404 @@
+#!/bin/bash 
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2020 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       wdmgr
+# Description:
+#       A script to configure Watchdog interval 
+#
+##
+# Usage: 
+# 	wdmgr [-i <interval_time>] [-p]
+#	wdmgr -h
+##
+# Output:
+#       Command print-out is printed on console.
+#
+##
+# Changelog:
+# - 25-03-2020  Sravanthi (XSRAVAN)
+#       First version.
+################################################################################################################
+
+# Source Common functions
+. /opt/ap/apos/conf/apos_common.sh
+
+# script-wide variables
+HELP=''
+interval_value=10
+print_result=''
+PSO_PATH="/storage/system/config/apos/"
+REQID_FILE="/usr/lib/lde/inithooks/lde-watchdogd"
+OPT_SERVICE="lde-watchdogd.service"
+#Exit codes
+exit_success=0
+exit_failure=1
+exit_gen=1 #Exit code for General Fault
+exit_usage=2 #Exit code for incorrect usage
+exit_hw_type=3
+exit_active_node=5 #Exit code for failed requirements
+
+#Exit Messages
+EXIT_USAGE_ERROR_MSG="Incorrect Usage"
+
+
+# list-of commands
+GREP="/bin/grep"
+WC="/usr/bin/wc"
+SED="/bin/sed"
+ECHO="/bin/echo"
+SSH="/usr/bin/ssh"
+TR="/usr/bin/tr"
+EGREP="/bin/egrep"
+CMD_TOUCH=/usr/bin/touch
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+OPT_I=$FALSE
+OPT_P=$FALSE
+otherNode=$(</etc/cluster/nodes/peer/hostname)
+#######################################################################################
+# function usage();                                                                   #
+#                                                                                     #
+# Displays the command usage                                                          #
+#######################################################################################
+function usage() {
+
+        ${ECHO}
+        ${ECHO} -e "Usage: wdmgr [-i <interval_timeout>] [-p]"
+		${ECHO} -e "       wdmgr -h"
+        ${ECHO}
+        ${ECHO} -e "Where <interval_timeout> can be:"
+        ${ECHO} -e "1 sec"
+        ${ECHO} -e "10 sec"
+       	${ECHO}
+
+}
+
+#######################################################################################
+# function usage_error();                                                             #
+#                                                                                     #
+# Displays the command usage and exits with $EXIT_USAGE_ERROR (3)                     #
+#                                                                                     #
+# Exits:                                                                              #
+# - $EXIT_USAGE_ERROR                                                                 #
+#######################################################################################
+function usage_error() {
+	$ECHO 
+	$ECHO "Incorrect Usage$(usage)"	
+	apos_abort $exit_usage "Incorrect Usage$(usage)"
+}
+
+#######################################################################################
+# function checkHWType();                                                             #
+#                                                                                     #
+# to check to execute command only on Virtual nodes                                   #
+#######################################################################################
+function checkHWType(){
+	if ! is_vAPG; then
+		$ECHO "Illegal command in this system configuration."
+		apos_abort $exit_hw_type "Illegal command in this system configuration"
+	fi
+	return $exit_success
+}
+
+
+#######################################################################################
+# function isActive();                                                                #
+#                                                                                     #
+# to check if current node is active node                                             #
+#######################################################################################
+function isActive(){
+        local rCode
+	status=$( get_node_state )
+        if [ $status != "active" ]; then
+		$ECHO "Command can be executed only on the active node."
+               apos_abort $exit_active_node "Command can be executed only on the active node. Exiting..."
+	fi
+       return $exit_success
+}
+
+#######################################################################################
+# function parse_args();                                                              #
+#                                                                                     #
+# to parse the arguements                                         		    		  #
+#######################################################################################
+function parse_args(){
+
+	local val
+	 if [ $# == 0 ]; then
+           usage_error
+  	 fi
+
+	if [ $# -gt 2 ]; then
+          usage_error
+	fi
+
+	#if [ $# -eq 2 ]; then
+        #	if [[  "$1" == "-i"  &&  "$2" == "-p"  ||  "$1" == "-p"  &&  "$2" == "-i"  ]];then
+        #	usage_error
+	#	fi
+#	fi
+  
+	while [ $# -ge 1 ]; do
+                        case "$1" in
+                                        --)
+                	                                # No more options left.
+                        	                        shift
+                                	                break
+                                        		 ;;
+                                        -i|--interval)
+                	                                
+							if [ $# -eq 1 ]; then
+            					   	  usage_error
+        						fi
+							val=$(echo "$2")
+							OPT_I=$TRUE
+							break;
+                                                        ;;
+                                        -p|--print)
+                                                      # print
+							OPT_P=$TRUE
+                                                        ;;
+					-h|--help)
+                                                        HELP=$TRUE
+                                                        ;;
+                                        *)
+                                                        echo "Invalid option: $1" >&2
+                                                        usage_error
+                                                        ;;
+                        esac
+
+                        shift
+        done
+
+	if [[ $OPT_P -eq $TRUE && $OPT_I -eq $TRUE ]]; then
+           usage_error
+           exit $FALSE;
+        fi
+
+	if [[ $OPT_P -eq $TRUE && $HELP ]]; then
+           usage_error
+           exit $FALSE;
+        fi
+
+	if [[ $HELP && $OPT_I -eq $TRUE ]]; then
+           usage_error
+           exit $FALSE;
+        fi
+	
+        if [ $HELP ]; then
+           helpUsage
+           exit $FALSE;
+        fi
+
+	 if [[ $OPT_I -eq $TRUE ]]; then
+           
+           checkIntervalRange $val
+        fi
+
+	return $exit_success
+}
+
+#######################################################################################
+# function helpUsage();                                                               #
+#                                                                                     #
+# to print the help usage                                         		              #
+#######################################################################################
+function helpUsage(){
+
+        usage
+        echo '       -i, --interval         The interval timeout value: '
+        echo '                                          "1 sec" or'
+        echo '                                          "10 sec"'
+        echo '       -p, --print            Print the interval value'		 
+        echo '       -h, --help             Display this help.'
+
+
+}	
+
+#######################################################################################
+# function checkIntervalRange();                                                      #
+#                                                                                     #
+# to check the interval timeout range                                        	      #
+#######################################################################################
+function checkIntervalRange(){
+
+	if [ $# == 0 ];then
+		usage_error
+	fi
+	
+	interval_value="$1"
+	
+	if [[ $interval_value != "1"  &&  $interval_value != "10" ]];then
+		echo "Invalid Interval Value. The only allowed values are 1 sec or 10 sec"
+		usage_error
+	fi
+
+	return $exit_success
+}
+
+#######################################################################################
+# function print();                                                                   #
+#                                                                                     #
+# to print the interval timeout value                                        	      #
+#######################################################################################
+function print(){
+	local rCode	
+	print_result=$(systemctl status lde-watchdogd | grep -i "/usr/sbin/watchdogd")
+	rCode=$?
+    	if [ $rCode -ne 0 ]; then
+		$ECHO "Error when executing (General Fault)"
+                apos_abort "Error while setting the interval. Exiting..." $exit_gen
+	fi
+
+	my_array=($(echo $print_result | tr " " "\n"))
+	found=0
+
+	for i in "${my_array[@]}"
+	do
+		if [ $found -eq 1 ];then
+			$ECHO "interval="$i
+			break
+		fi
+    		if [ $i == "-i" ];then
+			found=1
+		fi
+	done
+	if [ $found -eq 0 ];then
+		$ECHO "interval=10"
+		
+	fi
+	 return $exit_success
+}
+
+#######################################################################################
+# function setInterval();                                                             #
+#                                                                                     #
+# to set the interval timeout range                                        	          #
+#######################################################################################
+function setInterval(){
+	local rCode
+	local cmd=$($CMD_ECHO "sed -i '0,/WATCHDOG_DAEMON_OPTIONS=.*/s//WATCHDOG_DAEMON_OPTIONS=\"\$WATCHDOG_DAEMON_OPTIONS -i $interval_value\"/' /usr/lib/lde/inithooks/lde-watchdogd" )
+	eval "$cmd"
+    	rCode=$?
+    	if [ $rCode -ne 0 ]; then
+		$ECHO "Error when executing (General Fault)"
+                apos_abort  $exit_gen "Error while setting the interval. Exiting..."
+	fi
+	
+
+	apos_servicemgmt  restart $OPT_SERVICE &>/dev/null
+	rCode=$?
+    	if [ $rCode -ne 0 ]; then
+		$ECHO "Error when executing (General Fault)"
+                apos_abort  $exit_gen "Error while setting the interval. Exiting..."
+	fi
+
+local cmd1=$(echo "$SSH $otherNode \"sed -i '0,/WATCHDOG_DAEMON_OPTIONS=.*/s//WATCHDOG_DAEMON_OPTIONS=\\\"\\\$WATCHDOG_DAEMON_OPTIONS -i $interval_value\\\"/'" /usr/lib/lde/inithooks/lde-watchdogd\" )
+	eval "$cmd1"
+ 	rCode=$?
+   	if [ $rCode -ne 0 ]; then
+		$ECHO "Error when executing (General Fault)"
+                apos_abort  $exit_gen "Error while setting the interval. Exiting..."
+	fi
+	
+	
+	$SSH $otherNode systemctl restart $OPT_SERVICE
+	rCode=$?
+   	if [ $rCode -ne 0 ]; then
+		$ECHO "Error when executing (General Fault)"
+                apos_abort  $exit_gen "Error while setting the interval. Exiting..."
+	fi
+
+	PSO_PATH_FILE=$PSO_PATH/lde-watchdogd-config
+	$CMD_TOUCH "$PSO_PATH_FILE" &>/dev/null
+	rCode=$?
+        if [ $rCode -ne 0 ]; then
+                $ECHO "Error when executing (General Fault)"
+                apos_abort  $exit_gen "Error while setting the interval. Exiting..."
+        fi	
+	
+        chmod 666 "$PSO_PATH_FILE" &>/dev/null
+	rCode=$?
+        if [ $rCode -ne 0 ]; then
+                $ECHO "Error when executing (General Fault)"
+                apos_abort  $exit_gen "Error while setting the interval. Exiting..."
+        fi
+	
+	$CMD_ECHO "interval=$interval_value"> $PSO_PATH_FILE
+	rCode=$?
+ 	if [ $rCode -ne 0 ]; then
+		$ECHO "Error when executing (General Fault)"
+                apos_abort  $exit_gen "Error while setting the interval. Exiting..."
+	fi
+ return $exit_success
+}
+
+#######################################################################################
+# function sanity_check();                                                            #
+#                                                                                     #
+# to do the sanity checks if file is present on both active and passive nodes         #
+#######################################################################################
+function sanity_check {
+
+        if [ ! -f $REQID_FILE ]; then
+                ${ECHO} "Error when executing (General Fault)"
+                ${ECHO} "$REQID_FILE does not exist."
+                apos_abort  $exit_gen "$REQID_FILE does not exist. Exiting..."
+        fi
+	
+	$($SSH $otherNode test -f $REQID_FILE &>/dev/null) 
+        rCode=$?
+        if [ $rCode -ne 0 ]; then
+                $ECHO "Error when executing (General Fault)"
+                apos_abort  $exit_gen "Error while setting the interval. Exiting..."
+        fi
+	
+
+}
+
+#######################################################################################
+# function invoke();                                                                  #
+#                                                                                     #
+# to invoke the action based on option                                                #
+#######################################################################################
+function invoke {
+
+        if [ $OPT_P -eq $TRUE ]; then
+		print
+        fi
+
+        if [ $OPT_I -eq $TRUE ]; then
+		setInterval
+        fi
+
+}
+
+	
+# _____________________ _____________________ 
+#|    _ _   _  .  _    |    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |   | ) ) (_| | | )   |   
+#|_____________________|_____________________|
+# Here begins the "main" function...
+
+# Set the interpreter to exit if a non-initialized variable is used.
+set -u
+
+#Check if command is executed in only Vviryual environment
+checkHWType
+
+# Check if the command is executed on the active node only
+isActive
+
+# Parse command line arguments.
+parse_args "$@"
+
+#preform sanity checks
+sanity_check
+
+
+# invokes the required action
+invoke

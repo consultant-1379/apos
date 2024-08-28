@@ -1,0 +1,544 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name: 001_ah_dnr_blade1
+#
+# Description:
+#     	This is the after-booting-from-disk hook and is used in
+#     	DNR doble node recovery procedure.
+# 	In high level this hook does following tasks:
+# 		1. Import the backup file 
+# 		2. Restore the backup file
+# 		3. commit the changes
+# 		4. reboot the node
+# 	If any of the above operation is failed, the same is 
+#	informted to LOTC global install script.
+
+# Note:
+#       None.
+##
+# Usage:
+#       None.
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Fri MAr 11 2022 - Sowjanya GVL (XSOWGVL)
+#   - Added -e option for lde-brf restore commit command in case of DNR 
+# - Tue Dec 24 2019 -Dharma Teja (XDHATEJ)
+#   - added fix for TR HX80852 DNDR failing after both APUB GEP5 boards changed 3.5.0
+# - Thu Jul 18 2019 -Roshini Chilukoti (ZCHIROS)
+#   - added fix for TR HX33352 DNDR not working on SW level 3.5.x when one board is replaced
+# - Tue May 21 2019 -Harika Bavana (XHARBAV)
+#   - Updated for secure backup
+# - Thu Mar 29 2018 -Sindhura Chintakindi (ZCHISIN)
+#   - added check to verify "lde-brf service" is active
+# - Tue 04 2017 - Raghavendra Koduri (XKODRAG)
+#   - added impacts for GEP7
+# - Mon Dec 05 2016 - Prabhakaran Dayalan (XPRADAY)
+#   - added fix for TR-HU91984 to support DNR incase of teaming
+# - Mon Nov 23 3015 - Baratam Swetha (XSWEBAR)
+#   - added eth7 and eth8 to support GEP5-64
+# - Tue Sep 24 2013 - PratapReddy Uppada (XPRAUPP)
+#   - added eth5 and eth6 to support GEP5
+# - Wed Oct 24 2012 - Malangsha Shaik (XMALSHA)
+#   - added support for LOTC API usage
+# - Mon Sep 03 2012 - PratapReddy Uppada (XPRAUPP)
+#   - First version.
+##
+
+# set -x
+
+# script-wide variables.
+exit_success=0
+exit_failure=1
+isGEP5_64=0
+
+f_cluster_conf=/cluster/etc/cluster.conf
+PERSISTENT_LOCATION='/cluster/home/dnr_bckp'
+DNR_PATH='/cluster/dnr'
+f_board_type='board_type'
+SYSTEM_BACKUP=''
+
+# command-list
+sed=/usr/bin/sed
+dmidecode=/usr/sbin/dmidecode
+grep=/usr/bin/grep
+awk=/usr/bin/awk
+cat=/bin/cat
+find=/usr/bin/find
+
+#------------------------------------------------------------------------------------------
+function abort() {
+        echo $1
+        exit $exit_failure
+}
+
+#------------------------------------------------------------------------------------------
+function console_print() {
+        echo $1
+}
+
+#------------------------------------------------------------------------------------------
+function sanity_check() {
+
+	# fetch hard ware type
+	HW_TYPE=$(get_hwtype)
+    [ $? != 0 ] && abort 'HW_TYPE not found'
+	[ ! -f $f_cluster_conf ]      && abort "Error: $f_cluster_conf not found"
+	[ ! -d $PERSISTENT_LOCATION ] && abort "Error: $PERSISTENT_LOCATION not found"
+
+}
+
+#------------------------------------------------------------------------------------------
+function locate_backup() {
+
+    # Find the location of file
+	BACKUP_FILE=$( ls -1 $PERSISTENT_LOCATION/*.tar )
+    [ -z $BACKUP_FILE ] && abort '-e \b ..failed' 
+	SYSTEM_BACKUP=$BACKUP_FILE
+	BACKUP_LABEL=$( tar tvf $BACKUP_FILE | $awk '{print $NF}' | $awk -F"/" '{print $1}' | head -1)
+	[ -z $BACKUP_LABEL ] && abort '-e \b ..failed'
+ 
+	return $exit_success
+}
+
+#------------------------------------------------------------------------------------------
+function check_brf(){ 
+	console_print '-n Checking if lde-brf service is up...' 
+	local count=0 
+	local max_try=15 
+	while [[ $count -lt $max_try ]] 
+	do 
+		brf_state=$(systemctl is-active lde-brf.service) 
+		if [ "$brf_state" == "active" ]; then 
+			break 
+		else 
+			((count ++)) 
+			sleep 20 
+		fi 
+		[ $count -eq $max_try ] && abort '-e \b failed... lde-brf service is not up' 
+	done 
+	console_print '-n lde-brf service is up....' 
+} 
+#------------------------------------------------------------------------------------------
+function import_backup() {
+
+	console_print '-n Importing system backup using lde-brf: '
+
+	locate_backup
+
+	/usr/sbin/lde-brf import -l $BACKUP_LABEL -f  $SYSTEM_BACKUP -t system &>/dev/null
+	[ $? != 0 ] && abort '-e \b ..failed' 
+	
+	console_print '-e \b ..success'
+	return $exit_success
+}
+
+#------------------------------------------------------------------------------------------
+function restore_backup() {
+
+        # restoring backup file into node
+	console_print '-n Restoring system backup using lde-brf: '
+	#Check if backup is encrypted or not
+        SECURE_BACKUP=$(tar -tvf $SYSTEM_BACKUP | $awk '{print $NF}' | $awk -F"/" '{print $2}' | grep config.tar.gz.enc  2>/dev/null)
+        if [ ! -z $SECURE_BACKUP ]; then
+          #Fetch password from password file
+          PASSWORD=$( cat $PERSISTENT_LOCATION/APG_BACKUP_PWD.dat 2>/dev/null)
+          [ -z "$PASSWORD" ] && abort "Password not found in file"
+          console_print 'restore secure backup'
+          /usr/sbin/lde-brf restore -l $BACKUP_LABEL -t system -p <<< $PASSWORD &>/dev/null
+        else
+          console_print 'restore regular backup'
+	  /usr/sbin/lde-brf restore -l $BACKUP_LABEL -t system &>/dev/null
+	fi
+        [ $? != 0 ] && abort '-e \b ..failed'
+
+	console_print '-e \b ..success'
+	return $exit_success
+}
+
+#------------------------------------------------------------------------------------------
+function commit_backup() {
+	
+        # To commit the changes
+	console_print '-n Commiting system backup using lde-brf: '
+        /usr/sbin/lde-brf restore --commit -l $BACKUP_LABEL -e &>/dev/null
+        [ $? != 0 ] && abort '-e \b ..failed'
+
+	console_print '-e \b ..success'
+	return $exit_success
+}
+
+#------------------------------------------------------------------------------------------
+function generate_board_type() {
+	
+	console_print '-n Creating board_type file: '
+
+	# create dnr folder
+	[ ! -d $DNR_PATH ] && mkdir -p $DNR_PATH
+	[ $? != 0 ] && abort '-e \b ..failed'
+	
+	# create board file with 'new' 
+	[ -f $DNR_PATH/$f_board_type ] && rm -f $DNR_PATH/$f_board_type
+	echo "new" > $DNR_PATH/$f_board_type
+	
+	console_print '-e \b ..success'
+	
+	return $exit_success
+}
+
+#------------------------------------------------------------------------------------------
+function cluster_conf() {
+
+	# cross verify the cluster.conf mac address
+	verify_macs
+	
+	[ $? -ne 0 ] && {
+        update_macs
+
+		# This is the case of board replacement/swap.
+		# On GEP5 platform, this case need to be handled
+		# to create a folder structure once the node is 
+		# is completely installed. Here we create a file
+		# to handle board_type, new -> indicates new board
+		# is replaced. This file is used by HAAGENT to 
+		# restore the folder structure.
+		[[ "$HW_TYPE" == 'GEP5' || "$HW_TYPE" == 'GEP7' ]] && generate_board_type
+		# restoring cluster.conf to /boot/
+		# this is required in case of double board
+		# replacement.
+		/bin/cp /cluster/etc/cluster.conf /boot/.cluster.conf
+	}
+	
+	return $exit_success
+}
+#-----------------------------------------------------------------------------------------	
+function clean_ldeconfig() {
+	echo "Removing lde_config.xml file from boot..........."
+	local FILE_LDE="/boot/lde-config.xml"
+	if [ -f "$FILE_LDE" ]; then
+		rm -f $FILE_LDE
+		/opt/lde/lde-config/cluster2imm.py /boot/.cluster.conf /boot/lde-config.xml
+	else
+		echo "lde-config.xml file is not present......"
+	fi
+}
+#------------------------------------------------------------------------------------------
+function verify_macs() {
+
+	console_print '-n Performing cluster.conf verification: '
+
+	# verify each ethernet address and macvlan address against cluster.conf
+	mac_addr_list=$(ip addr | $grep ether | $awk '{print $2}')
+	for mac_addr in $mac_addr_list; do
+		$( $grep -i "$mac_addr" $f_cluster_conf &>/dev/null)
+		rCode=$?
+		[ $rCode != 0 ] && {
+			echo -e "\b ..failed"
+			echo "mac address [$mac_addr] mismatch"
+			echo 'assuming new apub is replaced'
+			break
+		}
+	done
+
+	[ $rCode -eq 0 ] && console_print '-e \b ..success'
+	return $rCode
+}
+
+#-------------------------------------------------------------------------------------------
+function get_hwtype(){
+
+        local VM='VM'
+        local ERROR='NO_HWTYPE'
+        local GEP_PREFIX='GEP'
+        local HW_TYPE=''
+
+        MANUFACTURER=$( $dmidecode -s system-manufacturer | tr '[:upper:]' '[:lower:]' )
+	[ -z "$MANUFACTURER" ] && echo "Could not retrieve manufacturer information"
+	if [ -z "$ROJ" ]; then
+                ROJ=$( eri-ipmitool gp | grep ROJ | tr '[:upper:]' '[:lower:]' | awk '{print $3,$4,$5}' |sed -e "s/ //g" )
+        fi
+
+        case "$MANUFACTURER" in
+                *vmware*)
+                        HW_TYPE="$VM"
+                        echo "$HW_TYPE"
+                ;;
+                *ericsson*)
+			ROJ=$( $dmidecode -s baseboard-product-name | tr '[:upper:]' '[:lower:]' | $sed -e "s/ //g"  )
+                        [ -z "$ROJ" ] && echo "Could not retrieve GEP Version" $exit_fail
+                        GEP_TYPE=`echo "$ROJ" | $sed 's@.*/@@g'`
+			HW_TYPE="$GEP_PREFIX${GEP_TYPE:0:1}"
+			if [ "$ROJ" == "roj208867/5" ]; then
+                                isGEP5_64=1
+                        fi
+			echo "$HW_TYPE"
+                ;;
+                *)
+                        HW_TYPE="$ERROR"
+                        echo "$HW_TYPE"
+                ;;
+        esac
+}
+
+#-------------------------------------------------------------------------------------------
+function increase_mac(){
+        printf '%012x' $(( 16#${1} + ${2} ))|tr [:lower:] [:upper:]| $sed 's/../&:/g;s/:$//'
+}
+
+#-------------------------------------------------------------------------------------------
+function update_macs() {
+
+	console_print '-n updating cluster.conf with new mac address: '
+
+	# check hw-type
+	HW_TYPE=$(get_hwtype)
+	[ $? != 0 ] && abort '-e \b ..failed'
+	# following is pci mapping for each adpater.
+        # GEP1:
+        # eth0 ---> 0000:07:00.0
+        # eth1 ---> 0000:07:00.1
+        # eth2 ---> 0000:00:04.0
+        # eth3 ---> 0000:04:04.0
+        # eth4 ---> 0000:04:04.1
+        #
+        # GEP2:
+        # eth0 ---> 0000:03:00.0
+        # eth1 ---> 0000:03:00.1
+        # eth2 ---> 0000:00:19.0
+        # eth3 ---> 0000:09:00.0
+        # eth4 ---> 0000:09:00.1
+		#
+        # GEP5:
+        # eth0 ---> 0000:02:00.3
+        # eth1 ---> 0000:02:00.4
+        # eth2 ---> 0000:06:00.0
+        # eth3 ---> 0000:02:00.1
+        # eth4 ---> 0000:02:00.2
+        # eth5 ---> 0000:01:00.0
+        # eth6 ---> 0000:01:00.1
+
+	# GEP5-64:
+        # eth0 ---> 0000:02:00.3
+        # eth1 ---> 0000:02:00.4
+        # eth2 ---> 0000:06:00.0
+        # eth3 ---> 0000:02:00.1
+        # eth4 ---> 0000:02:00.2
+        # eth5 ---> 0000:01:00.0
+        # eth6 ---> 0000:01:00.1
+        # eth7 ---> 0000:04:00.0
+        # eth8 ---> 0000:04:00.1
+
+        # GEP7:
+        # eth2 ---> 0000:0a:00.1
+        # eth3 ---> 0000:0a:00.0
+        # eth4 ---> 0000:0d:00.0
+        # eth5 ---> 0000:01:00.0
+        # eth6 ---> 0000:01:00.1
+        # eth7 ---> 0000:07:00.0
+        # eth8 ---> 0000:07:00.1
+
+
+	case "$HW_TYPE" in
+                GEP1)
+                        sys_eth0=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:07:00.0/net/.*/address')
+                        mac_eth0=$( $cat $sys_eth0 | tr '[:lower:]' '[:upper:]')
+
+                        sys_eth1=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:07:00.1/net/.*/address')
+                        mac_eth1=$( $cat $sys_eth1 | tr '[:lower:]' '[:upper:]')
+
+                        sys_eth2=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/0000:00:04.0/net/.*/address')
+                        mac_eth2=$( $cat $sys_eth2 | tr '[:lower:]' '[:upper:]')
+
+                        sys_eth3=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:04:04.0/net/.*/address')
+                        mac_eth3=$( $cat $sys_eth3 | tr '[:lower:]' '[:upper:]')
+
+                        sys_eth4=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:04:04.1/net/.*/address')
+                        mac_eth4=$( $cat $sys_eth4 | tr '[:lower:]' '[:upper:]')
+                ;;
+                GEP2)
+                        sys_eth0=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:03:00.0/net/.*/address')
+                        mac_eth0=$( $cat $sys_eth0 | tr '[:lower:]' '[:upper:]')
+
+                        sys_eth1=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:03:00.1/net/.*/address')
+                        mac_eth1=$( $cat $sys_eth1 | tr '[:lower:]' '[:upper:]')
+
+                        sys_eth2=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/0000:00:19.0/net/.*/address')
+                        mac_eth2=$( $cat $sys_eth2 | tr '[:lower:]' '[:upper:]')
+
+                        sys_eth3=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:09:00.0/net/.*/address')
+                        mac_eth3=$( $cat $sys_eth3 | tr '[:lower:]' '[:upper:]')
+
+                        sys_eth4=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:09:00.1/net/.*/address')
+                        mac_eth4=$( $cat $sys_eth4 | tr '[:lower:]' '[:upper:]')
+                ;;
+		GEP5)
+			sys_eth0=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:02:00.3/net/.*/address' )
+			mac_eth0=$( $cat $sys_eth0)
+			
+			sys_eth1=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:02:00.4/net/.*/address' )
+			mac_eth1=$( $cat $sys_eth1)
+			
+			sys_eth2=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:06:00.0/net/.*/address' )
+			mac_eth2=$( $cat $sys_eth2)
+
+			sys_eth3=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:02:00.1/net/.*/address' )
+			mac_eth3=$( $cat $sys_eth3)
+
+			sys_eth4=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:02:00.2/net/.*/address' )
+			mac_eth4=$( $cat $sys_eth4)
+
+			sys_eth5=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:01:00.0/net/.*/address' )
+			mac_eth5=$( $cat $sys_eth5)
+
+			sys_eth6=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:01:00.1/net/.*/address' )
+			mac_eth6=$( $cat $sys_eth6)
+		
+			[ "$isGEP5_64" == 1 ] && {
+                        sys_eth7=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:04:00.0/net/.*/address' )
+                        mac_eth7=$( $cat $sys_eth7)
+
+                        sys_eth8=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:04:00.1/net/.*/address' )
+                        mac_eth8=$( $cat $sys_eth8)
+			}
+                ;;
+                GEP7)
+                        sys_eth2=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:0a:00.1/net/.*/address' )
+                        mac_eth2=$( $cat $sys_eth2)
+
+                        sys_eth3=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:0a:00.0/net/.*/address' )
+                        mac_eth3=$( $cat $sys_eth3)
+
+                        sys_eth4=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:0d:00.0/net/.*/address' )
+                        mac_eth4=$( $cat $sys_eth4)
+
+                        sys_eth5=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:01:00.0/net/.*/address' )
+                        mac_eth5=$( $cat $sys_eth5)
+
+                        sys_eth6=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:01:00.1/net/.*/address' )
+                        mac_eth6=$( $cat $sys_eth6)
+
+                        sys_eth7=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:07:00.0/net/.*/address' )
+                        mac_eth7=$( $cat $sys_eth7)
+
+                        sys_eth8=$( $find /sys/devices/ | $grep -E '/sys/devices/pci0000:00/.*/0000:07:00.1/net/.*/address' )
+                        mac_eth8=$( $cat $sys_eth8)
+
+                ;;
+                *)
+                        echo "$HW_TYPE HW-TYPE not supported"
+                ;;
+        esac
+
+       node_id=$(</etc/cluster/nodes/this/id)
+       [ -z $node_id ] && node_id=1
+
+      #eth0 and eth1 are not present in GEP7 boards
+      if [[ "$HW_TYPE" != "GEP7" ]]; then
+	if [ "$mac_eth0" = "$mac_eth1" ] ;then
+		new_mac_eth0=$(echo $mac_eth0 | $sed 's/://g' 2>/dev/null)
+		offset=1
+		mac_eth1=$(increase_mac $new_mac_eth0 $offset)
+	fi
+
+	  $($sed -i 's/interface '$node_id' eth0 ethernet.*/interface '$node_id' eth0 ethernet '$mac_eth0'/g' $f_cluster_conf)
+          [ $? != 0 ] && abort '-e \b ..failed'
+
+          $($sed -i 's/interface '$node_id' eth1 ethernet.*/interface '$node_id' eth1 ethernet '$mac_eth1'/g' $f_cluster_conf)
+          [ $? != 0 ] && abort '-e \b ..failed'
+      fi
+
+        $($sed -i 's/interface '$node_id' eth2 ethernet.*/interface '$node_id' eth2 ethernet '$mac_eth2'/g' $f_cluster_conf)
+        [ $? != 0 ] && abort '-e \b ..failed'
+
+        $($sed -i 's/interface '$node_id' eth3 ethernet.*/interface '$node_id' eth3 ethernet '$mac_eth3'/g' $f_cluster_conf)
+        [ $? != 0 ] && abort '-e \b ..failed'
+
+        $($sed -i 's/interface '$node_id' eth4 ethernet.*/interface '$node_id' eth4 ethernet '$mac_eth4'/g' $f_cluster_conf)
+        [ $? != 0 ] && abort '-e \b ..failed'
+
+	if [[ "$HW_TYPE" == "GEP5" || "$HW_TYPE" == "GEP7" ]];then
+		if [ "$mac_eth5" = "$mac_eth6" ] ;then
+                	new_mac_eth5=$(echo $mac_eth5 | $sed 's/://g' 2>/dev/null)
+                	offset=1
+                	mac_eth6=$(increase_mac $new_mac_eth5 $offset)
+	        fi
+        	# Updating eth5 mac address
+	        $($sed -i 's/interface '$node_id' eth5 ethernet.*/interface '$node_id' eth5 ethernet '$mac_eth5'/g' $f_cluster_conf)
+    	        [ $? != 0 ] && abort '-e \b ..failed'
+        	# updating eth6 mac address
+        	$($sed -i 's/interface '$node_id' eth6 ethernet.*/interface '$node_id' eth6 ethernet '$mac_eth6'/g' $f_cluster_conf)
+        	[ $? != 0 ] && abort '-e \b ..failed'
+		
+		[[  "$HW_TYPE" == "GEP7" || "$isGEP5_64" == 1 ]] && {
+                	# Updating eth7 mac address
+                	$($sed -i 's/interface '$node_id' eth7 ethernet.*/interface '$node_id' eth7 ethernet '$mac_eth7'/g' $f_cluster_conf)
+                	[ $? != 0 ] && abort '-e \b ..failed'
+                	# updating eth8 mac address
+                	$($sed -i 's/interface '$node_id' eth8 ethernet.*/interface '$node_id' eth8 ethernet '$mac_eth8'/g' $f_cluster_conf)
+                	[ $? != 0 ] && abort '-e \b ..failed'
+		}
+	        fi
+
+        console_print '-e \b ..success'
+        return $exit_success
+}
+
+#------------------------------------------------------------------------------------------
+function reset_self() {
+
+	# Cleaning hooks
+	/bin/rm -f /cluster/hooks/pre-installation.tar.gz
+	/bin/rm -f /cluster/hooks/post-installation.tar.gz
+	/bin/rm -f /cluster/hooks/after-booting-from-disk.tar.gz
+	/bin/rm -rf $PERSISTENT_LOCATION 
+	
+	console_print " -n Performing node reset:"
+
+	sleep 10
+
+	# reboot the node 
+	/sbin/reboot
+
+	console_print '-e \b ..success'
+	return $exit_success
+}
+
+#------------------------------------------------------------------------------------------
+
+
+# M A I N
+
+console_print 'DNR: after-booting-from-disk hook:'
+
+# sanity check
+sanity_check
+
+# check brf 
+check_brf
+
+# import the backup file
+import_backup
+
+# restore the backup file
+restore_backup
+
+# commit the changes 
+commit_backup
+
+# verify & update cluterconf if required
+cluster_conf
+
+#Regenerating lde-config.xml file
+clean_ldeconfig 
+
+# reboot the node
+reset_self
+
+exit $exit_success
+

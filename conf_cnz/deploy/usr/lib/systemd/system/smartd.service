@@ -1,0 +1,13 @@
+[Unit]
+Description=Self Monitoring and Reporting Technology (SMART) Daemon
+After=syslog.target
+ConditionVirtualization=false
+
+[Service]
+ExecStart=/usr/sbin/smartd --no-fork --quit=never
+ExecReload=/bin/kill -HUP $MAINPID
+StandardOutput=syslog
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

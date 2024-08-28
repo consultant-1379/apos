@@ -1,0 +1,6 @@
+#%PAM-1.0
+#
+# APG-customized acs-common-session-heading hook
+#
+session required        pam_limits.so
+session optional        pam_umask.so umask=0027

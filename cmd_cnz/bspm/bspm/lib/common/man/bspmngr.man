@@ -1,0 +1,16 @@
+Usage: bspmngr --help
+        bspmngr <command> <sub_command> [<sub_command_options>] [<board>]
+
+Manage the boards in a Generic Ericsson Magazine (EGEM/EGEM2).
+
+<command> <sub_command> must be one of the following pairs:
+                                get mac
+                                get rtfdflag
+                                set bootdev
+                                set baudrate
+                                set clearrtfd
+                                set reboot
+
+<sub_command_options>   call "bspmngr <command> <sub_command> --help" for more
+                        details.
+

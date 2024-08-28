@@ -1,0 +1,113 @@
+#!/bin/sh
+#
+### BEGIN INIT INFO
+# Information about the application 
+#
+#
+#
+### END INIT INFO
+
+prog="apos_ha_devmond"
+apgpiddir=/var/run/apg
+apglockdir=/var/lock/subsys/apg
+compnamedir=/var/lib/apg
+apgbindir=/opt/ap/apos/bin
+
+binary=$apgbindir/$prog
+pidfile=$apgpiddir/$prog.pid
+lockfile=$apglockdir/$prog.lock
+compnamefile=$compnamedir/"$prog"_comp_name
+
+#create directories
+#
+mkdir -p $apgpiddir
+mkdir -p $apglockdir
+mkdir -p $compnamedir
+
+RETVAL=0
+
+log() {
+        /bin/logger -t $prog "$@"
+}
+
+stop() {
+	
+	log "Stopping $prog: "
+	pidofproc -p $pidfile $binary #check if the application is really come down.
+        RETVAL=$?
+	if [ $RETVAL != 0 ]; then
+		rm -f $compnamefile
+		rm -f $lockfile
+		rm -f $pidfile
+		RETVAL=0
+		return $RETVAL
+	fi
+
+        killproc -p $pidfile $binary -USR2
+        RETVAL=$?
+        if [ $RETVAL -eq 0 ]; then
+                usleep 1000000 #sleep for a sec for the application to do gracefull shutdown.
+			       #sleep timeout is application dependent.
+                pidofproc -p $pidfile $binary #check if the application has really come down.
+		RETVAL=$?
+                if [ $RETVAL != 0 ]; then
+                        rm -f $compnamefile
+                        rm -f $lockfile
+			rm -f $pidfile
+			RETVAL=0
+                        return $RETVAL
+                fi
+                killproc -p $pidfile $binary -KILL #Force kill if the applcation is not yet come down.
+                RETVAL=$?
+        else
+		log "Sending USR2 Failed"
+	fi
+
+	return $RETVAL
+}
+
+
+instantiate() {
+
+	[ -x $binary ] || exit 5
+        log "AMF Instantiating $prog: "
+        echo $SA_AMF_COMPONENT_NAME > $compnamefile
+        start_daemon -p $pidfile $binary $args
+        RETVAL=$?
+        if [ $RETVAL -eq 0 ]; then
+                touch $lockfile
+        fi
+
+        return $RETVAL
+}
+
+status() {
+	pidofproc -p $pidfile $binary
+	RETVAL=$?
+	return $RETVAL
+}
+
+case "$1" in
+
+  instantiate)
+	instantiate
+	RETVAL=$?
+	;;
+
+  cleanup)
+	stop
+	RETVAL=$?
+	;;
+
+  status)
+	status
+	RETVAL=$?
+	;;
+
+  *)
+	echo "Usage: $0 {instantiate|cleanup|status}"
+	RETVAL=2
+esac
+
+exit $RETVAL
+

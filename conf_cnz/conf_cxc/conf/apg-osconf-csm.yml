@@ -1,0 +1,48 @@
+csm-version: '1.0'
+components:
+- uid: apos.osconf
+  name: apos-osconf
+  description: APOS OSCONF component
+  availability-manager: NONE
+  software:
+    sdp: ERIC-APOS_OSCONFBIN-CXC1371499
+  supersedes:
+  - software: ERIC-APOS_OSCONFBIN-CXC1371499
+  constraints:
+    plugin: plugin/apos.osconf
+    installation:
+      after:
+      - component: apg.com.oam.lib
+        method: DIFFERENT-STEP
+      - component: apg.sec.certm.oi.lib
+        method: DIFFERENT-STEP
+      - component: apg.sec.ldap.oi.lib
+        method: DIFFERENT-STEP
+      - component: coremw.brfeia.participant
+        method: DIFFERENT-STEP
+      - component: apg.sec.certm.agent.lib
+        method: DIFFERENT-STEP
+      - component: apos.oscmd
+        method: DIFFERENT-STEP
+    upgrade:
+      after:
+      - component: apg.com.oam.lib
+        method: DIFFERENT-STEP
+      - component: apg.sec.certm.oi.lib
+        method: DIFFERENT-STEP
+      - component: apg.sec.ldap.oi.lib
+        method: DIFFERENT-STEP
+      - component: coremw.brfeia.participant
+        method: DIFFERENT-STEP
+      - component: apg.sec.certm.agent.lib
+        method: DIFFERENT-STEP
+      - component: apos.oscmd
+        method: DIFFERENT-STEP
+  meta-data:
+    component-version: 19.0.1-0
+    deliverable:
+      deployment-package: apos_osconf-19.0.1-0-deployment-CXC1371499.tar.gz
+      runtime-package: apos_osconf-19.0.1-0-runtime-CXC1371499.tar.gz
+    software:
+    - file-name: APOS_OSCONFBIN-CXC1371499_19-R1B.x86_64.sdp
+      bundle-name: ERIC-APOS_OSCONFBIN-CXC1371499_19-R1B

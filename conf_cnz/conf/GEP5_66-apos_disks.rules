@@ -1,0 +1,25 @@
+# This file contains the rules for the physical-to-logical disk mapping for APG.
+
+# DO NOT WRAP THIS LINE
+#
+# old udev does not understand some of it,
+# and would end up skipping only some lines, not the full rule.
+# which can cause all sort of trouble with strange-named device nodes
+# for completely unrelated devices,
+# resulting in unusable network lookback, etc.
+#
+# in case this is "accidentally" installed on a system with old udev,
+# having it as one single line avoids those problems.
+#
+# DO NOT WRAP THIS LINE
+
+# -- GEP5 DRBD handling
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{device}=="0x2323", SYMLINK+="eri_flash"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{sas_address}=="0x4433221100000000", SYMLINK+="eri_disk"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{sas_address}=="0x4433221101000000", SYMLINK+="eri_diskC"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{sas_address}=="0x443322110[23]000000", SYMLINK+="eri_diskD"
+ENV{DEVTYPE}=="partition", ATTRS{sas_address}=="0x4433221100000000", ATTR{partition}=="6", SYMLINK+="eri-meta-part"
+# -- NANO USB handling
+ENV{ID_PATH}=="*usb-0:1.3:1.0-scsi*", ENV{DEVTYPE}=="partition", ENV{ID_PART_ENTRY_NUMBER}=="[0-9]", SYMLINK+="eri_thumbdrive_$env{ID_PART_ENTRY_NUMBER}"
+KERNEL=="sd?", ENV{DEVTYPE}=="disk", ENV{ID_PATH}=="*usb-0:1.3:1.0-scsi*", SYMLINK+="eri_thumbdrive"
+ACTION=="remove", KERNEL=="sd?", ENV{DEVTYPE}=="disk", ENV{ID_PATH}=="*usb-0:1.3:1.0-scsi*", RUN="/bin/rm -f /dev/eri_thumbdrive*"

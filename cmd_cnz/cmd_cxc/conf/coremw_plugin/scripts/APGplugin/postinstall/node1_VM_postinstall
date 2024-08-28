@@ -1,0 +1,140 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2015 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#      node1_VM_postinstall 
+# Description:
+#       A script to perform post installation activities on node SC-2-1.
+# Note:
+#       This script is executed as a post activity during the 
+#       installation of COM with Automatic Installation Tool (AIT).
+##
+# Usage:
+#       Used during vAPG maiden installation.
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Fri Dec 16 2022 - Sainadth Pagadala (ZPAGSAI)
+#   create_baseline commented in main() since we are using APG Offline Baseline Creation
+# - Mon Jan 07 2019 - Pranshu Sinha (XPRANSI)
+#   Activated rpms on both SC-2-1 and SC-2-2 as a WA to resolve TR HX42772, JIRA CC-20343
+# - Mon Nov 30 2015 - Nikhila Sattala (XNIKSAT)
+#   First version.
+
+PLUGIN_SCRIPTS_ROOT="$(dirname "$(readlink -f $0)")"
+PLUGIN_SCRIPTS_ROOT="$PLUGIN_SCRIPTS_ROOT/.."
+#PLUGIN_SCRIPTS_ROOT='/home/ait/repo/unpack/plugin/APG_PLUGIN/scripts'
+if [ ! -d "${PLUGIN_SCRIPTS_ROOT}" ]; then
+  echo "${PLUGIN_SCRIPTS_ROOT} not found...exiting" >&2
+  exit 1
+fi
+
+COMMON_FUNCTIONS="${PLUGIN_SCRIPTS_ROOT}/non_exec-common_functions"
+if [ ! -r "$COMMON_FUNCTIONS" ]; then
+  echo 'COMMON_FUNCTIONS not found...exiting' >&2
+  exit 1
+fi
+
+export PLUGIN_SCRIPTS_ROOT
+. ${COMMON_FUNCTIONS}
+
+# common variables
+CMD_ECHO='/bin/echo'
+
+$CMD_ECHO "$0"
+
+#------------------------------------------------------------------------
+function create_baseline(){
+  $CMD_ECHO "--- create_baseline() begin"
+
+  local LCT_BIN_PATH="/opt/ap/acs/bin"
+  local BASELINE="acs_lct_baseline_create"
+  pushd $LCT_BIN_PATH >/dev/null 2>&1
+  ./$BASELINE
+  [ $? -ne 0 ] && abort "command $BASELINE failed"
+  popd >/dev/null 2>&1
+
+  $CMD_ECHO "--- create_baseline() end"
+}
+
+#------------------------------------------------------------------------------
+function set_deployment_status() {
+  $CMD_ECHO "--- set_deployment_status() begin"
+
+  local STORAGE_CONFIG='/cluster/storage/system/config'
+  local LDEWS_OS_CONFIG='config/initial/ldews.os'
+  local LDE_CSM_TEPLATES_DIR='lde/csm/templates'
+  local LDE_CSM_FINALIZED_DIR='lde/csm/finalized'
+  local CMW_CSM_CONFIG_BASE_DIR='coremw/csm/config-base/CSM'
+
+  # templates DIR:  /cluster/storage/system/config/lde/csm/templates/config/initial/ldews.os/
+  local TEPLATES_DIR="$STORAGE_CONFIG/$LDE_CSM_TEPLATES_DIR/$LDEWS_OS_CONFIG"
+
+  # Finalized DIR:  /cluster/storage/system/config/lde/csm/finalized/config/initial/ldews.os/
+  local FINALIZED_DIR="$STORAGE_CONFIG/$LDE_CSM_FINALIZED_DIR/$LDEWS_OS_CONFIG"
+
+  # Config-base DIR: /cluster/storage/system/config/coremw/csm/config-base/CSM/config/initial/ldews.os
+  local CMW_CONFIG_BASE_DIR="$STORAGE_CONFIG/$CMW_CSM_CONFIG_BASE_DIR/$LDEWS_OS_CONFIG"
+
+  for DIR in $CMW_CONFIG_BASE_DIR $TEPLATES_DIR $FINALIZED_DIR
+  do 
+    if [ -d "$DIR" ]; then 
+      if [ -f "$DIR/factoryparam.conf" ]; then 
+        # Re-name the factoryparam.conf to factoryparam_applied.conf in all DIR's
+        $CMD_ECHO "Moving the factoryparam.conf file in $DIR to factoryparam_applied.conf..."
+        /usr/bin/mv $DIR/factoryparam.conf $DIR/factoryparam_applied.conf || \
+          abort "Failed to move the factoryparam.conf file in $DIR"
+        $CMD_ECHO " done"
+      else
+        $CMD_ECHO "INFO: factoryparam.conf file not found"
+      fi
+    else  
+      $CMD_ECHO "INFO: $DIR does not exist in the system"    
+    fi 
+  done 
+
+  $CMD_ECHO "--- set_deployment_status() end"
+}
+
+### M A I N ###
+main() {
+  $CMD_ECHO "--- main() begin"
+
+  #Activating rpms on both SC-2-1 and SC-2-2 as a WA to resolve TR HX42772, JIRA CC-20343
+  /opt/coremw/bin/cmw-rpm-config-activate SC-2-1
+  if [ $? -ne 0 ]; then
+    abort "Failed to execute /opt/coremw/bin/cmw-rpm-config-activate SC-2-1"
+  fi
+  /opt/coremw/bin/cmw-rpm-config-activate SC-2-2
+  if [ $? -ne 0 ]; then
+    abort "Failed to execute /opt/coremw/bin/cmw-rpm-config-activate SC-2-2"
+  fi
+
+
+  # LCT baseline creation
+  # create_baseline
+
+  # set deployment completion status
+  set_deployment_status
+  
+  # create '.installation_platform' file under /boot folder, 
+  # if installation happening on simulated platform. In other 
+  # scenarios(virtual/native) this file creation will be skipped.
+  if is_simulated; then
+    set_simulated
+  fi
+
+  $CMD_ECHO "--- main() end"
+}
+
+
+$CMD_ECHO "## node1_vm_postinstall ##"
+
+main "@"
+
+exit 0

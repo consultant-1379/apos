@@ -1,0 +1,36 @@
+#!/bin/sh
+# Cluster commands 
+
+
+
+if [ $1 ] && [ $1 = "reboot-node" ]; then
+	cluster reboot --node $2
+	cluster alarm --status --node $2
+
+elif [ $1 ] && [ $1 = "reboot-cluster" ]; then
+	cluster reboot --all
+	cluster alarm --status --all
+
+
+elif [ $1 ] && [ $1 = "stop-service" ]; then
+	cluster ip --deactivate $2
+
+
+elif [ $1 ] && [ $1 = "start-service" ]; then
+	cluster ip --activate $2
+
+
+elif [ $1 ] && [ $1 = "backup" ]; then
+
+	cluster backup --create root@$2:$3/$4.tar.gz
+
+	echo -e "\n *** Backup completed ***  \n"
+else
+	echo -e "\nWrong parameter, please follow as..."
+	echo -e "\n Clustercmd reboot-node <nodeid>"
+	echo -e " Clustercmd reboot-cluster"
+	echo -e " Clustercmd start-service <Service-name>"
+	echo -e " Clustercmd stop-service <Service-name>"
+	echo -e " Clustercmd backup <remote-server-ip> <remote-path> <filename>"
+
+fi

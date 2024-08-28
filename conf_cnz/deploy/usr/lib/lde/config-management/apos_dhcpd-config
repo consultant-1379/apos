@@ -1,0 +1,238 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       apos_dhcpd-config
+# Description:
+#       A script to configure the /etc/dhcpd.conf.local file according to the
+#	APG needs.
+# Note:
+#	This script is intended to be deployed to the
+#	/usr/lib/lde/config-management/ directory.
+#
+#	It relies on the /opt/ap/apos/conf/apos_common.sh library.
+##
+# Changelog:
+# - Thu Jan 12 2012 - Francesco Rainone (efrarai)
+#	First version.
+# - Wed Apr 18 2018 -Sindhura Chintakindi (zchisin)
+#   Added  Fix for TR HW51363
+##
+# LDE_deployment:
+# 	type:		config
+# 	priority:	510
+##
+
+##
+# libraries -------------------------------------------------------------- BEGIN
+if [ -r /opt/ap/apos/conf/apos_common.sh ]; then
+	. /opt/ap/apos/conf/apos_common.sh
+else
+	echo '/opt/ap/apos/conf/apos_common.sh not found or not readable!' >&2
+	exit 1
+fi
+# libraries ---------------------------------------------------------------- END
+##
+
+
+##
+# functions -------------------------------------------------------------- BEGIN
+function usage(){
+	cat << HEREDOC
+Usage: $0 <action> <phase> [<etc_root>]
+where:
+	<action> can be "start" or "stop" or "config"
+	<phase> can be "init" or "reload"
+	<etc_root> (optional) specifies the base folder where the configuration
+	           will be generated (/etc by default)
+HEREDOC
+}
+
+function do_start(){
+	# TO-DO: implement the start phase if needed.
+	return
+}
+
+function do_stop(){
+	# TO-DO: implement the stop phase if needed.
+	return
+}
+
+function do_config(){
+
+	BOOTSERVER="$ETC_ROOT/cluster/nodes/this/properties/bootserver/legacyboot"
+	NETWORK="$ETC_ROOT/cluster/nodes/this/properties/bootserver/legacyboot/networks/0"
+	BOND_IP_ADDRESS=$(<$ETC_ROOT/cluster/nodes/this/networks/internal/primary/address) 
+
+	if [ -d $ETC_ROOT/cluster/nodes/this/properties/bootserver -a "$(<$ETC_ROOT/cluster/nodes/this/type)" != "standalone" ]; then
+		# check if file should be created in subdir
+		if [ -d $ETC_ROOT/dhcp/ ]; then
+			DHCP_DIR="$ETC_ROOT/dhcp"
+		else
+			DHCP_DIR="$ETC_ROOT"
+		fi
+		# Create /etc/dhcpd.conf
+		(
+			echo "#"
+			echo "# $DHCP_DIR/dhcpd.conf: dhcpd configuration"
+			echo "#"
+			echo ""
+			echo "authoritative;"
+			echo "ddns-update-style none;"
+			echo "ddns-local-address4 $BOND_IP_ADDRESS;"
+			echo ""
+               		echo "option space pxelinux;"
+			echo "option pxelinux.magic      code 208 = string;"
+			echo "option pxelinux.configfile code 209 = text;"
+			echo "option pxelinux.reboottime code 211 = unsigned integer 32;"
+			echo ""
+			echo "subnet $(<$ETC_ROOT/cluster/networks/internal/address) netmask $(<$ETC_ROOT/cluster/networks/internal/netmask) {"
+			echo "        site-option-space \"pxelinux\";"
+			echo "        option pxelinux.magic f1:00:74:7e;"
+			echo "        option pxelinux.configfile \"pxelinux.conf\";"
+			echo "        option pxelinux.reboottime 10;"
+			echo "        if exists dhcp-parameter-request-list {"
+			echo "                # Always send the PXELINUX options"
+			echo "                option dhcp-parameter-request-list = concat(option dhcp-parameter-request-list,d0,d1,d3);"
+			echo "        }"
+			echo ""
+			
+			for NODE in $(ls -1 $ETC_ROOT/cluster/nodes/all); do
+				local NODE_INTERFACE=$ETC_ROOT/cluster/nodes/all/$NODE/networks/internal/primary/interface
+				local DHCP_INTERFACES=
+				local IF_INTERNAL_TYPE=$(<${NODE_INTERFACE}/type)
+				if [ "$IF_INTERNAL_TYPE" = "alias" ]; then
+							NODE_INTERFACE=${NODE_INTERFACE}/parent
+							IF_INTERNAL_TYPE=$(<${NODE_INTERFACE}/type)
+				fi
+				if [ "$IF_INTERNAL_TYPE" = "ethernet" ]; then
+					DHCP_INTERFACES=$(<${NODE_INTERFACE}/address)
+				elif [ "$IF_INTERNAL_TYPE" = "macvlan" ]; then
+					DHCP_INTERFACES="$DHCP_INTERFACES $(<${NODE_INTERFACE}/parent/address)"
+				elif [ "$IF_INTERNAL_TYPE" = "bonding" ]; then
+					for SLAVE in $(ls -1 ${NODE_INTERFACE}/slaves); do
+						local SLAVE_PATH=${NODE_INTERFACE}/slaves/$SLAVE
+						if [ "$(<$SLAVE_PATH/type)" = "macvlan" ]; then
+							SLAVE_PATH=$SLAVE_PATH/parent
+						fi
+						DHCP_INTERFACES="$DHCP_INTERFACES $(<$SLAVE_PATH/address)"
+					done
+				fi
+				local INDEX=0
+				for MAC in ${DHCP_INTERFACES}; do
+					echo ""
+					echo "        host $(<$ETC_ROOT/cluster/nodes/all/$NODE/hostname)_${INDEX} {"
+					echo "                hardware ethernet $MAC;"
+					echo "                fixed-address $(<$ETC_ROOT/cluster/nodes/all/$NODE/networks/internal/primary/address);"
+					#echo "                next-server $(get_node_boot_address $NODE);"
+					echo "				  next-server $(get_node_boot_address $BOOTSERVER $NETWORK "$ETC_ROOT/cluster/nodes/all/$NODE");"
+					echo "                filename \"nodes/$(<$ETC_ROOT/cluster/nodes/all/$NODE/id)/boot/boot.0\";"
+					echo "        }"
+					let "INDEX += 1"
+				done
+			done
+
+			echo "}"
+                        echo ""
+                        echo "include \"/etc/dhcpd.conf.local\";"
+                        echo ""
+			echo "# End of file"
+		) > $DHCP_DIR/dhcpd.conf
+            touch /etc/dhcpd.conf.local
+            if apos_servicemgmt status apg-dhcpd.service &> /dev/null; then
+               apos_servicemgmt restart apg-dhcpd.service &> /dev/null|| apos_abort "failure while restarting apg-dhcpd.service"
+            fi
+	fi
+}
+
+get_node_boot_address() {
+	
+	local BOOTSERVER=$1
+	local NETWORK_INDEX=$2
+	local NODE=$3
+		
+	local SADDR
+
+	local MODE=$(<$BOOTSERVER/mode)
+	case "$MODE" in
+		backup)
+			# only 1 mip used
+			MIP=$(< $NETWORK_INDEX/mips/0/name)
+			SADDR=$(< $ETC_ROOT/cluster/nodes/this/mip/$MIP/address)
+			;;
+		shared)
+			# In shared mode, 2 mips will be used between the server peers
+			local SELECTOR=$(($(<$NODE/id) % 2))
+			MIP=$(< $NETWORK_INDEX/mips/$SELECTOR/name)
+			SADDR=$(< $ETC_ROOT/cluster/nodes/this/mip/$MIP/address)
+			;;
+		slave)
+			# when more than one master ip, distribute the blades between servers
+			local ADDRS=()
+			shopt -s nullglob
+			for ADDR in $BOOTSERVER/masterips/*; do
+				ADDRS=(${ADDRS[@]} $(<$ADDR/address))
+			done
+			shopt -u nullglob
+			local SELECTOR=$(($(<$NODE/id) % ${#ADDRS[@]}))
+			SADDR=${ADDRS[$SELECTOR]}
+			;;
+	esac
+
+	echo $SADDR
+}
+
+# functions ---------------------------------------------------------------- END
+##
+
+##
+# variables -------------------------------------------------------------- BEGIN
+
+# variables ---------------------------------------------------------------- END
+##
+
+##
+# main ------------------------------------------------------------------- BEGIN
+##
+# LDE config scripts called with the following:
+# param 1: action - start, stop or config
+# param 2: generate phase - init or reload
+# param 3: root path where config should be generated
+
+apos_intro $0
+
+if [ $# -lt 2 ]; then
+	usage
+	apos_abort 'missing parameter'
+fi
+
+if [ $(</etc/cluster/nodes/this/type) != 'control' ]; then
+	apos_abort 'this script must be run ONLY in control nodes'
+fi
+
+ACTION="$1"
+PHASE="$2"
+ETC_ROOT=${3:-"/etc"}
+
+case "$ACTION" in
+        start)
+                do_start
+                ;;
+        stop)
+                do_stop
+                ;;
+        config)
+				do_config
+                ;;
+        *)
+                usage
+                ;;
+esac
+
+apos_outro
+exit $TRUE
+# main --------------------------------------------------------------------- END
+##

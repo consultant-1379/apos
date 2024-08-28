@@ -1,0 +1,27 @@
+csm-version: '1.0'
+components:
+- uid: ext.tinycore
+  name: ext-tinycore
+  description: EXT TINYCORE component
+  availability-manager: NONE
+  software:
+    sdp: ERIC-EXT_TINYCOREBIN-CXC1371530
+  supersedes:
+  - software: ERIC-EXT_TINYCOREBIN-CXC1371530
+  constraints:
+    installation:
+      after:
+      - component: acs.lct.lib
+        method: DIFFERENT-STEP
+    upgrade:
+      after:
+      - component: acs.lct.lib
+        method: DIFFERENT-STEP
+  meta-data:
+    component-version: 15.0.0-1
+    deliverable:
+      deployment-package: ext_tinycore-15.0.0-1-deployment-CXC1371530.tar.gz
+      runtime-package: ext_tinycore-15.0.0-1-runtime-CXC1371530.tar.gz
+    software:
+    - file-name: EXT_TINYCOREBIN-CXC1371530_15-R1A01.x86_64.sdp
+      bundle-name: ERIC-EXT_TINYCOREBIN-CXC1371530_15-R1A01

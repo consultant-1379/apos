@@ -1,0 +1,20 @@
+Usage:  shelfmngr --help
+        shelfmngr <command> <sub_command> [<sub_command_options>] [<board>]
+
+Manage the boards in a Generic Ericsson Magazine (EGEM/EGEM2).
+
+<command> <sub_command> must be one of the following pairs:
+                                get bootdev
+				get baudrate
+                                get mac
+                                get master
+                                get productid
+                                set bootdev
+				set baudrate
+                                set master
+                                set power
+                                set reboot
+
+<sub_command_options>   call "shelfmngr <command> <sub_command> --help" for more
+                        details.
+

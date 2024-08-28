@@ -1,0 +1,10 @@
+[Unit]
+Description= APG atftps
+After=network.target
+
+[Service]
+EnvironmentFile=/etc/sysconfig/atftpd
+ExecStart=/usr/lib/systemd/scripts/apg-atftps.sh start
+ExecStop=/usr/lib/systemd/scripts/apg-atftps.sh stop
+Type=oneshot
+RemainAfterExit=yes

@@ -1,0 +1,366 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#   Copyright (C) 2018 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#     common.sh
+# Description:
+#     A script providing common functions.
+##
+# Usage:
+#     Used during vAPG maiden installation.
+##
+# Output:
+#     None.
+##
+# Changelog:
+# - Thu Jun 14 2018 - Pranshu Sinha (XPRANSI)
+#   First version.
+# - Thu Nov 23 2018 - Harika Bavana (XHARBAV)
+#   Changes done to support REDHAT impacts
+# - Mon May 24 2021 - Gnaneswara Seshu (ZBHEGNA)
+#    Replaced tipc-config with tipc
+# Global
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+
+CMD_ECHO='/bin/echo'
+CMD_CP='/bin/cp'
+CMD_GREP='/usr/bin/grep'
+CMD_AWK='/usr/bin/awk'
+CMD_SLEEP='/bin/sleep'
+CMD_SSH='/usr/bin/ssh'
+CMD_DMIDECODE='/usr/sbin/dmidecode'
+CMD_SED='/usr/bin/sed'
+
+LVM_CONF='/etc/lvm/lvm.conf'
+STORAGE_API='/usr/share/pso/storage-paths/config'
+PSO_PATH=$(<$STORAGE_API)
+APOS_PSO="$PSO_PATH/apos"
+
+EXHAUSTED=255
+
+THIS_ID=$(</etc/cluster/nodes/this/id)
+PEER_ID=$(</etc/cluster/nodes/peer/id)
+THOST=$(</etc/cluster/nodes/this/hostname)
+RHOST=$(</etc/cluster/nodes/peer/hostname)
+
+#------------------------------------------------------------------------
+function abort(){
+  local ERROR_STRING=""
+
+  if [ "$1" ]; then
+    ERROR_STRING="ERROR: $1"
+    echo "$ERROR_STRING"
+  fi
+  echo "ABORTING..."
+  echo ""
+  exit 1
+}
+
+#------------------------------------------------------------------------
+function get_hwtype(){
+
+	local VM='VM'
+	local ERROR='NO_HWTYPE'
+	local GEP_PREFIX='GEP'
+	local HW_TYPE=''
+
+	MANUFACTURER=$( ${CMD_DMIDECODE} -s system-manufacturer | tr '[:upper:]' '[:lower:]' )
+	[ -z "$MANUFACTURER" ] && abort "Could not retrieve GEP Version"
+        local VIRT_ENV=$( systemd-detect-virt  )
+        if [ -z "$VIRT_ENV" ]; then
+           abort "unsupported manufacturer found: \"$MANUFACTURER\""
+        else
+           if [ "$VIRT_ENV" == "none" ]; then
+              ROJ=$( ${CMD_DMIDECODE} -s baseboard-product-name | tr '[:upper:]' '[:lower:]'|$CMD_SED -e "s/ //g" )
+              if [ -z "$ROJ" ]; then
+                    ROJ=$( eri-ipmitool gp | grep ROJ | tr '[:upper:]' '[:lower:]' | $CMD_AWK '{print $3,$4,$5}' |$CMD_SED -e "s/ //g" )
+              fi
+              if [ -z "$ROJ" ]; then
+                    abort 'unable to retrieve the ROJ code'
+              else
+                    GEP_TYPE=`echo "$ROJ" | $CMD_SED 's@.*/@@g'`
+                    HW_TYPE="$GEP_PREFIX${GEP_TYPE:0:1}"
+              fi
+           else
+              HW_TYPE="$VM"
+           fi
+        fi
+	echo "$HW_TYPE"
+}
+
+#------------------------------------------------------------------------
+function is_alive(){
+
+  if [[ $# -gt 0 && $1 =~ ^[0-9]+$ ]]; then
+    local TIPC_ADDR="1.1.$1"
+    local LINE="<$TIPC_ADDR>: up"
+    if [ $(tipc node list | $CMD_GREP "$LINE" | wc -l) -gt 0 ]; then
+      return $TRUE
+    fi
+  else
+    abort 'Missing mandatory parameter'
+  fi
+  return $FALSE
+}
+ 
+#------------------------------------------------------------------------
+function is_in_sync(){
+local res=$1
+if [ $(drbdadm status "$res" |  tr -d " " |  grep '^disk:UpToDate' | wc -l )  -eq 1 ] && [ $(drbdadm status "$res" |  grep 'peer-disk:UpToDate' | wc -l ) -eq 1 ];then
+                return $TRUE
+        else
+                return $FALSE
+        fi
+
+}
+
+#------------------------------------------------------------------------
+function is_connected(){
+local res=$1
+#if [ $(drbdadm status "$res" | grep "$res role:Secondary" | wc -l ) -eq 1 ] && [ $(drbdadm status "$res" | grep 'SC-2-1 role:Secondary' | wc -l ) -eq 1 ];then
+if [ $(drbd-overview | grep 'Secondary(2\*)' | wc -l) -eq 1 ]; then 
+   return $TRUE
+  else
+    return $FALSE
+  fi
+}
+
+#------------------------------------------------------------------------
+function wait_node_b_startup(){
+
+  while ! is_in_sync 'drbd0'; do
+        sleep 5
+  done
+  $CMD_ECHO 'drbd0 partitions are now in sync' &>/dev/null 2>&1
+
+  while ! is_alive 2; do
+    sleep 5
+  done
+  $CMD_ECHO 'node 2 is now up' &>/dev/null 2>&1
+}
+
+#------------------------------------------------------------------------
+function wait_drbd1_join(){
+  $CMD_ECHO 'waiting for drbd1 is now joined from node 2' &>/dev/null 2>&1
+  while ! is_connected 'drbd1' ;do
+	$CMD_ECHO "$(drbd-overview)"
+	$CMD_ECHO 'waiting for drbd1 to join'
+    sleep 5
+  done
+  $CMD_ECHO 'drbd1 is now joined from node 2' &>/dev/null 2>&1
+}
+
+#------------------------------------------------------------------------
+function second_node_ip(){
+
+   local SECOND_NODE_IP=$(basename $(find /etc/cluster/nodes/peer/ip/169.254.208.[1234] -maxdepth 1 -type d))
+   echo $SECOND_NODE_IP
+}
+
+#------------------------------------------------------------------------
+function configure_drbd1(){
+  $CMD_ECHO "--- configure_drbd1() begin"
+
+  local OPTS=$1
+  pushd $PLUGIN_SCRIPTS_ROOT >/dev/null 2>&1
+  [ ! -x ./raidmgr_mi ] && abort "Unable to execute raidmgr_mi"
+  ./raidmgr_mi "$OPTS"
+  [ $? -ne 0 ] && abort "Failure while configuring drbd1."
+  popd >/dev/null 2>&1
+
+  $CMD_ECHO "--- configure_drbd1() end"
+}
+
+#------------------------------------------------------------------------
+function sync_drbd1(){
+  $CMD_ECHO "--- sync_drbd1() begin"
+
+  local RETURN_CODE=$FALSE
+  IP_SECOND_NODE=$(second_node_ip)
+
+  while [ $RETURN_CODE -ne $TRUE ]; do
+    ping -c 1 $IP_SECOND_NODE &>/dev/null 2>&1
+    RETURN_CODE=$?
+    sleep 5
+  done
+  $CMD_ECHO "apub_a is now pingable ($IP_SECOND_NODE)" &>/dev/null 2>&1
+
+  $CMD_ECHO "--  waiting for node b to be up..."
+  wait_node_b_startup
+  $CMD_ECHO "-- node b is up..."
+
+  $CMD_ECHO "--  waiting for drbd1 to join..."
+  # wait for drbd1 to be active on Node 2
+  wait_drbd1_join
+  $CMD_ECHO "--  drbd1 joined..."
+  # format drbd1
+  OPTS='--format --force'
+  configure_drbd1 "$OPTS"
+  $CMD_ECHO "-- formatting done..."
+  sleep 10
+
+  # check if drbd1 is in sync with Node2
+  ! is_in_sync 'drbd1' && abort "Unable to drbd1 in sync."
+  $CMD_ECHO " drbd1 is in sync."
+
+  $CMD_ECHO "--- sync_drbd1() end"
+}
+
+#------------------------------------------------------------------------
+function activate_vg(){
+  $CMD_ECHO "--- activate_vg() begin"
+
+  [ ! -f $LVM_CONF ] && abort "lvm.conf file not found"
+  $($CMD_GREP 'drbd0|vd*' $LVM_CONF &>/dev/null)
+  [ $? -ne $TRUE ] && {
+		$($CMD_SED -i "s/drbd0/drbd0|vd*/" $LVM_CONF )
+ 		[ $? -ne $TRUE ] && abort "Falied to update lvm.conf file"
+ 		$( /sbin/lvmdiskscan &>/dev/null )
+ 		[ $? -ne $TRUE ] && abort "Falied to update lvm.conf file"
+  }
+
+  $CMD_ECHO "--- activate_vg() end"
+}
+
+#------------------------------------------------------------------------
+function udev_rules(){
+  $CMD_ECHO "--- udev_rules() begin"
+
+  pushd $PLUGIN_SCRIPTS_ROOT >/dev/null 2>&1
+  [ ! -x ./apos_udevconf.sh ] && abort "Unable to execute the apos_udevconf.sh"
+  ./apos_udevconf.sh
+  [ $? -ne 0 ] && abort "Failure while executing the apos_udevconf.sh"
+  popd >/dev/null 2>&1
+
+  $CMD_ECHO "--- udev_rules() end"
+}
+#------------------------------------------------------------------------
+
+# usage:
+#   try <attempts> <interval> <command> [<argument1> ... <argumentN>]
+#
+# The function executes <command> for a maximum of <attempts> times and waits
+# <interval> seconds between each attempt. It returns <command>'s return code
+# upon completion, $EXHAUSTED in the case the command has failed for all
+# available attempts, $FALSE in the case of wrong usage.
+function try(){
+  if [ $# -lt 3 ]; then
+    echo "wrong number of parameters ($#)" >&2
+    return $FALSE
+  elif [[ ! $1 =~ ^[0-9]+$ ]]; then
+    echo "positive integer expected (found \"$1\")" >&2
+    return $FALSE
+  elif [[ ! $2 =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+    echo "positive decimal expected (found \"$2\")" >&2
+    return $FALSE
+  else
+    local MAX_ATTEMPTS=$1
+    local SLEEP_TIME=$2
+    shift; shift
+    local COMMANDLINE=$@
+
+    for ((i=0; i<${MAX_ATTEMPTS}; i++)); do
+      ${COMMANDLINE}
+      local RETCODE=$?
+      if [ $RETCODE -eq $TRUE ]; then
+        return $RETCODE
+      fi
+      sleep ${SLEEP_TIME}
+    done
+    return $EXHAUSTED
+  fi
+}
+
+#------------------------------------------------------------------------
+# usage:
+#   kill_after <timeout> <command> [<argument1> ... <argumentN>]
+#
+# The function executes <command> and awaits for its completion for a maximum of
+# <timeout> seconds before interrupting (SIGINT) the process.
+# If after <timeout>+2 seconds the process is still executing (SIGINT has not
+# successfully interrupted it), SIGKILL gets sent.
+# The function returns 124 if timeout has expired before command completion,
+# $FALSE in the case of wrong usage or the return code of $COMMAND otherwise.
+function kill_after(){
+  if [ $# -lt 2 ]; then
+    echo "wrong number of parameters ($#)" >&2
+    return $FALSE
+  elif [[ ! $1 =~ ^[0-9]+$ ]]; then
+    echo "positive integer expected (found \"$1\")" >&2
+    return $FALSE
+  else
+    local SIGINT_TMOUT=$1
+    shift
+    local SIGKILL_TMOUT=$((${SIGINT_TMOUT}+2))
+    local COMMANDLINE=$@
+
+    /usr/bin/timeout --signal=INT --kill-after=${SIGKILL_TMOUT} ${SIGINT_TMOUT} ${COMMANDLINE}
+    return $?
+  fi
+}
+
+#------------------------------------------------------------------------
+# usage:
+#   kill_after_try <attempts> <interval> <timeout> <command> [<argument1> ... <argumentN>]
+#
+# The function executes <command> for a maximum of <attempts> times and waits
+# <interval> seconds between each attempt. If each command invocation does not
+# terminate after <timeout> seconds, it gets interrupted (SIGINT).
+# If after <timeout>+2 seconds the process is still executing (SIGINT has not
+# successfully interrupted it), SIGKILL gets sent.
+# The function returns 124 if timeout has expired before command completion,
+# $FALSE in the case of wrong usage or the return code of $COMMAND otherwise.
+function kill_after_try(){
+  if [ $# -lt 4 ]; then
+    echo "wrong number of parameters ($#)" >&2
+    return $FALSE
+  else
+    local MAX_ATTEMPTS=$1
+    local SLEEP_TIME=$2
+    local SIGINT_TMOUT=$3
+    shift; shift; shift
+    local COMMANDLINE=$@
+
+    try $MAX_ATTEMPTS $SLEEP_TIME kill_after $SIGINT_TMOUT $COMMANDLINE
+    return $?
+  fi
+}
+
+#------------------------------------------------------------------------
+function is_simulated() {
+  local count=$(find $APOS_PSO -mindepth 1 -maxdepth 1 -name 'simulated_*'  2>/dev/null | wc -l)
+  [[ -n "$count" && $count -gt 0 ]] && return $TRUE
+  return $FALSE
+}
+
+#------------------------------------------------------------------------
+function set_simulated() {
+  $CMD_ECHO "--- set_simulated() begin"
+  # Note: The same "/boot/.installation_platform" file name is also used in 
+  # in APOSCONFBIN(i.e apos_common.sh). So, If the file name is 
+  # changed in this script then apos_common.sh script also needs to be updated. 
+  local destination_file='/boot/.installation_platform'
+  local installation_platform='simulated'
+  echo "$installation_platform" > $destination_file || \
+   abort "failure while populating $destination_file"
+
+  $CMD_ECHO "--- set_simulated() end"
+}
+
+#------------------------------------------------------------------------
+function create_stage() {
+  $CMD_ECHO "--- create_stage() begin"
+
+  local STAGE_FILE='/boot/.config_stage'
+  local TMP_CFG_FILE='/tmp/config_stage'
+  echo "2" > $TMP_CFG_FILE
+  install -m 666 -D $TMP_CFG_FILE $STAGE_FILE
+  rm -f $TMP_CFG_FILE
+
+  $CMD_ECHO "--- create_stage() end"
+}
+

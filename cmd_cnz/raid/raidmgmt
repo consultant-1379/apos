@@ -1,0 +1,1689 @@
+#!/bin/bash -u
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2011 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       raidmgmt
+# Description:
+#       A script to handle the RAID1 details for APG43L.
+##
+# Usage:
+#	call: raidmgmt --help
+##
+# Changelog:
+# - Mon 03 Jan 2022 - Dharma Teja (xdhatej)
+#     Added performance related logs for "busy filesystem issue"
+# - Fri Sep 29 2017 - Pranshu Sinha (xpransi)
+# Introduction of retry in discover_partition function
+# - Tue Nov 29 2016 - Francesco Rainone (efrarai)
+# Introduction of the discover_partitions function.
+# - Wed Apr 27 2016 - Francesco Rainone (efrarai)
+# Deprecation of disk_craving functionality.
+# - Sat Feb 6 2016 - Francesco Rainone (efrarai)
+# Deletion of /etc/mdadm.conf is now avoided and deprecation of --persistent
+# option.
+# - Tue Feb 2 2016 - Fabio Ronca (efabron)
+# Updated the path of commands quotacheck, quotaon, quotaoff  
+# - Fri Nov 13 2015 - Antonio Buonocunto (eanbuon)
+# Adaptation to COM 6.0. Changin permission on /data
+# - Tue Jun 18 2013 - Francesco Rainone (efrarai)
+#	CPU usage reduction for GEP1 compliance (step 2: udev rules usage).
+# - Mon Apr 29 2013 - Francesco Rainone (efrarai)
+#	CPU usage reduction for GEP1 compliance (step 1).
+# - Tue Sep 25 2012 - Francesco Rainone (efrarai)
+#	Fallback to the 1.0 superblock version.
+# - Wed Aug 29 2012 - Francesco Rainone (efrarai)
+#	Fix for the single disk partitioning option.
+# - Wed Apr 11 2012 - Francesco Rainone (efrarai)
+#	Logging disabled for the --dfi option. Added the "--force" switch to the
+#	recover option.
+# - Fri Mar 30 2012 - Francesco Rainone (efrarai)
+#	Changes to disk_finder() to make the command udev-independent.
+# - Fri Jan 27 2012 - Francesco Rainone (efrarai)
+#	Heavy rework. Added the -M, -r, -R, -S and -A options.
+# - Thu Oct 20 2011 - Francesco Rainone (efrarai)
+#       Removed cyclic unmount.
+# - Mon Oct 10 2011 - Francesco Rainone (efrarai)
+#	Added commandline logging and cyclic unmount.
+# - Mon May 23 2011 - Francesco Rainone (efrarai)
+#	Added the --persistent switch to be HA-agent-compliant.
+#	Added the removal of the line belonging to the raid device from the
+#	/etc/fstab file.
+#	Added the --assume-clean option to avoid the initial synchronization.
+# - Tue Apr 05 2011 - Francesco Rainone (efrarai)
+#	Handling of mixed data disks state (one with raid partition, one
+#	without).
+# - Wed Mar 09 2011 - Francesco Rainone (efrarai)
+#	Changes to the disk_finder algorithm to ignore the system disk.
+# - Wed Feb 23 2011 - Francesco Rainone (efrarai)
+#	Added additional security checks in the disk_finder function.
+# - Tue Feb 22 2011 - Paolo Palmieri (epaopal)
+#	Added the -i, --dfi switches.
+# - Fri Feb 18 2011 - Francesco Rainone (efrarai)
+#	Changed the master node identification.
+# - Tue Jan 19 2011 - Francesco Rainone (efrarai)
+#	Added quota support.
+# - Tue Jan 04 2011 - Francesco Rainone (efrarai)
+#	Added the assemble, check, disable and auto build functionalities.
+#	Implemented the is_mounted() and is_master() functions.
+# - Thu Dec 09 2010 - Francesco Rainone (efrarai)
+#	Added information about "recovery" state.
+# - Thu Dec 02 2010 - Francesco Rainone (efrarai)
+#	First version.
+##
+
+# Global Variables ------------------------------------------------------- BEGIN
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+
+CMD_MDADM='/sbin/mdadm'
+CMD_FDISK='/sbin/fdisk'
+CMD_LOGGER='/bin/logger'
+CMD_LOGGER_ERROR='/bin/logger'
+CMD_RM='/bin/rm'
+CMD_CAT='/bin/cat'
+CMD_GETOPT='/usr/bin/getopt'
+CMD_GREP='/usr/bin/grep'
+CMD_WC='/usr/bin/wc'
+CMD_TR='/usr/bin/tr'
+CMD_SED='/usr/bin/sed'
+CMD_MKFS_EXT3='/sbin/mkfs.ext3'
+CMD_AWK='/usr/bin/awk'
+CMD_BASENAME='/usr/bin/basename'
+CMD_MOUNT='/bin/mount'
+CMD_UMOUNT='/bin/umount'
+CMD_QUOTAON='/usr/sbin/quotaon'
+CMD_QUOTACHECK='/usr/sbin/quotacheck'
+CMD_QUOTAOFF='/usr/sbin/quotaoff'
+CMD_SYSCTL='/sbin/sysctl'
+CMD_MKDIR='/bin/mkdir'
+CMD_RESIZE2FS='/sbin/resize2fs'
+CMD_LS='/bin/ls'
+CMD_FUSER='/bin/fuser'
+CMD_PS='/bin/ps'
+CMD_TAIL='/usr/bin/tail'
+CMD_FIND='/usr/bin/find'
+CMD_DIRNAME='/usr/bin/dirname'
+CMD_DD='/bin/dd'
+CMD_PARTPROBE='/usr/sbin/partprobe'
+CMD_TIMEOUT='/usr/bin/timeout'
+CMD_BLOCKDEV='/sbin/blockdev'
+CMD_UDEVADM='/sbin/udevadm'
+CMD_E2FSCK='/sbin/e2fsck'
+CMD_READLINK='/usr/bin/readlink'
+CMD_STAT='/usr/bin/stat'
+CMD_CHMOD='/bin/chmod'
+
+RAID_DEVICE='/dev/md0'
+DDA='/dev/eri_diskA'
+DDA_DATA='/dev/eri_diskA_data'
+DDA_META='/dev/eri_diskA_meta'
+DDB='/dev/eri_diskB'
+DDB_DATA='/dev/eri_diskB_data'
+DDB_META='/dev/eri_diskB_meta'
+MOUNT_POINT='/data'
+MOUNT_POINT_MOD="755"
+ETC_DIR='/etc'
+STAT_FILE="/proc/mdstat"
+RAID_DISKS=''
+RAID_DISKS_COUNT=0
+RAID_DISKS_VERBOSE=''
+RAID_PARTITIONS=''
+LOG_TAG='-t raidmgmt'
+OUT_TMP=''
+ERR_TMP=''
+FSTAB_OPTIONS='rw,grpjquota=aquota.group,jqfmt=vfsv0'
+FSTAB_LINE="$RAID_DEVICE $MOUNT_POINT ext3 $FSTAB_OPTIONS 0 0"	
+BUSYFS_LOG="/var/log/acs/tra/logging/apos_raid.log"
+## Option variables ------------------------------------------------ BEGIN
+FULL_OPT_LIST=' '
+OPT_ADD=$FALSE; OPT_ADD_ARG=''
+OPT_ASSEMBLE=$FALSE; OPT_ASSEMBLE_ARG=''
+OPT_BITMAP=$FALSE
+OPT_CHECK=$FALSE; OPT_CHECK_ARG=''
+OPT_DFI=$FALSE
+OPT_DISABLE=$FALSE
+OPT_ENLARGE=$FALSE
+OPT_FORCE=$FALSE
+OPT_FORMAT=$FALSE
+OPT_HELP=$FALSE
+OPT_IS_MOUNTED=$FALSE
+OPT_LIST=$FALSE
+OPT_MOUNT=$FALSE
+OPT_PART=$FALSE; OPT_PART_ARG=''
+OPT_PERSISTENT=$FALSE
+OPT_QUOTA=$FALSE
+OPT_RECOVER=$FALSE
+OPT_REMOVE=$FALSE; OPT_REMOVE_ARG=''
+OPT_SPEEDUP=$FALSE; OPT_SPEEDUP_ARG=''
+OPT_STATUS=$FALSE
+OPT_UNMOUNT=$FALSE
+OPT_VERBOSE=$FALSE
+## Option variables ------------------------------------------------   END
+# Global Variables --------------------------------------------------------- END
+
+
+# Functions -------------------------------------------------------------- BEGIN
+# The function will check for the script's prerequisites to be satisfied.
+function sanity_check(){
+	OUT_TMP=$(mktemp --tmpdir raidmgmt_log_XXXXX)
+	ERR_TMP=$OUT_TMP
+	
+	if [ ! -d $ETC_DIR ]; then		
+		abort "folder $ETC_DIR not found!"
+	fi
+	
+	if [ ! -d $MOUNT_POINT ]; then		
+		$CMD_MKDIR -m $MOUNT_POINT_MOD -p $MOUNT_POINT >$OUT_TMP 2>$ERR_TMP
+		[ $? -ne $TRUE ] && abort "failure while creating the mount point $MOUNT_POINT"
+		log "created folder: \"$MOUNT_POINT\""
+	fi
+        local DATA_PERMISSION=$($CMD_STAT -c "%a" $MOUNT_POINT) || abort "failure while reading $MOUNT_POINT permissions"
+	if [ $DATA_PERMISSION -ne $MOUNT_POINT_MOD ]; then
+		$CMD_CHMOD $MOUNT_POINT_MOD $MOUNT_POINT
+		[ $? -ne $TRUE ] && abort "failure while setting permissions $MOUNT_POINT_MOD to $MOUNT_POINT"
+	fi
+}
+
+# The function will return $TRUE if the --verbose option has been specified,
+#  $FALSE otherwise.
+function is_verbose(){
+	if [ $OPT_VERBOSE -eq $TRUE ]; then
+		return $TRUE
+	else
+		return $FALSE
+	fi
+}
+
+# The function will log a message in the system log. If the --verbose option has
+#  been specified, it will print the same message on stdout too.
+function log(){
+	local PRIO='-p user.notice'
+	local MESSAGE="${*:-notice}"	
+	$CMD_LOGGER $PRIO $LOG_TAG "$MESSAGE" >$OUT_TMP 2>$ERR_TMP
+	is_verbose && echo -e "$MESSAGE"	
+}
+
+function busyfs_log(){
+       echo "[$(date --utc)] $@" >> $BUSYFS_LOG
+}
+
+# The function will log an error message in the system log. If the --verbose
+#  option has been specified, it will print the same message on stderr too.
+function log_error(){	
+	local PRIO='-p user.err'
+	local MESSAGE="${*:-error}"	
+	$CMD_LOGGER_ERROR $PRIO $LOG_TAG "$MESSAGE" >$OUT_TMP 2>$ERR_TMP
+	echo -e "$MESSAGE" >&2
+}
+
+# The function will log the function start and the parameter list only if the 
+#  --verbose option have been specified.
+# Parameters: log_function_start $FUNCNAME $*
+function log_function_start(){
+	is_verbose && log "START: [$*]"
+}
+
+# The function will log the function end only if the --verbose option have been
+#  specified.
+# Syntax: log_function_end $FUNCNAME
+function log_function_end(){
+	is_verbose && log "END: [$1]"
+}
+
+# The function, in the case of a clean termination, will do a system cleanup to
+#  remove all the unneeded files/structures.
+function system_cleanup(){
+	[ -f "$OUT_TMP" ] && $CMD_RM $OUT_TMP >/dev/null 2>&1
+	[ -f "$ERR_TMP" ] && $CMD_RM $ERR_TMP >/dev/null 2>&1
+}
+
+# The function will log and print an error message and will terminate the script
+#  with a $FALSE return code.
+function abort(){
+	local MESSAGE="ABORTING (${@:-unspecified error occurred})"
+	log_error $MESSAGE
+	if [[ -f $OUT_TMP && ! -s $OUT_TMP ]]; then
+		$CMD_RM $OUT_TMP &>/dev/null
+	fi
+	if [[ -f $ERR_TMP && ! -s $ERR_TMP ]]; then
+		$CMD_RM $ERR_TMP &>/dev/null
+	fi
+	exit $FALSE
+}
+
+# The function will print the command usage on stdout.
+function usage(){
+	$CMD_CAT << HEREDOC
+usage:	raidmgmt
+
+	raidmgmt --add|-A <device> [--force|-F] [--verbose|-v]
+
+	raidmgmt [--assemble|-a [<device>]] [--mount|-m] [--persistent|-P]
+		 [--force|-F] [--verbose|-v]
+
+	raidmgmt --check|-c <device> [--verbose|-v]
+
+	raidmgmt --dfi|-i [--verbose|-v]
+
+	raidmgmt [--disable|-d] [--unmount|-u] [--verbose|-v]
+
+	raidmgmt --enlarge|-E [--verbose|-v]
+
+	raidmgmt [--part|-p [<device>]] [--format|-f] [--mount|-m]
+	         [--persistent|-P] [--bitmap|-b] [--force|-F] [--verbose|-v]
+
+	raidmgmt --help|-h
+
+	raidmgmt --is-mounted|-M [--verbose|-v]
+
+	raidmgmt --list|-l [--verbose|-v]
+
+	raidmgmt --quota|-q [--verbose|-v]
+
+	raidmgmt --recover|-r [--verbose|-v] [--force|-F]
+
+	raidmgmt --remove|-R <device> [--verbose|-v]
+
+	raidmgmt --speedup <ON|OFF> [--verbose|-v]
+
+	raidmgmt --status|-s [--verbose|-v]
+	
+HEREDOC
+}
+
+# The function reads the command line argument list and parses it flagging the
+#  right variables in a case/esac switch.
+# Syntax: parse_cmdline $@
+function parse_cmdline(){
+	local PARAMETERS=$@
+	# OPTIONS is a list of single-character options.
+	#  The string must be in the form:
+	#   Example: 'ovl' (for -o -v -l options).
+	#  Options that takes an argument must be followed by a colon:
+	#   Example: 'ov:l' (-v takes a mandatory argument).
+	#  Options with an optional argument must be followed by a double colon:
+	#   Example: 'ovl::' (-l takes an optional argument).
+	local OPTIONS='A: a:: b c: i d E F f h M l m p:: P q r R: S: s u v'
+	
+	# LONG_OPTIONS is a list of space-separated multi-character options.
+	#  The string must be in the form:
+	#   Example: 'option1 option2 ... optionN'.
+	#  Options that takes an argument must be followed by a colon:
+	#   Example: 'option1: option2 ... optionN:'
+	#  Options with an optional argument must be followed by a double colon:
+	#   Example: 'option1:: option2:: ... optionN'
+	local LONG_OPTIONS='add: assemble:: bitmap check: dfi disable enlarge force format help is-mounted list mount part:: persistent quota recover remove: speedup: status unmount verbose'
+	
+	$CMD_GETOPT --quiet --quiet-output --longoptions="$LONG_OPTIONS" --options="$OPTIONS" -- "$@"
+	EXIT_CODE=$?
+	if [ $EXIT_CODE -ne $TRUE ]; then
+		usage
+		abort "Command line parameter error"
+	fi	
+	local ARGS="$@"
+	eval set -- "$ARGS"
+	
+	# Make sure to handle the cases for all the options listed in OPTIONS
+	#  and LONG_OPTIONS and to fill up the right script-wide variables.
+	while [ $# -gt 0 ]; do		
+		case "$1" in
+			--add|-A)				
+				OPT_ADD=$TRUE
+				if [[ $2 =~ ^-.*$ ]]; then
+					abort "The $1 option needs an argument to be specified."
+				else
+					OPT_ADD_ARG=${2:-''}
+					shift
+				fi
+				FULL_OPT_LIST="${FULL_OPT_LIST}add "
+			;;
+			--assemble|-a)				
+				OPT_ASSEMBLE=$TRUE
+				if [[ $# -gt 1 && -n "$2" && ! $2 =~ ^-.*$ ]]; then
+					OPT_ASSEMBLE_ARG=${2:-''}					
+					shift
+				fi
+				FULL_OPT_LIST="${FULL_OPT_LIST}assemble "
+			;;
+			--bitmap|-b)				
+				OPT_BITMAP=$TRUE				
+				FULL_OPT_LIST="${FULL_OPT_LIST}bitmap "
+			;;
+			--check|-c)				
+				OPT_CHECK=$TRUE
+				if [[ $2 =~ ^-.*$ ]]; then
+					abort "The $1 option needs an argument to be specified."
+				else
+					OPT_CHECK_ARG=${2:-''}
+					shift
+				fi				
+				FULL_OPT_LIST="${FULL_OPT_LIST}check "
+			;;
+			--dfi|-i)				
+				OPT_DFI=$TRUE				
+				FULL_OPT_LIST="${FULL_OPT_LIST}dfi "				
+			;;
+			--disable|-d)				
+				OPT_DISABLE=$TRUE				
+				FULL_OPT_LIST="${FULL_OPT_LIST}disable "
+			;;
+			--enlarge|-E)				
+				OPT_ENLARGE=$TRUE				
+				FULL_OPT_LIST="${FULL_OPT_LIST}enlarge "
+			;;
+			--force|-F)				
+				OPT_FORCE=$TRUE				
+				FULL_OPT_LIST="${FULL_OPT_LIST}force "
+			;;
+			--format|-f)				
+				OPT_FORMAT=$TRUE				
+				FULL_OPT_LIST="${FULL_OPT_LIST}format "
+			;;
+			--help|-h)				
+				OPT_HELP=$TRUE				
+				FULL_OPT_LIST="${FULL_OPT_LIST}help "
+			;;
+			--is-mounted|-M)				
+				OPT_IS_MOUNTED=$TRUE				
+				FULL_OPT_LIST="${FULL_OPT_LIST}is-mounted "
+			;;
+			--list|-l)				
+				OPT_LIST=$TRUE				
+				FULL_OPT_LIST="${FULL_OPT_LIST}list "
+			;;
+			--mount|-m)				
+				OPT_MOUNT=$TRUE				
+				FULL_OPT_LIST="${FULL_OPT_LIST}mount "
+			;;
+			--part|-p)				
+				OPT_PART=$TRUE
+				if [[ $# -gt 1 && -n "$2" && ! $2 =~ ^-.*$ ]]; then
+					OPT_PART_ARG=${2:-''}					
+					shift
+				fi				
+				FULL_OPT_LIST="${FULL_OPT_LIST}part "
+			;;
+			--persistent|-P)				
+				OPT_PERSISTENT=$TRUE
+				FULL_OPT_LIST="${FULL_OPT_LIST}persistent "
+        log "persistent option is deprecated and will be ignored"
+			;;
+			--quota|-q)				
+				OPT_QUOTA=$TRUE				
+				FULL_OPT_LIST="${FULL_OPT_LIST}quota "
+			;;
+			--recover|-r)				
+				OPT_RECOVER=$TRUE				
+				FULL_OPT_LIST="${FULL_OPT_LIST}recover "
+			;;
+			--remove|-R)				
+				OPT_REMOVE=$TRUE				
+				if [[ $2 =~ ^-.*$ ]]; then				
+					abort "The $1 option needs an argument to be specified."
+				else
+					OPT_REMOVE_ARG=${2:-''}
+					shift				
+				fi				
+				FULL_OPT_LIST="${FULL_OPT_LIST}remove "
+			;;
+			--speedup|-S)				
+				OPT_SPEEDUP=$TRUE
+				if [[ $2 =~ ^-.*$ ]]; then
+					abort "The $1 option needs an argument to be specified."
+				else
+					OPT_SPEEDUP_ARG=${2:-''}
+					shift				
+				fi
+				shift
+				FULL_OPT_LIST="${FULL_OPT_LIST}speedup "
+			;;
+			--status|-s)				
+				OPT_STATUS=$TRUE				
+				FULL_OPT_LIST="${FULL_OPT_LIST}status "
+			;;
+			--unmount|-u)				
+				OPT_UNMOUNT=$TRUE				
+				FULL_OPT_LIST="${FULL_OPT_LIST}unmount "
+			;;			
+			--verbose|-v)				
+				OPT_VERBOSE=$TRUE				
+				FULL_OPT_LIST="${FULL_OPT_LIST}verbose "
+			;;
+			--)				
+				shift
+				break
+			;;
+			*)
+				abort "unrecognized option ($1)"
+			;;
+		esac		
+		shift
+	done
+	
+	# Make the --dfi option speechless to avoid syslog flooding
+	[ $OPT_DFI -eq $TRUE ] && ! is_verbose && CMD_LOGGER=':'
+	
+	log " ---------- START: [$0 ${PARAMETERS}]"
+	log "temporary logs: $OUT_TMP and $ERR_TMP"
+	
+	options_check
+	
+	OPT_VERBOSE=$FALSE
+	log " ---------- END: [$0 ${PARAMETERS}]"
+	return $?
+}
+
+# The function will check for options' consistency. If two incompatible options
+#  will be specified, the system will exit with an error message and a $FALSE
+#  return code.
+function options_check(){
+	local FULL_OPT_NUMBER=$( echo $FULL_OPT_LIST | $CMD_WC -w 2>/dev/null )
+	log "recognized options: [$FULL_OPT_LIST]"	
+	local OPTION
+	local COMPATIBLE_OPTIONS=''	
+	if [ $FULL_OPT_NUMBER -le 0 ]; then
+		OPT_STATUS=$TRUE		
+	else
+		# raidmgmt --add|-A <device> [--force|-F] [--verbose|-v]
+		if [ $OPT_ADD -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='force verbose'
+			OPTION='add'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --assemble|-a [--format|-f] [--mount|-m] [--persistent|-P] [--force|-F] [--verbose|-v]
+		if [ $OPT_ASSEMBLE -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='format mount persistent force verbose'
+			OPTION='assemble'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi
+		# raidmgmt --bitmap|-b [--part|-p] [--format|-f] [--mount|-m] [--persistent|-P] [--force|-F] [--verbose|-v]
+		if [ $OPT_BITMAP -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='part format mount persistent force verbose'
+			OPTION='bitmap'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi
+		# raidmgmt --check|-c <device> [--verbose|-v]
+		if [ $OPT_CHECK -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='verbose'
+			OPTION='check'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --dfi|-i [--verbose|-v]
+		if [ $OPT_DFI -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='verbose'
+			OPTION='dfi'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --disable|-d [--unmount|-u] [--verbose|-v]
+		if [ $OPT_DISABLE -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='unmount verbose'
+			OPTION='disable'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --enlarge|-E [--verbose|-v]
+		if [ $OPT_ENLARGE -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='verbose'
+			OPTION='enlarge'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --format|-f [--part|-p] [--assemble|-a] [--mount|-m] [--persistent|-P] [--bitmap|-b] [--force|-F] [--verbose|-v]
+		if [ $OPT_FORMAT -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='part assemble mount persistent bitmap force verbose'
+			OPTION='format'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --help|-h
+		if [ $OPT_HELP -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS=''
+			OPTION='help'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --is-mounted|-M [--verbose|-v]
+		if [ $OPT_IS_MOUNTED -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='verbose'
+			OPTION='is-mounted'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --list|-l [--verbose|-v]
+		if [ $OPT_LIST -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='verbose'
+			OPTION='list'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --mount|-m [--assemble|-a] [--part|-p] [--format|-f] [--persistent|-P] [--bitmap|-b] [--force|-F] [--verbose|-v]
+		if [ $OPT_MOUNT -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='assemble part format persistent bitmap force verbose'
+			OPTION='mount'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --part|-p [--format|-f] [--mount|-m] [--persistent|-P] [--bitmap|-b] [--force|-F] [--verbose|-v]
+		if [ $OPT_PART -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='format mount persistent bitmap force verbose'
+			OPTION='part'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --persistent|-P [--part|-p] [--assemble|-a] [--mount|-m] [--bitmap|-b] [--force|-F] [--verbose|-v]
+		if [ $OPT_PERSISTENT -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='part assemble mount bitmap force verbose'
+			OPTION='persistent'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --quota|-q [--verbose|-v]
+		if [ $OPT_QUOTA -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='verbose'
+			OPTION='quota'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --recover|-r [--verbose|-v]
+		if [ $OPT_RECOVER -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='verbose force'
+			OPTION='recover'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --remove|-R <device> [--verbose|-v]
+		if [ $OPT_REMOVE -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='verbose'
+			OPTION='remove'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --speedup <ON|OFF> [--verbose|-v]
+		if [ $OPT_SPEEDUP -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='verbose'
+			OPTION='speedup'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --status|-s [--verbose|-v]
+		if [ $OPT_STATUS -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='verbose'
+			OPTION='status'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+		# raidmgmt --unmount|-u [--disable|-d] [--verbose|-v]
+		if [ $OPT_UNMOUNT -eq $TRUE ]; then
+			COMPATIBLE_OPTIONS='disable verbose'
+			OPTION='unmount'
+			check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+		fi		
+	fi
+	invoker
+}
+
+# check_options_compatibility <option> <compatible_options> <specified_options>
+function check_options_compatibility(){
+        local OPTION=$1
+        local COMPATIBLE=$2
+        local SPECIFIED=$3
+        # local SPECIFIED_WO=$(echo $SPECIFIED | $CMD_SED -e "s@^$OPTION[[:space:]]@@g" -e "s@[[:space:]]$OPTION@@g" -e "s@$OPTION[[:space:]]\$@@g")
+        for SPE in $SPECIFIED; do                
+                CHECK=$FALSE
+		if [ $SPE != $OPTION ]; then
+			for COMP in $COMPATIBLE; do
+				if [ $COMP == $SPE ]; then
+					CHECK=$TRUE
+					break
+				fi
+			done
+			[ $CHECK -eq $FALSE ] && abort 'incompatible options'
+		fi
+        done
+        return $TRUE
+}
+
+# The function will invoke functions based on the options specified.
+function invoker(){
+	[ $OPT_VERBOSE -eq $TRUE ] &&    do_verbose
+	[ $OPT_FORCE -eq $TRUE ] &&      do_force
+	[ $OPT_PERSISTENT -eq $TRUE ] && do_persistent
+	[ $OPT_BITMAP -eq $TRUE ] &&     do_bitmap
+	
+	[ $OPT_PART -eq $TRUE ] &&       do_part
+	[ $OPT_ASSEMBLE -eq $TRUE ] &&   do_assemble
+	[ $OPT_FORMAT -eq $TRUE ] &&     do_format
+	[ $OPT_MOUNT -eq $TRUE ] &&      do_mount
+	[ $OPT_UNMOUNT -eq $TRUE ] &&    do_unmount
+	[ $OPT_DISABLE -eq $TRUE ] &&    do_disable
+	
+	[ $OPT_ADD -eq $TRUE ] &&        do_add
+	[ $OPT_CHECK -eq $TRUE ] &&      do_check $OPT_CHECK_ARG
+	[ $OPT_DFI -eq $TRUE ] &&        do_dfi
+	[ $OPT_ENLARGE -eq $TRUE ] &&    do_enlarge	
+	[ $OPT_HELP -eq $TRUE ] &&       do_help
+	[ $OPT_IS_MOUNTED -eq $TRUE ] && do_is_mounted
+	[ $OPT_LIST -eq $TRUE ] &&       do_list	
+	[ $OPT_QUOTA -eq $TRUE ] &&      do_quota
+	[ $OPT_RECOVER -eq $TRUE ] &&    do_recover
+	[ $OPT_REMOVE -eq $TRUE ] &&     do_remove
+	[ $OPT_SPEEDUP -eq $TRUE ] &&    do_speedup
+	[ $OPT_STATUS -eq $TRUE ] &&     do_status
+	
+	return $?
+}
+
+# The function checks for a valid RAID.
+# exit codes of the $CMD_MDADM --detail $RAID_DEVICE --test command:
+#  0: The array is functioning normally.
+#  1: The array has at least one failed device.
+#  2: The array has multiple failed devices such that it is unusable.
+#  4: There was an error while trying to get information about the device. 
+# Return: the exit status is $TRUE in case it finds a valid RAID array, $FALSE otherwise.
+function raid_exists(){	
+	$CMD_MDADM --detail $RAID_DEVICE --test --verbose >$OUT_TMP 2>$ERR_TMP
+	local EXIT_CODE=$?
+	local EXISTS=$FALSE
+	case $EXIT_CODE in
+		0|1|2)			
+			MESSAGE="RAID device \"$RAID_DEVICE\" found."
+			EXISTS=$TRUE
+		;;		
+		4)			
+			MESSAGE="No RAID found. Exit status: $EXIT_CODE"
+		;;
+		*)
+			abort "unhandled return code found: $EXIT_CODE"
+	esac
+	log "$MESSAGE"
+	return $EXISTS	
+}
+
+# exit codes of the $CMD_MDADM --detail $RAID_DEVICE --test command:
+#  0: The array is functioning normally.
+#  1: The array has at least one failed device.
+#  2: The array has multiple failed devices such that it is unusable.
+#  4: There was an error while trying to get information about the device. 
+function raid_info(){
+	$CMD_MDADM --detail $RAID_DEVICE --test >$OUT_TMP 2>$ERR_TMP
+	local EXIT_CODE=$?	
+	log "\"$CMD_MDADM --detail $RAID_DEVICE --test\" returned: $EXIT_CODE"
+	return $EXIT_CODE
+}
+
+# The function will print on stdout the state of the device specified as
+#  parameter.
+# Syntax: get_disk_state <device>
+function get_disk_state(){	
+	local DISK=${1:-''}
+	if [ -n "$DISK" ]; then
+		echo "$($CMD_MDADM --detail $RAID_DEVICE | $CMD_SED -e '1,/^\ *Number\ *Major\ *Minor\ *RaidDevice\ *State/d' | $CMD_GREP $DISK\$)"
+		return $TRUE
+	else
+		return $FALSE
+	fi
+}
+
+# The function will return $TRUE if $RAID_DEVICE is found mounted. $FALSE
+#  otherwise.
+function is_mounted(){
+	local EXIT_CODE=$TRUE
+	local MESSAGE=''
+	if [ -z "$( $CMD_MOUNT | $CMD_GREP -E ^$RAID_DEVICE\ on\ $MOUNT_POINT )" ]; then		
+		EXIT_CODE=$FALSE		
+	fi	
+	return $EXIT_CODE
+}
+
+#----------------------------------------------------------------------------------------
+# The function will collect all the memory and cpu utilization during umount failure case.
+#
+function busyfs_data(){
+local cpu_count=3
+
+busyfs_log 'Collecting the necessary information for the process utilization'
+for ((i = 1; i <= cpu_count; i++))
+        do
+                echo "" >> $BUSYFS_LOG
+                CPU_USAGE=$(top -b -n2 -p 1 | grep -F "Cpu(s)" | tail -1 | awk -F'id,' -v prefix="$prefix" '{ split($1, vs, ","); v=vs[length(vs)]; sub("%", "", v); printf "%s%.1f%%\n", prefix, 100 - v }')
+                DATE=$(date "+%Y-%m-%d %H:%M:")
+                CPU_USAGE="$DATE CPU: $CPU_USAGE"
+                echo "" >> $BUSYFS_LOG
+                echo $CPU_USAGE >> $BUSYFS_LOG
+                echo "" >> $BUSYFS_LOG
+                echo "Process that hold high CPU" >> $BUSYFS_LOG
+                echo "**************************" >> $BUSYFS_LOG
+                ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%cpu | head >> $BUSYFS_LOG
+                echo "" >> $BUSYFS_LOG
+                echo "Process that hold high Mem" >> $BUSYFS_LOG
+                echo "**************************" >> $BUSYFS_LOG
+                ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%mem | head >> $BUSYFS_LOG
+                echo "" >> $BUSYFS_LOG
+        done
+
+        echo "CPU to IO utilisation in percentage (CPU.IO) for last 01 Minute : " >> $BUSYFS_LOG
+
+        cat /proc/loadavg |awk {'print $1'} /proc/loadavg >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        echo "CPU to IO utilisation in percentage (CPU.IO) for last 05 Minute : " >> $BUSYFS_LOG
+        cat /proc/loadavg |awk {'print $2'} >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        echo "CPU to IO utilisation in percentage (CPU.IO) for last 15 Minute : " >> $BUSYFS_LOG
+        cat /proc/loadavg |awk {'print $3'} >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        echo "iostat with 2 sec interval for $cpu_count" >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        iostat 2 $cpu_count -h >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        echo "vmstat with 2 sec interval for $cpu_count" >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        vmstat -a 2 $cpu_count -S m >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        echo "mpstat with 2 sec interval for $cpu_count" >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        mpstat 2 $cpu_count >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+        echo ------------------------------------------------------------------------------ >> $BUSYFS_LOG
+        echo "" >> $BUSYFS_LOG
+
+        echo "" >> $BUSYFS_LOG
+
+
+}
+# The function checks for the devices in $RAID_DISKS to be valid block-devices.
+function check_disks(){
+	RAID_PARTITIONS=''
+	for BLOCK_DEV in $RAID_DISKS; do
+		local PART="${BLOCK_DEV}1"
+		if [[ ! -b "$PART" && $OPT_PART -eq $FALSE && $OPT_DFI -eq $FALSE ]]; then
+			# $CMD_PARTPROBE >$OUT_TMP 2>$ERR_TMP
+			$CMD_BLOCKDEV --rereadpt $BLOCK_DEV >$OUT_TMP 2>$ERR_TMP
+			if [ ! -b "$PART" ]; then
+				$CMD_UDEVADM trigger --subsystem-match='block' >$OUT_TMP 2>$ERR_TMP
+				$CMD_UDEVADM settle >$OUT_TMP 2>$ERR_TMP
+			fi
+			[ ! -b "$PART" ] &&  log_error "the expected partition \"$PART\" has not been found"
+		fi
+		[ -b "$PART" ] && RAID_PARTITIONS="${RAID_PARTITIONS} $PART"		
+	done
+	return $TRUE
+}
+
+function phy2dev(){
+	for LINK in $(find /dev/ -maxdepth 1 -name 'eri_phy[0-9]-disk[AB]' -type l); do
+		PHY=$(basename $LINK)
+		PHY=${PHY##eri_}
+		PHY=${PHY%%-*}
+		DEV=/dev/$($CMD_READLINK $LINK)
+		echo "$PHY:$DEV "
+	done
+	return $TRUE
+}
+
+function discover_partitions(){
+  local SIGKILL_TIMEOUT=2
+  local SIGINT_TIMEOUT=3
+  local return_code=''
+  local count1=0
+  local count2=0
+  while [ $count1 -lt 10 ]; do
+  if [ -b $DDA ]; then
+    while [ $count2 -lt 10 ]; do
+    if [ ! -b $DDA_DATA ]; then
+      if [ $count2 -lt 10 ]; then
+      log "block device $DDA_DATA is missing: triggering partprobe"
+      $CMD_TIMEOUT --signal=INT --kill-after=$SIGKILL_TIMEOUT $SIGINT_TIMEOUT $CMD_PARTPROBE $DDA &>/dev/null
+      return_code=$?
+      if [ $return_code -eq 124 ]; then
+        log "timeout while executing \"$CMD_PARTPROBE $DDA\""
+      elif [ $return_code -ne 0 ]; then
+        log "failure while executing \"$CMD_PARTPROBE $DDA\""
+      fi
+      sleep 1
+      ((count2++))
+      continue
+      fi
+    else
+      break
+    fi
+    done
+    break
+  else
+    sleep 1
+    ((count1++))
+    continue
+  fi
+  done
+  count1=0
+  count2=0
+  while [ $count1 -lt 10 ]; do
+  if [ -b $DDB ]; then
+    while [ $count2 -lt 10 ]; do
+    if [ ! -b $DDB_DATA ]; then
+      if [ $count2 -lt 10 ]; then
+      log "block device $DDB_DATA is missing: triggering partprobe"
+      $CMD_TIMEOUT --signal=INT --kill-after=$SIGKILL_TIMEOUT $SIGINT_TIMEOUT $CMD_PARTPROBE $DDB &>/dev/null
+      return_code=$?
+      if [ $return_code -eq 124 ]; then
+        log "timeout while executing \"$CMD_PARTPROBE $DDA\""
+      elif [ $return_code -ne 0 ]; then
+        log "failure while executing \"$CMD_PARTPROBE $DDA\""
+      fi
+      sleep 1
+      ((count2++))
+      continue
+      fi
+    else
+      break
+    fi
+    done
+    break
+  else
+    sleep 1
+    ((count1++))
+    continue
+  fi
+  done  
+}
+
+# This is the only function allowed to define the content of the $RAID_DISKS and
+#  $RAID_DISKS_COUNT variables. In the case of changes to the device mapping,
+#  ONLY this function must reflect these changes. An exception to this is when
+#  a parameter to the --part option is specified.
+function disk_finder(){
+  local DEV_A=''
+  local DEV_A_DATA=''
+  local DEV_B=''
+  local DEV_B_DATA=''
+  discover_partitions
+  if [ -b $DDA ]; then
+    DEV_A=/dev/$($CMD_READLINK $DDA)
+    if [ -b $DDA_DATA ]; then
+      DEV_A_DATA=/dev/$($CMD_READLINK $DDA_DATA)
+    else
+      log "block device $DDA_DATA is missing"
+    fi
+  else
+    log "block device $DDA is missing"
+  fi
+  if [ -b $DDB ]; then
+    DEV_B=/dev/$($CMD_READLINK $DDB)
+    if [ -b $DDB_DATA ]; then
+      DEV_B_DATA=/dev/$($CMD_READLINK $DDB_DATA)
+    else
+      log "block device $DDB_DATA is missing"
+    fi
+  else
+    log "block device $DDB is missing"
+  fi
+	RAID_DISKS="$DEV_A $DEV_B"
+	RAID_DISKS_COUNT=$(echo "$RAID_DISKS" | $CMD_WC -w)
+	RAID_PARTITIONS="$DEV_A_DATA $DEV_B_DATA"		
+	RAID_DISKS_VERBOSE="$(phy2dev)"
+	return $TRUE
+}
+
+# The function will define a raid device called $RAID_DEVICE using the disks
+#  listed in the $RAID_DISKS variable. It will, if the corresponding options are
+#  specified, enable the bitmap functionality and/or enable the device to be 
+#  persistently defined in the system.
+function raid_creation(){
+	RAID_BITMAP=''
+	[ $OPT_BITMAP -eq $TRUE ] && RAID_BITMAP='--bitmap=internal'
+	
+	log "$CMD_MDADM --create $RAID_DEVICE --metadata=1.0 --assume-clean --force $RAID_BITMAP --level=raid1 --raid-devices=$RAID_DISKS_COUNT $RAID_PARTITIONS --run"	
+	$CMD_MDADM --create $RAID_DEVICE --metadata=1.0 --assume-clean --force $RAID_BITMAP --level=raid1 --raid-devices=$RAID_DISKS_COUNT $RAID_PARTITIONS --run >$OUT_TMP 2>$ERR_TMP
+	local EXIT_CODE=$?
+	if [ $EXIT_CODE -ne 0 ]; then
+		abort 'raid creation failed'
+	else
+		log 'raid creation successful'
+	fi
+
+}
+
+# This function prints a list of pids:commands that have handles open on the
+#  raid device.
+function get_pids(){	
+	local PIDS=''
+	PIDS=$($CMD_FUSER -m $MOUNT_POINT $RAID_DEVICE 2>/dev/null)	
+	if [ -n "$PIDS" ]; then
+		PIDS="$(echo $PIDS | $CMD_TR '[:space:]' '\n' | $CMD_AWK ' !x[$0]++')"
+		for P in $PIDS; do			
+			echo -e "$P:\"$($CMD_PS -p $P -o cmd h)\""
+		done
+	fi
+}
+
+# The function will add a new disk to the raid array.
+function do_add(){	
+	log_function_start $FUNCNAME $*
+	local MESSAGE=''
+	local RETURN_CODE=''
+	local DISK=''
+	if [ -b "$OPT_ADD_ARG" ]; then
+		DISK="$OPT_ADD_ARG"		
+	else
+		abort "the file $OPT_ADD_ARG does NOT belong to a block device"
+	fi
+	
+	! raid_exists && abort 'no active raid device found'
+		
+	DISK_STATE=$(get_disk_state $DISK)
+	
+	[ -n "$DISK_STATE" ] && abort "the disk $DISK already belongs to the $RAID_DEVICE array"
+	
+	local RAID_SIZE=$(</sys/class/block/$($CMD_BASENAME $RAID_DEVICE)/size)
+	local DISK_SIZE=$(</sys/class/block/$($CMD_BASENAME $DISK)/size)
+	local BITMAP=$FALSE
+	if $CMD_MDADM --detail $RAID_DEVICE 2>/dev/null| $CMD_GREP -Esq '^[[:space:]+]*Intent Bitmap : Internal$'; then
+		BITMAP=$TRUE
+	fi
+	if [ "$DISK_SIZE" -ge "$RAID_SIZE" ]; then
+		$CMD_MDADM $RAID_DEVICE --add $DISK >$OUT_TMP 2>$ERR_TMP
+		RETURN_CODE=$?
+		if [[ $RETURN_CODE -ne $TRUE && $OPT_FORCE -eq $TRUE ]]; then
+			MESSAGE="simple add failed. Going for force mode."
+			log "$MESSAGE"
+			! is_verbose && echo -e "$MESSAGE"
+			
+			$CMD_MDADM --zero-superblock $DISK >$OUT_TMP 2>$ERR_TMP
+			[ $? -ne $TRUE ] && abort "failure while zeroing the superblock of $DISK"
+			
+			if [ $BITMAP -eq $TRUE ]; then
+				$CMD_MDADM --grow $RAID_DEVICE --bitmap=none >$OUT_TMP 2>$ERR_TMP
+				[ $? -ne $TRUE ] && abort "failure while disabling the write-intent bitmap"
+			fi
+			
+			$CMD_MDADM $RAID_DEVICE --add $DISK >$OUT_TMP 2>$ERR_TMP
+			RETURN_CODE=$?
+		fi
+		[ $RETURN_CODE -ne $TRUE ] && abort "failure while adding $DISK to the $RAID_DEVICE array"
+				
+		local TOKEN='Raid Devices'
+		local DEVICES_COUNT=$( $CMD_MDADM --detail $RAID_DEVICE 2>/dev/null | $CMD_GREP -E "^[[:space:]]*$TOKEN : " | $CMD_SED 's@^.*: @@g' )
+		$CMD_MDADM $RAID_DEVICE --grow --raid-devices=$(($DEVICES_COUNT+1)) >$OUT_TMP 2>$ERR_TMP
+		[ $? -ne $TRUE ] && abort "failure while growing $RAID_DEVICE"
+		
+		[ $BITMAP -eq $TRUE ] && $CMD_MDADM --grow $RAID_DEVICE --bitmap=internal >$OUT_TMP 2>$ERR_TMP
+	else
+		abort "only a device with a size greater or equal than the running raid can be added"
+	fi
+	MESSAGE="the device $DISK has been successfully added to the $RAID_DEVICE raid array"
+	log "$MESSAGE"
+	! is_verbose && echo -e "$MESSAGE"	
+	
+	log_function_end $FUNCNAME
+}
+
+# The function will re-assemble an already existent raid array.
+function do_assemble(){	
+	log_function_start $FUNCNAME $*
+	local MESSAGE=''
+	
+	raid_exists
+	local RAID_PRESENT=$?
+	
+	if [[ $RAID_PRESENT -eq $TRUE && $OPT_FORCE -eq $FALSE ]]; then
+		abort "An already running RAID array found. Try --force switch to force the assembly."
+	else
+		if is_mounted; then
+			log 'WARNING: <Assembling over an already-mounted raid array!>'
+			do_unmount
+		fi		
+		[ $RAID_PRESENT -eq $TRUE ] && do_disable
+	fi
+	
+	local RUN=''
+	if [ -n "$OPT_ASSEMBLE_ARG" ]; then
+		if [ -b "$OPT_ASSEMBLE_ARG" ]; then
+			RAID_PARTITIONS=$OPT_ASSEMBLE_ARG
+			RAID_DISKS_COUNT=1
+			RUN='--run'
+		else
+			abort "$OPT_ASSEMBLE_ARG does not refers to a valid block device"
+		fi
+	else
+		disk_finder
+	fi
+	
+	# Handle the case when a disk is missing because a hardware failure.
+	[ $OPT_FORCE -eq $TRUE ] && RUN='--run'
+	
+	local D=''
+	for D in $RAID_PARTITIONS; do
+		if do_check "$D"; then
+			abort "the device $D does not contain a valid raid partition"
+		fi
+	done
+	
+	MESSAGE="performing \"$CMD_MDADM --assemble $RAID_DEVICE $RAID_PARTITIONS $RUN\"..."
+	log "$MESSAGE"
+	! is_verbose && echo -e "$MESSAGE"
+	$CMD_MDADM --assemble $RAID_DEVICE $RAID_PARTITIONS $RUN >$OUT_TMP 2>$ERR_TMP
+	[ $? -ne $TRUE ] && abort 'raid assembly failed'
+	MESSAGE='raid assembly successful'
+	log "$MESSAGE"
+	! is_verbose && echo -e "$MESSAGE"	
+
+	log_function_end $FUNCNAME
+}
+
+# The function does nothing.
+function do_bitmap(){
+	log_function_start $FUNCNAME $*
+	log_function_end $FUNCNAME
+}
+
+# The function checks if the device passed as argument contains a valid raid
+#  partition.
+# Return: $TRUE in case of no-raid-partition, $FALSE if a valid raid partition
+#  is found.
+function do_check(){	
+	log_function_start $FUNCNAME $*	
+	local EXIT_CODE=''
+	local MESSAGE=''
+	if [ -b "$1" ]; then
+		$CMD_MDADM --examine "$1" >$OUT_TMP 2>$ERR_TMP
+		EXIT_CODE=$?		
+	else
+		abort "Please specify a valid block-device name"
+	fi
+	if [ $EXIT_CODE -eq $TRUE ]; then
+		MESSAGE="$1 has a valid raid partition"				
+		EXIT_CODE=$FALSE
+	else
+		MESSAGE="$1 has no raid partition"		
+		EXIT_CODE=$TRUE
+	fi	
+	
+	log "$MESSAGE"
+	! is_verbose && echo "$MESSAGE"
+	
+	log_function_end $FUNCNAME
+	
+	return $EXIT_CODE
+}
+
+# The function will log in the system log and print on stdout the output of the
+#  disk_finder function.
+function do_dfi(){
+	log_function_start $FUNCNAME $*
+	disk_finder
+	local MESSAGE=''
+	MESSAGE="$( echo ${RAID_DISKS_VERBOSE} | tr ' ' '\n' )"
+	log "$MESSAGE"
+	! is_verbose && echo -e "$MESSAGE"
+	log_function_end $FUNCNAME
+}
+
+# The function will stop/disable the raid.
+function do_disable(){	
+	log_function_start $FUNCNAME $*
+	
+	$CMD_MDADM --stop $RAID_DEVICE >$OUT_TMP 2>$ERR_TMP
+	local EXIT_CODE=$?	
+	if [ $EXIT_CODE -eq $TRUE ]; then
+		local MESSAGE="$RAID_DEVICE successfully disabled"
+		log "$MESSAGE"
+		! is_verbose && echo -e "$MESSAGE"
+	else
+		abort "Unable to disable the raid."
+	fi
+	
+	log_function_end $FUNCNAME
+}
+
+# The function will grow the raid array and the above filesystem but only if it
+#  finds the raid array to be running on a disks greater in size than the
+#  current raid device.
+function do_enlarge(){	
+	log_function_start $FUNCNAME $*
+	local MESSAGE=''
+	local ONLINE_ENLARGE=$FALSE
+	
+	! raid_exists && abort 'no active raid devices found'
+	
+	if is_mounted; then
+		ONLINE_ENLARGE=$TRUE
+		MESSAGE="performing online enlarge on a running array"
+	else
+		$CMD_MDADM --stop $RAID_DEVICE &>/dev/null
+		MESSAGE="performing offline enlarge"
+	fi
+	log "$MESSAGE"
+	! is_verbose && echo -e "$MESSAGE"
+	
+	disk_finder
+	local RAID_SIZE=$(</sys/class/block/$($CMD_BASENAME $RAID_DEVICE)/size)
+	local DISK_1=$(echo $RAID_PARTITIONS | $CMD_AWK '{ print $1 }')	
+	local DISK_1_SIZE=$(</sys/class/block/$($CMD_BASENAME $DISK_1)/size)	
+	local DISK_2=$(echo $RAID_PARTITIONS | $CMD_AWK '{ print $2 }')	
+	local DISK_2_SIZE=$(</sys/class/block/$($CMD_BASENAME $DISK_2)/size)
+	
+	local BITMAP=$TRUE
+	local D=''
+	for D in $RAID_PARTITIONS; do
+		$CMD_MDADM --examine-bitmap $D >$OUT_TMP 2>$ERR_TMP
+		[ $? -ne $TRUE ] && BITMAP=$FALSE
+	done
+	
+	if [[ "$DISK_1_SIZE" -gt "$RAID_SIZE" && "$DISK_2_SIZE" -gt "$RAID_SIZE" ]]; then
+		MESSAGE='raid enlarge in progress...'
+		log "$MESSAGE"
+		! is_verbose && echo -e "$MESSAGE"
+		[ $BITMAP -eq $TRUE ] && $CMD_MDADM --grow $RAID_DEVICE --bitmap=none >$OUT_TMP 2>$ERR_TMP
+		$CMD_MDADM --grow $RAID_DEVICE --size=max --assume-clean >$OUT_TMP 2>$ERR_TMP
+		[ $? -ne $TRUE ] && abort 'failure during enlarge operation'
+		$CMD_MDADM --wait $RAID_DEVICE &>/dev/null
+		[ $BITMAP -eq $TRUE ] && $CMD_MDADM --grow $RAID_DEVICE --bitmap=internal >$OUT_TMP 2>$ERR_TMP
+		MESSAGE='raid enlarge done'
+		log "$MESSAGE"
+		! is_verbose && echo -e "$MESSAGE"
+		$CMD_MDADM --wait $RAID_DEVICE &>/dev/null
+		
+		if [ $ONLINE_ENLARGE -eq $FALSE ]; then
+			MESSAGE='filesystem check in progress...'
+			log "$MESSAGE"
+			! is_verbose && echo -e "$MESSAGE"		
+			$CMD_E2FSCK -f $RAID_DEVICE >$OUT_TMP 2>$ERR_TMP
+			[ $? -ne $TRUE ] && abort 'failure during filesystem check operation'
+			MESSAGE='filesystem check done'
+			log "$MESSAGE"
+			! is_verbose && echo -e "$MESSAGE"
+		fi
+
+		MESSAGE='filesystem enlarge in progress...'
+		log "$MESSAGE"
+		! is_verbose && echo -e "$MESSAGE"		
+		$CMD_RESIZE2FS $RAID_DEVICE >$OUT_TMP 2>$ERR_TMP		
+		[ $? -ne $TRUE ] && abort 'failure during filesystem resize operation'		
+		MESSAGE='filesystem enlarge done'
+		log "$MESSAGE"
+		! is_verbose && echo -e "$MESSAGE"
+		
+	else
+		MESSAGE="disk sizes unsuitable for enlarge: $RAID_DEVICE:${RAID_SIZE:-0} $DISK_1:${DISK_1_SIZE:-0} $DISK_2:${DISK_2_SIZE:-0}"
+		log "$MESSAGE"
+		! is_verbose && echo -e "$MESSAGE"
+	fi
+	
+	log_function_end $FUNCNAME
+}
+
+# The functions does nothing.
+function do_force(){	
+	log_function_start $FUNCNAME $*
+	log_function_end $FUNCNAME
+}
+
+# The function will build a linux ext3 filesystem (formatting) on the raid
+#  device.
+function do_format(){	
+	log_function_start $FUNCNAME $*
+	local MESSAGE=''
+	raid_exists
+	local VALID_RAID=$?
+	if [ $VALID_RAID -eq $TRUE ]; then	
+		if ! is_mounted; then
+      local OPT='-F'
+			MESSAGE='formatting in progress...'
+			log "$MESSAGE"
+			! is_verbose && echo -e "$MESSAGE"
+			OPT="${OPT} -q"
+			is_verbose && OPT=''
+			$CMD_MKFS_EXT3 $OPT $RAID_DEVICE 2>$ERR_TMP
+			[ $? -ne $TRUE ] && abort 'formatting failed'
+			MESSAGE='formatting done'
+			is_verbose && log "$MESSAGE"
+			! is_verbose && echo -e "$MESSAGE"
+		else
+			abort "the device is mounted, formatting not allowed."
+		fi
+	else
+		abort "No active RAID device to format found"
+	fi
+	
+	log_function_end $FUNCNAME
+}
+
+# The function prints a command help and exits.
+function do_help(){	
+	log_function_start $FUNCNAME $*
+	usage
+	log_function_end $FUNCNAME
+}
+
+# The function will log in the system log and print a message on stdout about
+#  the fact that the raid device is mounter (or it is not).
+function do_is_mounted(){	
+	log_function_start $FUNCNAME $*
+	is_mounted
+	EXIT_CODE=$?
+	local MESSAGE=''
+	if [ $EXIT_CODE -ne $TRUE ]; then
+		MESSAGE="$RAID_DEVICE is NOT mounted"		
+		EXIT_CODE=$FALSE
+	else
+		MESSAGE="$RAID_DEVICE is mounted to $MOUNT_POINT"
+	fi	
+	log "$MESSAGE"
+	! is_verbose && echo -e "$MESSAGE"	
+	log_function_end $FUNCNAME
+	exit $EXIT_CODE
+}
+
+# The function will show information about the $RAID_DEVICE device. The first
+#  row will show the status of the RAID device and the last optional lines (one
+#  per disk) will report the name, the ID and the current status of the
+#  RAID-involved disks.
+function do_list(){	
+	log_function_start $FUNCNAME $*
+	local MESSAGE=''	
+	disk_finder
+	if raid_exists; then
+		# Line1: RAID status
+		local TOKEN='State'
+		local RAID_STATE="$( $CMD_MDADM --detail $RAID_DEVICE 2>/dev/null | $CMD_GREP -E ^[[:space:]]*$TOKEN\ :\  | $CMD_SED 's@^.*: @@g' )"
+		TOKEN='Rebuild Status'
+		local REBUILD_STATUS=$( $CMD_MDADM --detail $RAID_DEVICE 2>/dev/null | $CMD_GREP -E "^[[:space:]]*$TOKEN : " | $CMD_SED 's@^.*: @@g' )
+		if [ -n "$REBUILD_STATUS" ]; then
+			MESSAGE="Raid status: ${RAID_STATE} (rebuild: ${REBUILD_STATUS})"
+		else
+			MESSAGE="Raid status: ${RAID_STATE}"
+		fi
+		log "$MESSAGE"
+		! is_verbose && echo -e "$MESSAGE"
+		
+		
+		# Line2 and Line3: disks status
+		local D=''
+		local COMPONENTS="$($CMD_MDADM --detail $RAID_DEVICE | $CMD_SED -e '1,/^\ *Number\ *Major\ *Minor\ *RaidDevice\ *State/d' | $CMD_GREP -v ^$ | grep '/dev/' | $CMD_AWK '{ print $NF }')"
+		for D in $COMPONENTS; do				
+			COMPONENT_STATE=$(get_disk_state $D)
+			if [ "$COMPONENT_STATE" ]; then
+				ID="$(echo $COMPONENT_STATE | $CMD_AWK '{ print $1 }')"
+				COL_NUM=$(echo $COMPONENT_STATE | $CMD_WC -w)
+				COLS=$( for ((i=5; i<=$COL_NUM-1; i++)); do echo -n "\$${i}\" \""; done)		
+				STATE="$(echo $COMPONENT_STATE | $CMD_AWK "{ print ${COLS} }")"				
+				local DISK_STATE=''
+				# backward compatibility filter ---------- BEGIN
+				#case "$STATE" in
+				#	*active\ sync*)
+				#		DISK_STATE='working'
+				#	;;
+				#	*spare\ rebuilding*)
+				#		DISK_STATE='working'
+				#	;;
+				#	*faulty\ spare*)
+				#		DISK_STATE='FAULTY'
+				#	;;
+				#	*)
+				#		DISK_STATE="unexpected:$STATE"
+				#	;;
+				#esac
+				# backward compatibility filter ------------ END
+				local BASE_D=$($CMD_BASENAME $D)				
+				MESSAGE="$ID: $BASE_D $STATE"		
+				log "$MESSAGE"
+				# MESSAGE="$ID: $BASE_D $DISK_STATE"
+				! is_verbose && echo -e "$MESSAGE"
+			fi
+		done
+	else
+		MESSAGE="Raid status: not found"
+		log "$MESSAGE"
+		! is_verbose && echo -e "$MESSAGE"
+		#for D in $RAID_DISKS; do
+		#	MESSAGE="-: $($CMD_BASENAME $D 2>/dev/null)"
+		#	log "$MESSAGE"
+		#	! is_verbose && echo -e "$MESSAGE"
+		#done
+	fi
+	log_function_end $FUNCNAME	
+}
+
+# This function mounts the $RAID_DEVICE to the $MOUNT_POINT folder, using
+#  $FSTAB_OPTIONS as mount options.
+function do_mount(){	
+	log_function_start $FUNCNAME $*
+	local MESSAGE=''
+	if ! is_mounted; then
+		$CMD_MOUNT -o "$FSTAB_OPTIONS" "$RAID_DEVICE" "$MOUNT_POINT" >$OUT_TMP 2>$ERR_TMP
+		[ $? -ne $TRUE ] && abort 'mount failed'
+		MESSAGE="device $RAID_DEVICE successfully mounted to $MOUNT_POINT"
+		log "$MESSAGE"
+		! is_verbose && echo -e "$MESSAGE"
+	else
+		MESSAGE="device $RAID_DEVICE ALREADY mounted to $MOUNT_POINT"
+		log "$MESSAGE"
+		! is_verbose && echo -e "$MESSAGE"
+	fi
+	
+	log_function_end $FUNCNAME
+	return $TRUE
+}
+
+# If this option is invoked without the --force option and it finds an existent
+#  RAID array (or RAID metadata already existent inside the data disks), it
+#  prints an error and then exit with the $FALSE return value. Otherwise it will
+#  partitions the disks with one "Non-fs data" (0xDA) partition per disk, then
+#  creates a RAID array by invoking the command:
+#  "mdadm --create /dev/md0 --assume-clean --force --level=raid1
+#  --raid-devices=$DEVICE_NUMBER $DEVICES --run".
+#  If invoked with the --persistent option, it also updates the "/etc/mdadm"
+#  file with information about the newly created RAID array.
+function do_part(){	
+	log_function_start $FUNCNAME $*	
+	local MESSAGE=''
+	
+	raid_exists	
+	RAID=$?
+	if [[ $RAID -eq $TRUE && $OPT_FORCE -eq $FALSE  ]]; then
+		abort "the $RAID_DEVICE device is already active, use the --force switch to force the partitioning"
+	fi
+	
+	if [ -n "$OPT_PART_ARG" ]; then
+		if [ -b "$OPT_PART_ARG" ]; then
+			RAID_DISKS=$OPT_PART_ARG
+			RAID_PARTITIONS=$OPT_PART_ARG
+			RAID_DISKS_COUNT=1
+		else
+			abort "$OPT_PART_ARG does not refer to a valid block device"
+		fi
+	else
+		disk_finder
+	fi
+	
+	for DEVICE in $RAID_PARTITIONS; do
+		do_check "$DEVICE"
+		if [[ $? -eq $FALSE && $OPT_FORCE -eq $FALSE ]]; then
+			abort "the device \"$DEVICE\" already has a raid-partition, use the --force switch to force the partitioning"
+		else
+			MESSAGE="zeroing the superblock of the device \"$DEVICE\"... "
+			log "$MESSAGE"
+			! is_verbose && echo -ne "$MESSAGE"
+			$CMD_MDADM --zero-superblock "$DEVICE" >$OUT_TMP 2>$ERR_TMP
+			MESSAGE="done"
+			log "$MESSAGE"
+			! is_verbose && echo -e "$MESSAGE"
+		fi
+	done
+	
+	is_mounted && do_unmount
+	raid_exists && do_disable
+
+			
+	local DD=''
+	for DD in $RAID_DISKS; do
+		MESSAGE="performing disk \"$DD\" partitioning... "
+		log "$MESSAGE"
+		! is_verbose && echo -en "$MESSAGE"		
+		
+		$CMD_DD if=/dev/zero of=$DD bs=512 count=1 >$OUT_TMP 2>$ERR_TMP || abort "failure while erasing the partition table of the disk \"$DD\""
+		
+		$CMD_FDISK $DD >$OUT_TMP 2>$ERR_TMP << COMMANDS
+n
+p
+2
+
++128M
+t
+da
+n
+p
+1
+
+
+t
+1
+da
+w
+COMMANDS
+		[ $? -ne 0 ] && abort "disk $DD partitioning failed"		
+		
+		$CMD_PARTPROBE $DD >$OUT_TMP 2>$ERR_TMP		
+		sync >$OUT_TMP 2>$ERR_TMP
+		$CMD_BLOCKDEV --rereadpt $DD >$OUT_TMP 2>$ERR_TMP
+				
+		MESSAGE="done"
+		log "$MESSAGE"
+		! is_verbose && echo -e "$MESSAGE"		
+	done
+	
+	check_disks
+	raid_creation
+	log_function_end $FUNCNAME
+}
+
+# The function does nothing.
+function do_persistent(){	
+	log_function_start $FUNCNAME $*
+	log_function_end $FUNCNAME
+}
+
+# The function will turn off the quota management, then it will trigger the
+#  quotacheck scan, lastly it will re-enable the quotas.
+function do_quota(){	
+	log_function_start $FUNCNAME $*	
+	local MESSAGE=''
+	
+	if ! is_mounted; then
+		abort "The device \"$RAID_DEVICE\" must be mounted in order to enable quota."
+	fi
+	
+	MESSAGE="Turning off quota... "
+	log "$MESSAGE"
+	! is_verbose && echo -en "$MESSAGE"
+	$CMD_QUOTAOFF -g $MOUNT_POINT >$OUT_TMP 2>$ERR_TMP
+	if [ $? -ne $TRUE ]; then
+		MESSAGE='quotaoff failed (note that this is expected if the quotas were not previously enabled in the filesystem)'
+	else
+		MESSAGE='done'
+	fi
+	log "$MESSAGE"
+	! is_verbose && echo -e "$MESSAGE"
+		
+	MESSAGE="Checking/rebuilding quota file... "
+	log "$MESSAGE"
+	! is_verbose && echo -en "$MESSAGE"
+	$CMD_QUOTACHECK -g $MOUNT_POINT
+	[ $? -ne $TRUE ] && abort 'quotacheck failed'
+	MESSAGE='done'
+	log "$MESSAGE"
+	! is_verbose && echo -e "$MESSAGE"	
+		
+	MESSAGE="Turning on quota... "
+	log "$MESSAGE"
+	! is_verbose && echo -en "$MESSAGE"
+	$CMD_QUOTAON -g $MOUNT_POINT		
+	[ $? -ne $TRUE ] && abort 'quotaon failed'
+	MESSAGE='done'
+	log "$MESSAGE"
+	! is_verbose && echo -e "$MESSAGE"
+		
+	log_function_end $FUNCNAME	
+	return $TRUE
+}
+
+# The function will search for FAULTY disks then it will re-add them to the raid
+#  device.
+function do_recover(){	
+	log_function_start $FUNCNAME $*
+	local MESSAGE=''
+	$CMD_MDADM $RAID_DEVICE --remove faulty >$OUT_TMP 2>$ERR_TMP || log_error 'failure while trying to remove faulty disks'
+	$CMD_MDADM $RAID_DEVICE --remove failed >$OUT_TMP 2>$ERR_TMP || log_error 'failure while trying to remove failed disks'
+	$CMD_MDADM $RAID_DEVICE --remove detached >$OUT_TMP 2>$ERR_TMP || log_error 'failure while trying to remove detached disks'
+	local OLD_OPT_VERBOSE=$OPT_VERBOSE
+	OPT_VERBOSE=$FALSE
+	local WORKING=$(do_list | $CMD_TAIL -n +2 | $CMD_AWK '{print $2}')	
+	OPT_VERBOSE=$OLD_OPT_VERBOSE
+	disk_finder
+	local RECOVERED=$FALSE
+	for D in $RAID_PARTITIONS; do
+		local FAULTY=$TRUE
+		for W in $WORKING; do			
+			if [ $($CMD_BASENAME $D) == $W ]; then
+				FAULTY=$FALSE
+			fi
+		done
+		if [ $FAULTY -eq $TRUE ]; then
+			RECOVERED=$TRUE
+			MESSAGE="re-adding the \"$D\" disk..."
+			log "$MESSAGE"
+			! is_verbose && echo -e "$MESSAGE"
+			$CMD_MDADM --manage $RAID_DEVICE --re-add $D >$OUT_TMP 2>$ERR_TMP
+			local RC=$?
+			if [ $RC -eq $FALSE ]; then
+				if [ $OPT_FORCE -eq $TRUE ]; then
+					MESSAGE='re-add failed, going for zero-superblock then add'
+					log "$MESSAGE"
+					! is_verbose && echo -e "$MESSAGE"
+					$CMD_MDADM --zero-superblock $D >$OUT_TMP 2>$ERR_TMP || abort "failure while trying to zero-superblock the \"$D\" disk"
+					$CMD_MDADM --manage $RAID_DEVICE --add $D >$OUT_TMP 2>$ERR_TMP || abort "failure while trying to add the \"$D\" disk"
+				else
+					abort "failure while trying to re-add the \"$D\" disk (try the --force switch)"
+				fi
+			fi
+			MESSAGE="done"
+			log "$MESSAGE"
+			! is_verbose && echo -e "$MESSAGE"
+		fi
+	done
+	
+	if [ $RECOVERED -eq $TRUE ]; then
+		MESSAGE="raid successfully recovered"
+	else
+		MESSAGE="nothing to recover"
+	fi
+	log "$MESSAGE"
+	! is_verbose && echo -e "$MESSAGE"
+	
+	log_function_end $FUNCNAME
+}
+
+# The function will remove a disk from the running raid device.
+function do_remove(){	
+	log_function_start $FUNCNAME $*
+	local MESSAGE=''
+	local DISK=''
+	if [ -b "$OPT_REMOVE_ARG" ]; then
+		! raid_exists && abort 'no active raid device found'
+		DISK="$OPT_REMOVE_ARG"		
+		DISK_STATE=$(get_disk_state $DISK)
+		if [ -n "$DISK_STATE" ]; then
+			$CMD_MDADM $RAID_DEVICE --fail $DISK >$OUT_TMP 2>$ERR_TMP
+			[ $? -ne $TRUE ] && abort "failure while setting the $DISK device as failed."
+			sleep 1
+			$CMD_MDADM $RAID_DEVICE --remove $DISK >$OUT_TMP 2>$ERR_TMP
+			[ $? -ne $TRUE ] && abort "failure while hot-removing the $DISK device."
+			sleep 1
+			local TOKEN='Raid Devices'
+			local DEVICES_COUNT=$( $CMD_MDADM --detail $RAID_DEVICE 2>/dev/null | $CMD_GREP -E "^[[:space:]]*$TOKEN : " | $CMD_SED 's@^.*: @@g' )
+			local FORCE='--force'
+			[ $DEVICES_COUNT -gt 2 ] && FORCE=''
+			$CMD_MDADM $RAID_DEVICE --grow --raid-devices=$(($DEVICES_COUNT-1)) $FORCE >$OUT_TMP 2>$ERR_TMP
+			[ $? -ne $TRUE ] && abort "failure while growing $RAID_DEVICE"
+		else
+			abort "the device $DISK does NOT belong to the $RAID_DEVICE device."
+		fi
+	else
+		log_error "the file $OPT_REMOVE_ARG does NOT belong to a block device"
+	fi
+	
+	MESSAGE="the device $DISK has been correctly removed from the $RAID_DEVICE array."
+	log "$MESSAGE"
+	! is_verbose && echo -e "$MESSAGE"
+	
+	log_function_end $FUNCNAME
+}
+
+# The function will enable some speedup features, will wait for the
+#  resync/recovery/reshape operations to be complete then it will automatically
+#  disable the speedup options.
+function do_speedup(){	
+	log_function_start $FUNCNAME $*
+	local MESSAGE=''
+	
+	ENABLED=$( echo "$OPT_SPEEDUP_ARG" | $CMD_TR '[:lower:]' '[:upper:]')
+	if [[ $ENABLED =~ ^OFF$ ]]; then
+		MESSAGE='SPEEDUP: OFF'
+		log "$MESSAGE"
+		! is_verbose && echo -e "$MESSAGE"
+		$CMD_SYSCTL -w dev.raid.speed_limit_min=${RAID_SPEED_MIN:-1000} >$OUT_TMP 2>$ERR_TMP
+		MESSAGE="dev.raid.speed_limit_min (re)set to ${RAID_SPEED_MIN:-1000}"
+		log "$MESSAGE"		
+	elif [[ $ENABLED =~ ^ON$ ]]; then
+		MESSAGE='SPEEDUP: ON'
+		log "$MESSAGE"
+		! is_verbose && echo -e "$MESSAGE\nwaiting for resync/recovery/reshape phase to be complete..."
+		RAID_SPEED_MIN="$($CMD_SYSCTL -n dev.raid.speed_limit_min)"
+		local RAID_SPEED_MAX="$($CMD_SYSCTL -n dev.raid.speed_limit_max)"
+		$CMD_SYSCTL -w dev.raid.speed_limit_min=$RAID_SPEED_MAX >$OUT_TMP 2>$ERR_TMP
+		MESSAGE="dev.raid.speed_limit_min set to ${RAID_SPEED_MAX} (was ${RAID_SPEED_MIN})"
+		log "$MESSAGE"
+		OPT_SPEEDUP_ARG='OFF'
+		$CMD_MDADM --wait $RAID_DEVICE >$OUT_TMP 2>$ERR_TMP
+		MESSAGE="resync/recovery/reshape phase completed."
+		log "$MESSAGE"
+		! is_verbose && echo -e "$MESSAGE"
+		do_speedup		
+	else
+		abort "unsupported parameter specified: $ENABLED"
+	fi
+	
+	
+	log_function_end $FUNCNAME
+}
+
+# The function will report the current status of the raid array.
+function do_status(){	
+	log_function_start $FUNCNAME $*
+	
+	raid_info
+	RAID=$?
+	local MESSAGE=''
+	if [ $RAID -eq 0 ]; then
+		MESSAGE='UP'	
+	elif [ $RAID -eq 1 ]; then
+		MESSAGE='DEGRADED'
+	elif [ $RAID -eq 2 ]; then
+		MESSAGE='DEGRADED'
+	elif [ $RAID -eq 4 ]; then
+		MESSAGE='DOWN'
+	else
+		MESSAGE='NOT-VALID'
+	fi
+	log "raid status: $MESSAGE"
+	
+	! is_verbose && echo -e "$MESSAGE"
+	
+	log_function_end $FUNCNAME
+}
+
+# The function unmounts a mounted raid array.
+function do_unmount(){
+        log_function_start $FUNCNAME $*
+        if is_mounted; then
+	log "Executing Umount Operation on data mount point.."
+        $CMD_UMOUNT "$MOUNT_POINT" >$OUT_TMP 2>$ERR_TMP        
+	if [ $? -ne 0 ]; then
+                        busyfs_data
+                        local PIDS="$(get_pids)"
+                        log "here a list of pids:commands having open handles on the raid device:"
+                        while read P; do
+                                log "$P"
+                        done < <(echo "$PIDS")
+                        abort "Umount failed! Busy filesystem?"
+                fi
+                echo "$RAID_DEVICE unmounted"
+        else
+                echo "$RAID_DEVICE already unmounted"
+        fi
+
+        log_function_end $FUNCNAME
+}
+
+# The function does nothing.
+function do_verbose(){	
+	log_function_start $FUNCNAME $*
+	log_function_end $FUNCNAME
+}
+# Functions ---------------------------------------------------------------- END
+
+# pre-MAIN
+sanity_check
+# MAIN ------------------------------------------------------------------- BEGIN
+parse_cmdline $@
+# MAIN --------------------------------------------------------------------- END
+system_cleanup
+exit $TRUE

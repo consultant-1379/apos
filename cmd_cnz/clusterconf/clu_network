@@ -1,0 +1,186 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       clu_network
+#
+# Description:
+#       This is an internal command invoked from clusterconf tool.
+#       This command is used to validate the input parameters passed to the cluster commands
+##
+# Changelog:
+# Changelog:
+# - Wed Feb 5 2020 - Yeswanth Vankayala (xyesvan)
+#    IPv6 Impacts for clu command
+# - Tue Dec 10 2013 - Roni Newatia(xronnew)
+#       Updated validate_ip for valid subnetmask
+#
+# Author: Satya Deepthi
+
+# Load the common functions.
+. /opt/ap/apos/bin/clusterconf/clu_sc
+
+
+# Check if the network ip is valid
+function validate_network_ip() {
+  local network="$1"
+  local rCode=$exit_success
+  local ipaddr=$(echo $network | awk -F '/' '{print $1}')
+  local prefix=$(echo $network | awk -F '/' '{print $2}')
+  if echo "$ipaddr" | $CMD_GREP -E '[0-9a-f]+:+' >/dev/null; then
+    if [ $prefix -gt 128 ]; then
+      rCode=1
+      return $rCode
+    fi
+    isValidIPv6 $ipaddr || rCode=1
+  else
+    if [ $prefix -gt 32 ]; then
+      rCode=1
+      return $rCode
+    fi
+    isValidIPv4 $ipaddr || rCode=1
+  fi
+
+  return $rCode
+}
+
+# To delete an existing n/w rule
+delete() {
+  word=${!1}
+  rule=${!2}
+  rule_num=$(validate_integer rule)
+  if [ $? -ne 0 ]; then
+    help
+    echo "Enter rule number as argument. Empty values not accepted "
+    exit 1
+  fi
+
+  # Calling cluster_parse file to delete rule
+  $clu_file $word --delete $rule_num
+}
+
+# To add/ modify an existing rule
+add_mod() {
+  word=${!1}
+  arg=${!2}
+  name=${!3}
+  ipaddr_new=${!4}
+  st=${!5}
+
+  w1=$(echo $arg | cut -d : -f 2)
+  if [ "$w1" != "$word" ]; then
+    echo "Wrong format"
+    help
+    exit 1
+  fi
+        
+  if [ $st == "modify" ]; then
+    rule=$(echo $arg | cut -d: -f 1)
+    rule_num=$(validate_integer rule)
+    if [ $? -ne 0 ]; then
+      help
+      echo "Enter correct format of arguments. "
+      exit 1
+    fi
+  fi
+	
+  validate_network_ip $ipaddr_new
+  if [ $? -ne 0 ]; then
+    help
+    echo "IP address should be of IPv4 or IPv6 address format. Empty values not accepted "
+    exit 1
+  fi
+
+  name_new=$(validate_name name)
+  if [ $? -ne 0 ]; then
+    help
+    echo "Empty values not accepted for network name"
+    exit 1
+  fi
+
+  # Calling cluster_parse file to modify network rule
+  rule="$word $name_new $ipaddr_new"
+  chk_rule="$word $name_new"
+  if [ $st == "modify" ]; then
+    $clu_file $word --modify $rule_num $rule $chk_rule
+  else
+    $clu_file $word --add $rule $chk_rule
+  fi
+ }
+
+# To display existing DNS rules
+display() {
+  $clu_file $word --display
+}
+
+# To display help
+help(){
+echo "
+Usage: clu_network <option> <rule>
+
+Options:
+-a|--add 	<New-rule>			To add a new $word rule 
+-d|--delete 	<Existing-rule-number>		To delete an existing $word rule
+-m|--modify 	<rule number>:<new-rule>	To modify an existing $word rule
+-D|--display					To display all the existing rules
+-h|--help					To display help
+
+Rule: network <network name> <network address>/<network prefix>
+<network name>				Eg. internal, external, default etc.
+<network address>/<network prefix> 	Eg. 192.168.0.0/24, 2010:ae24:123e::1/64 
+"
+}
+
+
+#Main
+pwd=`pwd`
+fname="clu_parse"
+clu_file="/opt/ap/apos/bin/clusterconf/$fname"
+word="network"
+
+if [ -f /cluster/etc/cluster.conf ]; then
+  clu_Conf_path="/cluster/etc/"
+  clu_Conf_file="cluster.conf"
+else
+  echo -e "\n/cluster/etc/cluster.conf file does not exists"
+  exit 1
+fi
+
+if [ -f "$clu_file" ]; then
+  if [ -x "$clu_file" ]; then
+    ch=$1
+    arg=$2
+    arg3=$3
+    arg4=$4
+    case $ch in
+      --add|-a)
+              st="add"
+              add_mod word arg arg3 arg4 st
+              ;;
+      --delete|-d)  
+                 delete word arg
+                 ;;
+      --modify|-m)
+                 st="modify"
+                 add_mod word arg arg3 arg4 st
+                 ;;
+      --display|-D)
+                  display
+                  ;;
+      --help|-h) 
+               help
+               ;;
+      *) echo -e "\nWrong input format, please follow the below format...\n"
+         help
+         ;;
+    esac 
+  else
+    echo -e "\n$clu_file is not executable"
+  fi
+else
+  echo -e "\n$clu_file file does not exists"
+fi
+

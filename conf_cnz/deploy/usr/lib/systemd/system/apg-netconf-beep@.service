@@ -1,0 +1,8 @@
+[Unit]
+Description=NETCONF-beep Server
+After=local-fs.target
+
+[Service]
+User=netcc
+ExecStart=-/opt/com/bin/netconf
+StandardInput=socket

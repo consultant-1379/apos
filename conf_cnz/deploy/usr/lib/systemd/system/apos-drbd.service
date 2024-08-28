@@ -1,0 +1,11 @@
+[Unit]
+Description=APOS drbd
+
+[Service]
+ExecStart=/usr/lib/systemd/scripts/apos-drbd.sh start
+ExecStop=/usr/lib/systemd/scripts/apos-drbd.sh stop
+Type=oneshot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=lde-servicestart.target

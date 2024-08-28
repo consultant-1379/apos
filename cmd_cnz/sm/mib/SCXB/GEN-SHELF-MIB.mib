@@ -1,0 +1,2705 @@
+-- =====================================================================
+--
+-- %CCaseFile:	GEN-SHELF-MIB.mib %
+-- %CCaseDocNo:	10/196 03-CRA 119 1365 Ux %
+-- %Rev: D %
+-- Author:	uabhlar
+-- 
+-- =====================================================================
+--
+-- Copyright (C) 2009-2010 by Ericsson AB
+-- S-126 25  STOCKHOLM
+-- SWEDEN, tel int + 46 8 719 0000
+--
+-- This Program may be used and/or copied only with the written 
+-- permission from Ericsson AB, or in accordance with the terms and
+-- conditions stipulated in the agreement/contract under which the 
+-- program has been supplied.
+--
+-- All rights reserved.
+--
+-- =====================================================================
+--
+-- REVISION HISTORY
+--
+-- Rev     Date         Name        What
+-- ===     ==========   ========    ====
+-- PB1     2010-02-11   uabhlar     - New Common LED objects
+--                                  - New Autonomous objects
+--
+-- PB2     2010-02-16   uabhlar     - New Mbus MAC address objects
+--                                  - New Diagnostic Test objects
+--                                  - New Factory default objects
+--                                  - New Led test object
+--
+-- PB3     2010-03-11   uabhlar     - New IPMI boot MAC address object
+--                                  - New Diagnostic Test Notification
+--                                  - New Backplane identity objects
+--                                  - shelfMgrCmd object; 
+--                                      restart(2) -> goToIdle(2)
+--                                  - Description of result when 
+--                                    reading of read-write objects
+--                                  - Description pfmModuleLed; 
+--                                      LED lit at power-on
+--                                  - Modified IPMI and PFM upgrade 
+--                                    result values
+--                                  - New sensor ID values: 
+--                                      137 and 161
+--
+-- PB4     2010-04-14   uabhlar     - Name change in all MIB:
+--                                     subrack -> shelf; 
+--                                     board -> blade
+--                                  - SensorIDValues extended from
+--                                    161  to 255 (future proof).
+--                                  - Updated PFM flag description
+--                                  - New PFM module table objects
+--                                  - New bladeIOExpanderLed04 
+--                                      (FEX LED) object
+--                                  - New serial RP Bus object added:
+--                                      shelfMgrRPBS
+--                                  - New type of shelf object added:
+--                                      shelfType
+--                                  - Compliance statements optional
+-- PB5     2010-04-21   uabhlar     - Doc number changed. Was faulty.
+--                                  - Textual conventions to GEN-TC-MIB
+--                                  - PFM parts to GEN-PFM-MIB
+--                                  - shmcSlotPos SYNTAX SlotValues
+--                                  - New Shelftype to GEN-TC-MIB
+--                                  - bladeIOExpanderLed04 ->
+--                                         bladeIOExpander04
+--                                  - bladeLedType added
+-- PB6     2010-04-26   uabhlar     - shelfBpVendorName removed
+-- PB7     2010-04-27   uabhlar     Doc number changed
+-- PB8     2010-04-30   uabhlar     - SlotValues back from GEN-TC-MIB
+--                                  - ShelfTypes back from GEN-TC-MIB
+-- PB9     2010-05-10   uabhlar     Old OID numbers as before PFM parts
+--                                  moved to own mib to be preserved.
+-- PB10    2010-05-27   uabhlar     - Backplane prod number and name
+--                                    examples now have relevant values.   
+--                                  - Following objects modified due
+--                                    to "not supported":
+--                                      bladeGreen/Red/Yellow/Led
+--                                      bladeIPMIData 
+--                                      bladeIPMIUpgrade
+--                                      bladeIPMIUpgradeStatus
+--                                      bladeIPMIReset
+--                                      bladeFirst/Consecutive/MacAddr
+--                                      bladeBIOSXXXX
+--                                      bladeFatalEventLogInfo
+--                                      bladeCommonGreen/Red/Yellow/Blue/Led
+--                                      bladeDiagnosticTest/Status
+--                                      bladeMacAddrA/B, bladeBootMacAddr
+--                                      bladeLedTest
+-- PB11    2010-06-04   uabhlar       - Additional objects modified due
+--                                      to "not supported":
+--                                      shelfMgrRPBS
+--                                      bladeFatalEventLogInfo
+-- B       2010-06-08   uabhlar       Updated after mail review
+--                                    - genShelfMIB MODULE-IDENTITY
+--                                      Updated description
+--                                    - SlotValues updated.
+--                                    MIB in firm revision.
+-- PC1     2010-07-28   uabhlar       New object: shelfMgrNotificationSending 
+-- PC2     2010-08-02   uabhlar	      Obsolete
+-- PC3     2010-08-27   uabhlar       Consistent Error codes.
+--                                    MODULE-IDENTITY Description, updated
+-- PC4     2010-08-27   uabhlar       More examples on sensorValues and
+--                                    sensorStates.
+-- PC5     2010-08-31   uabhlar	      - notAvailable changed to notSupported
+--                                      for object powerState
+--                                    - The objects bladePwrOff and bladePwrOn
+--                                      are replaced by the object bladePwr.
+--                                    - Description changed for objects
+--                                      sensorIDIndex, gprIndex and
+--                                      fatalEventIndex
+--                                    - Description made clearer for all
+--                                      Common LED objects.
+-- PC6     2010-09-06   uabhlar	      - MODULE-IDENTITY Description updated
+--                                    - New value notSupported(2) for
+--                                      object bladeLedType and bladePwr
+--                                    - gprIndex and fatalEventIndex
+--                                      both read/write applicable.
+-- PC7     2010-09-07   uabhlar	      - MODULE-IDENTITY Description updated
+--                                    - shelfMgrCtrlState syntax and
+--                                      description changed.
+--                                    - shelfMgrNotificationSending
+--                                      description changed.
+--                                    - For sensorValue/sensorState
+--                                      examples now see GEN-TC-MIB
+--                                    - gprIndex and fatalEventIndex
+--                                      description changed.
+-- PC8     2010-09-08   uabhlar	      - MODULE-IDENTITY description updated
+--                                    - shelfMgrState description updated
+--                                    - gprDataValue description updated 
+-- PC9     2010-09-08   uabhlar	      - MODULE-IDENTITY description updated
+-- PC10    2010-09-08   uabhlar	      - MODULE-IDENTITY description updated
+--                                    - shelfMgrState, hwBladePresence,
+--                                      bladePresenceStatus, and gprIndex 
+--                                      descriptions updated    
+-- C       2010-09-16   uabhlar	      - Firm revision after review.
+--                                    - MODULE-IDENTITY description updated
+--				      - Notification shelfAddressChange
+--                                      now contains shelfPhysicalAddress
+--                                    - Object bladePresenceStatus now only
+--                                      returns inserted|accessible
+--                                    - Object fatalEventIndex; The maximum
+--                                      number of fatal events depends on
+--                                      IPMI FW version.
+-- D       2010-10-04   uabhlar	      Object bladePresenceStatus. Changed
+--                                    values for inserted and accessible
+-- =====================================================================
+
+GEN-SHELF-MIB  DEFINITIONS ::= BEGIN          
+
+IMPORTS
+	MODULE-IDENTITY,
+	OBJECT-TYPE,
+	NOTIFICATION-TYPE,
+	Integer32,
+        IpAddress,	
+	enterprises	
+		FROM SNMPv2-SMI
+
+	TEXTUAL-CONVENTION,	
+	DisplayString,
+        MacAddress,
+	RowStatus          
+		FROM SNMPv2-TC
+
+	OBJECT-GROUP,             
+        NOTIFICATION-GROUP,
+        MODULE-COMPLIANCE       
+                FROM SNMPv2-CONF
+
+ 	SensorTypeValues, 
+	SensorTypeCodeValues,
+	SensorIDValues, 
+	SensorEventDataValues,
+	CommonLedStates,
+	DiagTestResult
+		FROM GEN-TC-MIB;
+ 
+-- *********************************************************************
+
+genShelfMIB MODULE-IDENTITY
+        LAST-UPDATED 
+   		"201010040000Z"
+        ORGANIZATION
+		"Ericsson AB"
+	CONTACT-INFO
+		"E-mail: ingvar.froroth@ericsson.com"       
+	DESCRIPTION
+		"This MIB module defines Shelf Management objects 
+                 for a generic shelf.
+
+		 Read and Write operations on shelfObjects are permitted
+		 towards both Shelf Managers.
+
+
+		 Rules for IPMI blades
+		 =====================
+
+		 The Shelf Manager control states idle, passive, 
+		 passiveDegraded and active are only applicable for 
+		 IPMI blades.
+
+                 A general rule is that read and write operations
+                 on IPMI equipped blades shall be done towards
+                 the active Shelf Manager.
+
+		 An exception to the rule is read or read/write operations 
+		 on the following own bladeObjects that are possible
+		 towards a Shelf Manager in control state passive or 
+		 passiveDegraded:
+
+		 - bladeIPMIData		(read-only)
+		 - bladeIPMIUpgrade		(read-write)
+		 - bladeIPMIUpgradeStatus	(read-only)
+		 - bladeIPMIReset		(read-write)
+
+		 Read operations on other IPMI bladeObjects towards a 
+		 non active Shelf Manager will result in a SNMP exception
+		 'no such instance'.
+
+		 Write operations on other IPMI bladeObjects towards a 
+		 non active Shelf Manager will always result in the SNMP 
+		 error message resourceUnavailable (13, 0xD).
+
+
+
+		 Read/Write operations on IPMI bladeObjects towards the 
+		 active Shelf Manager that fails due to IPMB (IPMI I2C bus) 
+		 fault (hanging bus) will result in the SNMP error message
+		 genErr(5). 
+
+		 If the IPMI bus A/B is hanging for more than x ms then the 
+		 corresponding sensor SENSOR_ID_IPMB_A/B is set. 
+
+		 IPMI repeatedly tries to repair the bus and will hopefully 
+		 succeed at last and then the corresponding sensor is cleared.
+
+		 The information that an IPMI bus is hanging/normal is 
+		 signalled in the sensorStateChange notification but is 
+		 not stored in the Fatal Event Log,FEL log, in IPMI.
+
+
+
+		 Rules for MBUS blades
+		 =====================
+
+		 For MBUS blades the Shelf Manager in position 0 
+		 controls the MBUS blades in positions 1-12 and the 
+		 Shelf Manager in position 25 controls the MBUS 
+		 blades in positions 13-24.
+
+
+		 Read operations towards MBUS bladeObjects in 
+		 positions 1-12 from the Shelf Manager in position 25,
+		 as well as read/write operations towards MBUS 
+		 bladeObjects in positions 13-24 from the Shelf Manager 
+		 in position 0, will result in a SNMP exception 
+		 'no such instance'.
+
+		 Write operations towards MBUS bladeObjects in 
+		 positions 1-12 from the Shelf Manager in position 25,
+		 as well as read/write operations towards MBUS 
+		 bladeObjects in positions 13-24 from the Shelf Manager 
+		 in position 0, will result in a SNMP error message 
+		 noCreation (11, 0xB).
+
+
+
+
+		 Rules for both IPMI and MBUS blades
+		 ===================================
+
+		 Read operations on IPMI or MBUS bladeObjects for a 
+		 specific blade before that blade is reported as 
+		 'accessible' will result in a SNMP exception 
+		 'no such instance' even if the Shelf Manager is in 
+		 a valid control state.
+
+		 Exception to this rule is that read operations on the objects:
+
+		 - bladePresenceStatus		  (read-only)
+		 - bladeBusType                   (read-only)
+
+		 are permitted after the blade has been reported as 'inserted'.
+		 Note that when all IPMI resp. MBUS blades have been reported
+		 as 'inserted' the object 'shelfMgrCtrlState' will indicate 
+		 'inventory finished' for IPMI resp. MBUS blades.
+		 
+		 Write operations on IPMI or MBUS bladeObjects for a 
+		 specific blade before that blade is reported as 
+		 'accessible' will result in the SNMP error message: 
+		 inconsistentValue (12 0xC) even if the Shelf Manager 
+		 is in a valid control state.
+
+
+		 Read operations on not supported IPMI bladeObjects 
+		 on an MBUS blade as well as read operations on not 
+		 supported MBUS bladeObjects on an IPMI blade,
+		 will return specific values depending on object. 
+
+		 Write operations on not supported IPMI bladeObjects 
+		 on an MBUS blade as well as write operations on not 
+		 supported MBUS bladeObjects on an IPMI blade,
+		 will return the SNMP error message notWritable (17, 0x11).
+
+
+		 Read operations towards IPMI or MBUS bladeObjects 
+		 in non-equipped slot positions will result in a SNMP 
+		 exception 'no such instance'.
+		 Write operations towards IPMI or MBUS bladeObjects 
+		 in non-equipped slot positions will result in the SNMP 
+		 error message noCreation (11, 0xB)." 
+
+	-- Revision history.	  
+	REVISION
+	   "201010040000Z"
+	DESCRIPTION
+           "See top of document"
+                                                           
+        ::= { enterprises ericsson(193) components(177) 
+              generic(2) equipment(2) genShelfMIB(1) }
+
+-- ---------------------------------------------------------------------
+-- Groups in the MIB
+-- ---------------------------------------------------------------------
+
+notifications         OBJECT IDENTIFIER ::= { genShelfMIB 0 }
+notificationObjects   OBJECT IDENTIFIER ::= { genShelfMIB 1 }
+
+shelf                 OBJECT IDENTIFIER ::= { genShelfMIB 2 }
+   shelfObjects          OBJECT IDENTIFIER ::= { shelf 1 }
+
+blade                 OBJECT IDENTIFIER ::= { genShelfMIB 3 }
+   bladeObjects          OBJECT IDENTIFIER ::= { blade 1 }
+   sensorObjects         OBJECT IDENTIFIER ::= { blade 2 }
+   gprObjects            OBJECT IDENTIFIER ::= { blade 3 }
+   feObjects             OBJECT IDENTIFIER ::= { blade 4 }   
+
+conformance           OBJECT IDENTIFIER ::= { genShelfMIB 4 }
+   groups                OBJECT IDENTIFIER ::= { conformance 1 }
+   compliance            OBJECT IDENTIFIER ::= { conformance 2 }
+
+
+
+--**********************************************************************
+-- Textual Conventions
+--**********************************************************************
+SlotValues ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d"
+    STATUS	current
+    DESCRIPTION
+	"This textual convention describes the 
+	 logical slot configuration.
+
+	 The physical numbering in the backplane 
+         for a EGEM2_10G/EGEM2_40G shelf is:
+            slot 25       = Base Switch left side
+            slot 26       = Data switch left side
+            slot 1-24     = Application blades
+            slot 27       = Base Switch right side
+            slot 28	  = Data Switch right side
+
+	The physical numbering in the backplane 
+        for a CAS shelf is:
+	    slot 0        = Data switch left side
+	    slot 1        = Data Switch right side
+		 
+	Thus giving the following logical numbering:
+
+	BASE_SWITCH_LEFT		= 0,
+	CAS_LEFT			= 0,
+	CAS_RIGHT			= 1,
+ 	APPLICATION_BLADE_1		= 1, 
+        APPLICATION_BLADE_2		= 2, 
+	APPLICATION_BLADE_3		= 3, 
+        APPLICATION_BLADE_4		= 4, 
+	APPLICATION_BLADE_5		= 5, 
+        APPLICATION_BLADE_6		= 6, 
+	APPLICATION_BLADE_7		= 7, 
+        APPLICATION_BLADE_8		= 8, 
+	APPLICATION_BLADE_9		= 9, 
+        APPLICATION_BLADE_10		= 10,
+	APPLICATION_BLADE_11		= 11, 
+        APPLICATION_BLADE_12		= 12, 
+	APPLICATION_BLADE_13		= 13, 
+        APPLICATION_BLADE_14		= 14, 
+	APPLICATION_BLADE_15		= 15, 
+        APPLICATION_BLADE_16		= 16, 
+	APPLICATION_BLADE_17		= 17, 
+        APPLICATION_BLADE_18		= 18, 
+	APPLICATION_BLADE_19		= 19, 
+        APPLICATION_BLADE_20		= 20,
+        APPLICATION_BLADE_21		= 21,
+        APPLICATION_BLADE_22		= 22,
+        APPLICATION_BLADE_23		= 23,
+        APPLICATION_BLADE_24		= 24,
+	BASE_SWITCH_RIGHT		= 25,
+	DATA_SWITCH_LEFT		= 26,  
+        DATA_SWITCH_RIGHT	  	= 28"
+
+     SYNTAX Integer32 (0..28)
+
+
+ShelfTypes ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d"
+    STATUS	current
+    DESCRIPTION
+	"This textual convention describes different types 
+	 of shelf types.
+	 0 = EGEM 
+	 1 = EGEM2_40 
+	 2 = EGEM2_10 
+	 3 = Reserved for future EGEM type
+
+	 4 = CAS
+	 Other values are reserved for future use."
+     SYNTAX Integer32 
+
+PhysicalAddressValue ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d"
+    STATUS	current
+    DESCRIPTION
+	"This textual convention describes tThe present 
+	 value of the shelf address.
+           BIT 0 is Least Significant Bit (LSB)
+           BIT  #3-0: Plug #0  
+           BIT  #7-4: Plug #1
+           BIT #11-8: Plug #3
+           BIT #12  : Parity error Plug #0
+	   BIT #13  : Parity error Plug #1
+	   BIT #14  : Parity error Plug #3"
+     SYNTAX Integer32 (0..65535)
+
+--**********************************************************************
+-- notificationObjects    OBJECT IDENTIFIER ::= { genShelfMIB 1 }
+--**********************************************************************     
+shelfNum OBJECT-TYPE 
+    SYNTAX      Integer32 (0..31)
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current   
+    DESCRIPTION
+	"The shelf number is a logical number, assigned
+	 at start-up, which is used to identify the shelf.
+       	 Value range 0-31."
+    ::= { notificationObjects 1 }
+
+shmcSlotPos OBJECT-TYPE 
+    SYNTAX      SlotValues
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current  
+    DESCRIPTION
+	"Slot position of blade on which the notification
+         sending Shelf Manager Controller (ShMC) is located.
+         Value range according to SlotValues."
+    ::= { notificationObjects 2 }
+
+slotPos OBJECT-TYPE 
+    SYNTAX      SlotValues
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current  
+    DESCRIPTION
+	 "Blade slot position within the shelf
+	  Value range according to SlotValues."
+    ::= { notificationObjects 3 }
+
+shelfMgrState OBJECT-TYPE 
+    SYNTAX      INTEGER {idle(0), passive(1), passiveDegraded(2), 
+			 active(3), inventoryFinishedIpmi(4),
+                         inventoryFinishedMbus(5)
+                         }
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+	"Shelf Manager controller status.
+
+	 Shelf Manager Control States for IPMI blades:
+	     idle(0), 
+	     passive(1), 
+	     passiveDegraded(2), 
+	     active(3)
+	 
+	 All IPMI blades has been scanned:
+	     inventoryFinishedIpmi(4)
+
+	 All MBUS blades has been scanned:
+	     inventoryFinishedMbus(5)
+
+	     Note regarding inventoryFinishedIpmi/inventoryFinishedMbus
+	     that this mean that all IPMI/MBUS blades now are in
+	     bladePresenceStatus: inserted."
+    ::= { notificationObjects 4 }
+
+neighbour OBJECT-TYPE 
+    SYNTAX      INTEGER {absent(0), present(1)}
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+	"Neighbour Shelf Manager controller presence information"
+    ::= { notificationObjects 5 }
+
+controlBrdIpAddress OBJECT-TYPE
+    SYNTAX      IpAddress
+    MAX-ACCESS  accessible-for-notify
+    STATUS	current
+    DESCRIPTION	
+	"SNMP agent IP address on blade where the 
+	 notification sending Shelf Manager 
+         Controller (shmc) is located."
+    ::=	{ notificationObjects 6 }
+
+hwBladePresence OBJECT-TYPE 
+    SYNTAX      INTEGER {removed(0), inserted(1), 
+                         notAccessible(2), accessible(3)}
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+	"Blade presence indication.
+
+         removed(0):	    The blade has been removed from the shelf.
+
+	 inserted(1):	    The blade has been scanned by IPMI
+			    and found to be inserted.
+			     
+	 notAccessible(2):  An active Shelf Manager has been ordered
+			    to go to idle state. All blades will then
+			    be reported as notAccessible.
+
+	 accessible(3):	    When the active Shelf Manager has successfully
+			    read data from a blade then the blade is
+			    reported as accessible."
+    ::= { notificationObjects 7 }
+
+busType OBJECT-TYPE 
+    SYNTAX      INTEGER {ipmi(0), mbus(1)}
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+	"Type of bus."
+    ::= { notificationObjects 8 }
+
+sensorType OBJECT-TYPE 
+    SYNTAX      SensorTypeValues
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+       "This object defines different types of sensors.
+	See Textual Convention: SensorTypeValues."
+    ::= { notificationObjects 9 }
+
+sensorID OBJECT-TYPE 
+    SYNTAX      SensorIDValues 
+    MAX-ACCESS  accessible-for-notify 
+    STATUS      current 
+    DESCRIPTION
+        "This object defines different sensor numbers.
+         See Textual Convention: SensorIDValues." 
+    ::= { notificationObjects 10 }
+
+sensorTypeCode OBJECT-TYPE 
+    SYNTAX      SensorTypeCodeValues 
+    MAX-ACCESS  accessible-for-notify 
+    STATUS      current 
+    DESCRIPTION
+        "This object defines different types of sensor event codes:
+         See Textual Convention: SensorTypeCodeValues" 
+    ::= { notificationObjects 11 }
+
+sensorEventData OBJECT-TYPE 
+    SYNTAX       SensorEventDataValues 
+    MAX-ACCESS   accessible-for-notify 
+    STATUS       current 
+    DESCRIPTION 
+       "The state values have different meanings for 
+        different type of sensors.
+        See Textual Convention: SensorEventDataValues."
+ ::= { notificationObjects 12 }
+
+
+ipmiUpgradeResultValue OBJECT-TYPE 
+    SYNTAX      Integer32
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+        "Result of an IPMI upgrade request.
+         Reserved values are:
+         0 = ok
+         1 = fileError; error when accessing/reading FW file
+         2 = otherError
+         Further values to be defined."
+    ::= { notificationObjects 13 }   
+
+-- notificationObjects pfmType, pfmInstance, pfmFanFlags,
+-- pfmPowerFlags, pfmInterfaceFlags and pfmUpgradeResultValue
+-- are moved to the GEN-PFM-MIB   
+
+ipmiFwType OBJECT-TYPE 
+    SYNTAX      OCTET STRING (SIZE (1)) 
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+	    "IPMI FW type (Mode).
+	     Upgradeable(UPG) = 0, 
+             Fallback   (FB)  = 1"
+    ::= {notificationObjects 20}
+
+ipmiFwVersion OBJECT-TYPE 
+    SYNTAX      OCTET STRING (SIZE (2)) 
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+	"IPMI FW version.
+	 Most significant digit Hex, 
+         least significant digit BCD"
+    ::= {notificationObjects 21}
+
+ipmiFwTimestamp OBJECT-TYPE 
+    SYNTAX      OCTET STRING (SIZE (4)) 
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+	"Standard timestamp, LSB first.
+         The time is given in seconds since 1970-01-01 00:00 UTC"
+    ::= {notificationObjects 22}
+
+selEntry OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (15))
+    MAX-ACCESS  accessible-for-notify   
+    STATUS      current
+    DESCRIPTION
+        "One entry in the System Event Log (SEL) file 
+         contains the following octets: 
+            octets   1 - 4: Time Stamp. LSB first.
+            octet        5: Generator ID
+            octet        6: Event Message Revision
+ 	    octet        7: Sensor Type
+ 	    octet        8: Sensor Number
+            octet        9: Event Type
+            octets 10 - 15: Event Data"
+    ::= {notificationObjects 23}
+
+typeOfBpIdError OBJECT-TYPE 
+    SYNTAX      Integer32
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current 
+    DESCRIPTION
+	"Type of error when reading the backplane ID EEPROM
+         0 = checksum error
+         1 = no acknowledge
+         2 = Left / Right ID EEPROM values differs"
+    ::= { notificationObjects 24 }
+
+resultOfDiagnosticTest OBJECT-TYPE 
+     SYNTAX      DiagTestResult
+     MAX-ACCESS  accessible-for-notify
+     STATUS      current 
+     DESCRIPTION
+ 	 "Result of a diagnostic test.
+          See textual convention DiagnosticTestResultValue."
+     ::= {notificationObjects 25}
+
+shelfPhysicalAddress OBJECT-TYPE 
+     SYNTAX  PhysicalAddressValue
+     MAX-ACCESS  accessible-for-notify
+     STATUS      current 
+     DESCRIPTION
+ 	 "The present value of the shelf address.
+	  For values see textual convention PhysicalAddressValue."
+     ::= {notificationObjects 26} 
+
+--**********************************************************************     
+-- notifications   OBJECT IDENTIFIER ::= { genShelfMIB  0 }
+--**********************************************************************     
+shelfMgrCtrl NOTIFICATION-TYPE
+    OBJECTS { shelfNum, 
+	      shmcSlotPos,
+              shelfMgrState,
+	      neighbour
+	    }
+    STATUS  current
+    DESCRIPTION
+    	"Indicates a status change of the Shelf Manager Controller."
+    ::= { notifications  1 }    
+
+
+bladePresence NOTIFICATION-TYPE
+    OBJECTS { shelfNum, 
+	      slotPos,
+	      hwBladePresence,
+	      busType
+            }
+    STATUS  current
+    DESCRIPTION
+    	"Indicates presence status change of a blade."
+    ::= { notifications 2 }    
+
+
+sensorStateChange	NOTIFICATION-TYPE
+    OBJECTS { shelfNum, 
+	      slotPos,
+	      sensorType, 
+	      sensorID,		      
+	      sensorTypeCode, 
+	      sensorEventData
+	    }
+     STATUS  current
+     DESCRIPTION
+         "Indicates that an IPMI supervised sensor 
+          has changed state."
+     ::= { notifications 3 }  
+
+
+shelfAddressChange  NOTIFICATION-TYPE
+     OBJECTS { shelfNum,
+	       shmcSlotPos,
+	       shelfPhysicalAddress
+	     }
+     STATUS  current
+     DESCRIPTION
+   	 "Indicates that the physical shelf address has changed.
+	  The actual physical address is included."
+     ::= { notifications 4}   
+
+-- notifications  pfmStateChange and pfmUpgradeResult are
+-- moved to the GEN-PFM-MIB
+ 
+ipmiUpgradeResult    NOTIFICATION-TYPE
+     OBJECTS { shelfNum,
+	       slotPos,
+	       ipmiUpgradeResultValue 
+	     }
+     STATUS  current
+     DESCRIPTION
+   	 "Indicates the result of a 
+          IPMI FW upgrade"
+     ::= { notifications 7 }   
+
+ipmiRestart    NOTIFICATION-TYPE
+     OBJECTS { shelfNum,
+		slotPos,
+	        ipmiFwType,
+	        ipmiFwVersion,
+	        ipmiFwTimestamp 
+	        }
+     STATUS  current
+     DESCRIPTION
+   	    "Indicates that IPMI FW has restarted."
+    	::= { notifications 8 }   
+
+systemEventLogEntry     NOTIFICATION-TYPE
+     OBJECTS { shelfNum,
+ 	       slotPos,
+ 	       selEntry
+ 	     }
+     STATUS  current
+     DESCRIPTION
+    	   "Indicates the reception of an entry 
+            in the System Event Log (SEL) file."
+     ::= { notifications 9 }    
+
+backplaneIdFaulty     NOTIFICATION-TYPE
+     OBJECTS { shelfNum,
+ 	       slotPos,
+               typeOfBpIdError
+ 	     }
+     STATUS  current
+     DESCRIPTION
+    	   "Backplane ID EEPROM faulty."
+     ::= { notifications 10 }  
+
+diagnosticTestResult      NOTIFICATION-TYPE
+    OBJECTS { shelfNum,
+	      slotPos,
+              resultOfDiagnosticTest 
+            }
+    STATUS  current
+    DESCRIPTION
+         "Indicates a result of a specific diagnostic test."
+
+    ::= { notifications 11 }    
+
+
+-- *********************************************************************
+-- shelf               OBJECT IDENTIFIER ::= { genShelfMIB 2 }
+--    shelfObjects        OBJECT IDENTIFIER ::= { shelf 1 }        
+-- *********************************************************************
+physicalAddress OBJECT-TYPE
+    SYNTAX PhysicalAddressValue
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+	"The present value of the shelf address.
+	 For values see textual convention PhysicalAddressValue."
+    ::= { shelfObjects 1 }
+
+powerState OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (2))
+    MAX-ACCESS  read-only    
+    STATUS      current
+    DESCRIPTION
+        "Each octet within this value specifies a 
+         shelf power type:
+            octet 1: power type A
+            octet 2: power type B
+
+         Each power type can then have the 
+            following states:
+               0 - ok
+	       1 - nok
+	       2 - notSupported"
+    ::= { shelfObjects 2 }
+
+shelfMgrCmd OBJECT-TYPE
+    SYNTAX      INTEGER {notScan(0), scan(1), goToIdle(2)}
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Set Shelf Manager Controller (ShMC) state.
+
+         - notScan (0)
+           Order stop scanning to IPMI and disable address 20h.
+         - scan (1)
+           Order start scanning to IPMI and enable address 20h.
+         - goToIdle (2)
+           This will cause the ShMC to go to idle state.
+           (ShMC will send notification shelfMgrCtrl with 
+            shelfMgrState=idle.)
+
+           In case the ShMC was active and scanning
+           then the IPMI scanning will be turned off.
+
+           If there is another passive ShMC in the shelf then 
+           this Shelf Manager will now go to active state.
+	   (The former passive ShMC will send notification 
+            shelfMgrCtrl with shelfMgrState=active.)
+
+	   If there isn't another Shelf Manager then this
+	   Shelf Manager will be active again.
+	   (This ShMC will send notification shelfMgrCtrl with 
+            shelfMgrState=active.)
+
+           The management application receiving the active
+           notification can then order start scanning by calling
+           this object with scan(1).
+
+	 Reading this object will return:
+           0: IPMI is not scanning
+           1: IPMI is scanning"
+    ::={ shelfObjects 3 }
+
+shelfMgrAliveCmd OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Shelf Manager alive protocol object.
+
+         - stop  (0)
+           Stop supervision protocol. 
+         - alive (1)
+           Set to indicate that management application is alive.
+	 - N     (2..)
+           Start supervision protocol using N seconds as a dead interval.
+           Thus if ShMC has not received a set operation on
+           shelfMgrAliveCmd object within N seconds, ShMC may consider
+           the interacting management application dead.  The interacting
+           management application will do the set operation regularly
+           every N/3 seconds
+         
+	 Reading this object will return:
+         0:  no supervision protocol is used
+	 >=2 interval in seconds when supervision protocol is used"
+    ::={ shelfObjects 4 }
+
+notificationAck OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Acknowledge of Shelf Notification.
+
+	 Reserved values are:
+         0 = shelfAddressChange
+	 1 = systemEventLogEntry
+	 2 = backplaneIdFaulty
+	 3 = diagnosticTestResult
+
+        Reading this object will always return 0"
+    ::={ shelfObjects 5 }
+
+-- shelfObject pfmScanning has been moved to the
+-- the GEN-PFM-MIB
+
+shelfMgrAutonomousMode OBJECT-TYPE
+    SYNTAX      INTEGER {notAutonomous(0), autonomous(1) }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Orders Shelf Manager controller to run in
+         in not autonomous or autonomous mode.
+
+         Reading this object will return:
+         0: Shelf Manager running in notAutonomous mode
+	 1: Shelf Manager running in autonomous mode."
+    ::={ shelfObjects 7 }
+
+shelfMgrCtrlState OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (3))
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Read Shelf Manager Controller status.
+
+	 The octets shows the following:
+            octet 1: Shelf Manager Control State for IPMI blades
+            octet 2: Inventory Finished State for IPMI blades
+	    octet 3: Inventory Finished State for MBUS blades
+
+         Shelf Manager Control State has one on the following values:
+            0 - idle
+	    1 - passive
+	    2 - passiveDegraded
+	    3 - active
+
+	 Inventory Finished State for IPMI blades has one on 
+	 the following values:
+            0 - Inventory Not Finished; IPMI scanning is not finished.
+	    1 - Inventory Finished; All IPMI blades have been scanned.
+
+	 Inventory Finished State for MBUS blades has one on 
+	 the following values:
+            0 - Inventory Ongoing; MBUS blades are beeing scanned.
+	    1 - Inventory Finished; All MBUS blades have been scanned."
+    ::={ shelfObjects 8 }
+
+shelfMgrNeighbourPresence OBJECT-TYPE
+    SYNTAX      INTEGER {absent(0), present(1)}
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Read Shelf Manager Controller neighbour presence."
+    ::={ shelfObjects 9 }
+
+shelfBpProductNumber OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Backplane Product Number (e.g. ROJ 609 1001/2),
+	 [24 ASCII characters]."
+    ::={ shelfObjects 10 }
+
+shelfBpProductRevisionState OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Backplane Product Revision State (e.g. P1C/3),
+	 [7 ASCII characters]."
+    ::={ shelfObjects 11 }
+
+shelfBpProductName OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Product Name (e.g. EGEM2 40G BP),
+	 [12 ASCII characters]."
+    ::={ shelfObjects 12 }
+
+shelfBpSerialNumber OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Serial Number (e.g. A27000 0141000),
+	 [13 ASCII characters
+	   6 characters for factory code
+           7 characters for individual number]."
+    ::={ shelfObjects 13 }
+
+shelfBpManufacturingDate OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Manufacturing Date (e.g. 20080124),
+	 [8 ASCII characters]."
+    ::={ shelfObjects 14 }
+
+shelfMgrRPBS OBJECT-TYPE
+    SYNTAX      Integer32 (0..4)
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+	"Writing a value to this object will cause
+         1,2,3 or 4 number of RPBS branches to be
+         connected to the Base Switch board.
+
+         Reading this object will return the number
+         of RPBS branches connected to the Base 
+         Switch board (1..4) or the value 0 if 
+         object is not supported."
+    ::={ shelfObjects 15 }
+
+shelfType OBJECT-TYPE
+    SYNTAX  ShelfTypes 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Type of shelf."
+    ::={ shelfObjects 16 }
+
+shelfMgrNotificationSending OBJECT-TYPE
+    SYNTAX      INTEGER {stop(0), start(1)}
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Shelf Manager object to start or stop 
+         sending of notifications.
+
+         - stop  (0)
+           Stop sending of notifications. 
+         - start (1)
+           Start sending of notifications.
+	   If in autonomous mode then start sending of notifications
+	   is not needed as it is default started.
+         
+	 Reading this object will return:
+         0: if notification sending is not started
+	 1: if notification sending is started"
+    ::={ shelfObjects 17 }
+
+-- *********************************************************************
+-- blade                 OBJECT IDENTIFIER ::= { genShelfMIB 3 }
+--   bladeObjects           OBJECT IDENTIFIER ::= { blade 1 }
+-- *********************************************************************
+
+-- ---------------------------------------------------------------------
+-- Blade Table
+-- ---------------------------------------------------------------------
+
+bladeTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF BladeEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The table handles blade related data in the shelf, 
+         by using the slot number as the index.
+	 An SNMP walk will only return data for present blades."
+    ::={ bladeObjects 1 }
+
+bladeEntry OBJECT-TYPE
+    SYNTAX      BladeEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "A entry in the BladeTable.
+         The table is indexed with SlotValues"
+    INDEX       { bladeIndex }
+    ::={ bladeTable 1 }
+     
+BladeEntry ::= 
+     SEQUENCE { 
+	 bladeIndex			SlotValues,
+	 bladeProductNumber		 DisplayString,
+	 bladeProductRevisionState	 DisplayString,
+	 bladeProductName		 DisplayString,
+	 bladeSerialNumber		 DisplayString,
+	 bladeManufacturingDate		 DisplayString,
+	 bladeVendorName		 DisplayString,
+	 bladeBusType			 INTEGER,
+	 bladeGreenLed			 INTEGER,
+	 bladeRedLed			 INTEGER,
+	 bladeYellowLed			 INTEGER,
+	 bladeReset			 Integer32,
+	 bladeIPMIData			 DisplayString,
+	 bladeIPMIUpgrade		 DisplayString,
+	 bladeIPMIUpgradeStatus		 INTEGER,
+	 bladeIPMIReset			 INTEGER,
+	 bladePresenceStatus		 INTEGER,	    
+	 bladeFirstMacAddr		 MacAddress,
+	 bladeConsecutiveMAC		 Integer32,
+	 bladeBIOSDefaultImage		 INTEGER,
+	 bladeBIOSPointer		 INTEGER,
+	 bladeBIOSRunMode		 INTEGER,
+	 bladeNotificationAck		 Integer32,		    
+	 bladeRowStatus			 RowStatus,
+         bladeFatalEventLogInfo		 OCTET STRING,
+	 bladeGracefulReset		 Integer32,
+	 bladeGracefulPwrOff		 Integer32,
+	 bladeCommonRedLed		 CommonLedStates,
+	 bladeCommonGreenLed		 CommonLedStates,
+	 bladeCommonBlueLed		 CommonLedStates,
+	 bladeCommonYellowLed		 CommonLedStates,
+	 bladeDiagnosticTest		 Integer32,
+         bladeDiagnosticTestStatus	 DiagTestResult,
+         bladeLedTest			 INTEGER,
+	 bladeMacAddrA			 MacAddress,
+	 bladeMacAddrB			 MacAddress,
+	 bladeReturnToFactoryDefault	 Integer32,
+         bladeBootMacAddr		 MacAddress,
+	 bladeIOExpander04	         INTEGER,
+	 bladeLedType			 INTEGER,
+	 bladePwr			 INTEGER
+
+-- ---------------------------------------------------------------------
+-- These objects are considered for future inclusion
+-- ---------------------------------------------------------------------
+
+--         bladeEnable                INTEGER,
+--         bladeDisable               INTEGER
+           }
+                
+bladeIndex OBJECT-TYPE  
+    SYNTAX SlotValues
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Index according to SlotValues"
+    ::={ bladeEntry 1 }
+
+bladeProductNumber OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Product number (e.g. ROJ xxx xxx/1),
+	 [24 ASCII characters]."
+    ::={ bladeEntry 2 }
+
+bladeProductRevisionState OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Product Revision State (e.g. P1C/3),
+	 [7 ASCII characters]."
+    ::={ bladeEntry 3 }
+
+bladeProductName OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Product Name (e.g. CMXB),
+	 [12 ASCII characters]."
+    ::={ bladeEntry 4 }
+
+bladeSerialNumber OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Serial Number (e.g. A27000 0141000),
+	 [13 ASCII characters
+	   6 characters for factory code
+           7 characters for individual number]."
+    ::={ bladeEntry 5 }
+
+bladeManufacturingDate OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Manufacturing Date (e.g. 20080124),
+	 [8 ASCII characters]."
+    ::={ bladeEntry 6 }
+
+bladeVendorName OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"Vendor Name (e.g.Ericsson ),
+	 [31 ASCII characters]."
+    ::={ bladeEntry 7 }
+
+bladeBusType OBJECT-TYPE 
+    SYNTAX      INTEGER {ipmi(0), mbus(1)}
+    MAX-ACCESS  read-only  
+    STATUS      current    
+    DESCRIPTION
+        "Type of bus"
+    ::={ bladeEntry 8 }
+
+bladeGreenLed OBJECT-TYPE 
+    SYNTAX      INTEGER {off(0), on(1), notSupported(2)}
+    MAX-ACCESS  read-only  
+    STATUS      current    
+    DESCRIPTION
+        "Indication of the blades internal DC/DC. 
+         Check status of all secondary voltages.
+	 0 = off
+	 1 = on
+         2 = not supported"
+    ::={ bladeEntry 9 }
+
+bladeRedLed OBJECT-TYPE 
+    SYNTAX      INTEGER {off(0), on(1), notSupported(2)}
+    MAX-ACCESS  read-write
+    STATUS      current    
+    DESCRIPTION
+        "Alarm Condition LED-state on a blade 
+
+         This alarm can be set by IPMI, CPU
+         and application (If set by either of these
+         then the LED will be on. I.e. an OR function)
+
+         It can be in the following states when read:  
+         0 = off
+	 1 = on
+         2 = not supported
+
+         The following states can be written:
+         0 = off
+	 1 = on"
+    ::={ bladeEntry 10 }
+
+bladeYellowLed OBJECT-TYPE 
+    SYNTAX      INTEGER {off(0), on(1), notSupported(2)}
+    MAX-ACCESS  read-write
+    STATUS      current    
+    DESCRIPTION
+        "MIA LED-state on a blade.
+         It can be in the following states when read:
+         0 = off
+	 1 = on
+         2 = not supported
+
+	 The following states can be written:
+         0 = off
+	 1 = on"
+    ::={ bladeEntry 11 }
+
+
+bladeReset OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+	"Setting this value will cause a blade reset
+         at the blade specified.
+         
+         The supported types of reset are:
+	 -coldreset(0)
+	 -resetPayload(1)  a.k.a. warmReset
+	 -nonMaskableInterruptReset(4) 
+	
+         There is never an acknowledgment to this request 
+         which means that resetting a blade is a 
+         'best effort' approach.
+
+         When read this object always returns 0"
+        ::={ bladeEntry 12 }
+
+bladeIPMIData OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-only
+    STATUS	current
+    DESCRIPTION
+	"IPMI identity string for the blade
+	 in this slot.
+         The ASCII string is encoded as follows:
+         bladeIPMIData[0] : 
+            Firmware type,
+	    0 = UPG (Upgrade)
+	    [1 ASCII character]
+         bladeIPMIData[1-25] : 
+            IPMI product number,
+            [25 ASCII characters]
+         bladeIPMIData[26-33] :
+            IPMI product Revision State,
+            [8 ASCII characters]
+	 bladeIPMIData[34-41] :
+             IPMI firmware revision
+             [8 ASCII characters]
+
+         bladeIPMIData[42] : 
+             Firmware type,
+	     1 = FB (Fallback)
+	     [1 ASCII character]
+         bladeIPMIData[43-67] : 
+             IPMI product number,
+             [25 ASCII characters]
+         bladeIPMIData[68-75] :
+            IPMI product Revision State,
+            [8 ASCII characters]
+	 bladeIPMIData[76-83] :
+            IPMI firmware revision
+            [8 ASCII characters]
+
+         bladeIPMIData[84] : 
+            Firmware type,
+             2 = NON UPG (Non Upgradeable)
+             [1 ASCII character]
+         bladeIPMIData[85-109] : 
+            IPMI product number,
+            [25 ASCII characters]
+         bladeIPMIData[110-117] :
+            IPMI product Revision State,
+            [8 ASCII characters]
+	 bladeIPMIData[118-125] :
+            IPMI firmware revision
+            [8 ASCII characters]
+
+         bladeIPMIData[126] : 
+            Firmware type,
+	    X = RUNNING (UPG(0) | FB(1) | NON UPG(2))
+            [1 ASCII character]
+         bladeIPMIData[127-151] : 
+            IPMI product number,
+            [25 ASCII characters]
+         bladeIPMIData[152-159] :
+            IPMI product Revision State,
+            [8 ASCII characters]
+	 bladeIPMIData[160-167] :
+            IPMI firmware revision
+            [8 ASCII characters]
+        When not supported this object returns an
+        ASCII string with all zeroes."
+        ::={ bladeEntry 15 }
+
+bladeIPMIUpgrade OBJECT-TYPE
+    SYNTAX  DisplayString 
+    MAX-ACCESS  read-write
+    STATUS	current
+    DESCRIPTION
+	"The path (and file name) as well as the IP address to 
+         a TFTP server where the IPMI firmware is located.
+	 The ASCII string is encoded as follows:
+	   bladeIPMIUpgrade[0-N]:
+             Path to and File name of IPMI firmware file
+         bladeIPMIUpgrade[N+1]
+             Divider (semicolon)
+	 bladeIPMIUpgrade [(N+2)-(N+X)]: 
+             IP address (AAA.BBB.CCC.DDD)
+		In case of locally stored IPMI firmware 
+                file the IP address should be coded: 127.0.0.1
+         bladeIPMIUpgrade[N+X+1]
+            Ending character (\0) = Integer 0.
+
+         When read this object returns the written 
+         ASCII string above.
+         If no ASCII string is written or if object not supported,
+         an ASCII string with all zeroes is returned."
+        ::={ bladeEntry 16 }
+ 
+bladeIPMIUpgradeStatus OBJECT-TYPE
+    SYNTAX      INTEGER {ready(0), ongoing(1), 
+			 notStarted(2), notSupported(3)}
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+	"IPMI upgrade status:
+         - ready (0)
+           IPMI upgrade is ready.
+           When in this state
+           a new upgrade request can be done
+         - ongoing (1)
+           IPMI upgrade is ongoing.
+           Trying to initiate a new upgrade when in
+           this state will result in error.
+         - notStarted (2)
+	   IPMI upgrade is not started.
+           This status is the default state when no
+           upgrade has been started. When in this state
+           a new upgrade request can be done.
+         - notSupported (3)
+           This object is not supported."
+    ::={ bladeEntry 17 }
+
+bladeIPMIReset OBJECT-TYPE
+    SYNTAX      INTEGER {upg(0), fb(1), notSupported(2)}
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Reset IPMI in upgradable(upg) or
+         fallback (fb) mode.
+
+         When read this object will return:
+         0: IPMI running in upg mode
+         1: IPMI running in fb mode
+         2: Not supported"
+    ::={ bladeEntry 18 }
+
+bladePresenceStatus OBJECT-TYPE
+   SYNTAX      INTEGER {inserted(1), accessible(3)}
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+       "Read presence status of a blade.
+
+	inserted(1):	     The blade has been scanned by IPMI
+			     and found to be inserted.
+			     
+	accessible(3):	     When the active Shelf Manager has successfully
+			     read data from a blade then blade is reported
+			     as accessible."
+   ::={ bladeEntry 19 }
+
+bladeFirstMacAddr OBJECT-TYPE 
+    SYNTAX      MacAddress
+    MAX-ACCESS  read-only    
+    STATUS      current
+    DESCRIPTION
+        "First MAC address of the device in this 
+         slot position.
+	 When object is not supported a MAC address 
+         with all zeroes will be returned."
+    ::= { bladeEntry 20 }
+
+bladeConsecutiveMAC OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+	"Number of consecutive MAC addresses.
+         A not supported object will return the value 0"
+    ::={ bladeEntry 21 }
+
+bladeBIOSDefaultImage OBJECT-TYPE
+    SYNTAX      INTEGER {bios1(0), bios2(1), notSupported(2)}
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION 
+        "BIOS Default Image command is used to define
+         or read which BIOS image should be the default
+         image after IPMI restart.
+
+         When read this object can return:
+         0 = bios1
+         1 = bios2
+         2 = not supported.
+
+         The following values can be written:
+         0 = bios1
+         1 = bios2"
+    ::={ bladeEntry 22 }
+
+bladeBIOSPointer OBJECT-TYPE
+    SYNTAX      INTEGER {bios1(0), bios2(1), notSupported(2)}
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION 
+        "BIOS Pointer command is used to define
+         or read which BIOS image should be the actual
+         image after blade restart.
+
+         When read this object can return:
+         0 = bios1
+         1 = bios2
+         2 = not supported.
+
+         The following values can be written:
+         0 = bios1
+         1 = bios2"		
+    ::={ bladeEntry 23 }
+
+bladeBIOSRunMode OBJECT-TYPE
+    SYNTAX      INTEGER {bios1(0), bios2(1), notSupported(2)}
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION 
+        "BIOS Run Mode command is used to define or read
+         which BIOS image should be the default and actual
+         image after IPMI restart.
+
+         When read this object can return:
+         0 = bios1
+         1 = bios2
+         2 = not supported.
+
+         The following values can be written:
+         0 = bios1
+         1 = bios2"
+    ::={ bladeEntry 24 }
+
+bladeNotificationAck OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Acknowledge of blade related notification.
+
+         Reserved values are:
+         0 = bladePresence
+	 1 = sensorStateChange
+         2 = ipmiUpgradeResult
+	 3 = ipmiRestart
+
+        Reading this object will always return 0."
+
+    ::={ bladeEntry 25 }
+
+bladeRowStatus OBJECT-TYPE
+    SYNTAX        RowStatus
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Status of actual row in table
+                   set to active if row exists."
+    ::= { bladeEntry 26 }
+
+bladeFatalEventLogInfo OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (6))
+    MAX-ACCESS  read-only    
+    STATUS      current
+    DESCRIPTION
+        "Read Fatal Event Log Info
+	 Octet string: [B6, B5, B4, B3, B2, B1]
+         B6-B5: Number of Fatal Event Log entries
+         B4-B1: Standard Timesstamp. The time is given in
+                seconds since 1970-01-01 00:00 UTC.
+
+         If object is not supported then an Octet String with
+         all zeroes is returned."
+    ::= { bladeEntry 27 }
+
+bladeGracefulReset OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+	"Setting this value will cause a graceful blade reset
+         at the blade specified.
+       
+         A graceful reset will offer the blade to be reset a
+         possibility to take measures for a controlled reset.
+
+         The supported type of graceful reset is:
+	 coldReset(0)
+
+         When read this object always returns 0"
+    ::={ bladeEntry 28 }
+
+bladeGracefulPwrOff OBJECT-TYPE
+    SYNTAX      Integer32 
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Setting this value will cause the power 
+         to be gracefully 'turned off' at the blade specified. 
+
+         A graceful power off will offer the blade to be 'turned off' a
+         possibility to take measures for a controlled power off.
+
+         The value written don't matter.
+
+         When read this object always returns 0"
+    ::={ bladeEntry 29 }
+
+bladeCommonRedLed OBJECT-TYPE 
+    SYNTAX      CommonLedStates
+    MAX-ACCESS  read-write
+    STATUS      current    
+    DESCRIPTION
+        "Fault LED
+
+	 Result of reading the Red LED:
+	 off (0)	   No fault exists on this blade
+	 on  (1)	   A HW fault exists on this blade that
+			   requires manual attention
+	 notSupported(4)   Not supported object.
+         
+	 The following CommonLedStates could be written:
+	 off (0)           No fault exists on this blade
+	 on  (1)	   A HW fault exists on this blade
+ 	 
+	 Writing another CommonLedState will result in an error."
+
+    ::={ bladeEntry 30 }
+
+bladeCommonGreenLed OBJECT-TYPE 
+    SYNTAX      CommonLedStates
+    MAX-ACCESS  read-write
+    STATUS      current    
+    DESCRIPTION
+        "Operational LED
+
+ 	 Result of reading the Green LED:
+ 	 off (0)	 No power
+ 	 on  (1)	 Operational
+                         (All secondary voltages and frequencies are
+		         OK and the unit is functioning as intended.)
+         slowBlink (2)   Not connected to supervising system 
+                         or other remote resource.
+			 (E.g. not yet received DHCP response.)
+ 	 fastBlink (3)	 Busy
+                         (The unit is not yet fully operational)
+	 notSupported(4) Not supported object.
+ 
+	 The following CommonLedStates could be written:
+ 	 on  (1)	Operational
+   	 slowBlink (2)  Not connected to supervising system 
+                        or other remote resource.
+ 
+         Writing another CommonLedState will result in an error."
+
+    ::={ bladeEntry 31 }
+
+
+bladeCommonBlueLed OBJECT-TYPE 
+    SYNTAX      CommonLedStates
+    MAX-ACCESS  read-write
+    STATUS      current    
+    DESCRIPTION
+        "Maintenance LED
+
+	 Result of reading the Blue LED:
+ 	 off (0)         The blade is not in maintenance mode
+		         (Manual intervention not allowed)
+	 on  (1)         Full maintenance mode enabled
+		         (Manual intervention allowed)
+         slowBlink (2)   Removing traffic
+		         (Traffic is about to be suppressed or the
+		         unit is preparing for full maintenance mode)
+  	 fastBlink (3)   Notification that a front button is pressed
+                         (Today the only front button is the reset button
+		         on GEP blades. In the GEP case, the main processor
+			 will be reset immediately when the button is
+			 pressed and after 4 seconds the blade will be 
+			 powered down
+	 notSupported(4) Not supported object.
+ 
+	 The following CommonLedStates could be written:
+ 	 off (0)         The blade is not in maintenance mode
+	 on  (1)         Full maintenance mode enabled
+ 	 slowBlink (2)   Removing traffic
+
+         Writing another CommonLedState will result in an error."
+    ::={ bladeEntry 32 }
+
+
+bladeCommonYellowLed OBJECT-TYPE 
+    SYNTAX      CommonLedStates
+    MAX-ACCESS  read-write
+    STATUS      current    
+    DESCRIPTION
+        "Status LED
+
+	 Result of reading the Yellow LED:
+ 	 off (0)           No fault exists on the blade
+	 on  (1)           HW/SW configuration is not OK
+			   (E.g. missing sensor table, new SW download
+                            required, reloading flash, restarting to
+			    get new SW.)
+  	 fastBlink (3)     Operational but reduced functionality
+                           on blade. Do not manually intervene.
+			   (E.g. IPMI running in fallback mode.)
+	 notSupported(4)   Not supported object.
+ 
+	 The following CommonLedStates could be written:
+ 	 off (0)           No fault exists on the blade
+	 on  (1)           HW/SW configuration is not OK
+  	 fastBlink (3)     Operational but reduced functionality
+                           on blade. Do not manually intervene.
+ 
+         Writing another CommonLedState will result in an error."
+    ::={ bladeEntry 33 }
+
+
+bladeDiagnosticTest OBJECT-TYPE
+    SYNTAX      Integer32 (0..31)
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Writing a 'diagnostic code' 1 - 31 to this object 
+         will cause a 'diagnostic test' order to be sent 
+         to IPMI on the blade specified. 
+         IPMI will send 'diagnostic test' with the received
+         'diagnostic code' to the CPU on the blade.
+         The meaning of the 'diagnostic code' values are TBD.
+         Only one diagnostic test can be active at a given time.
+         Ordering a new 'diagnostic test' while another
+         'diagnostic test is active will cancel the active one.
+
+	 Reading this object will return the 
+         'diagnostic code' last written (1 - 31).
+         If the object is not supported a value 0 is returned"
+    ::={ bladeEntry 34 }
+
+bladeDiagnosticTestStatus OBJECT-TYPE
+    SYNTAX      DiagTestResult
+    MAX-ACCESS  read-only  
+    STATUS      current
+    DESCRIPTION
+	"The diagnostic test result will be returned in
+         the following octets where:
+         octet  1    'diagnostic code' as written, 1-31.
+         octet  2    Result size in bytes 
+	 octet  3-N  Result bytes     
+
+        If octet 1 = 0 then the 'diagnostic test'
+        is either:
+        - notStarted
+        - notReady  (Diagnostic test initiated but not ready)
+        - notSupported"
+    ::= { bladeEntry 35 }
+
+bladeLedTest OBJECT-TYPE
+    SYNTAX INTEGER {off(0), on(1), notSupported(2)}
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION
+	"Writing value on(1) to this object will turn on
+         all LEDS on the board for 10 seconds.
+         Writing value off(0) while the led test is running
+         will stop the led test.
+         Reading this object will return on(1) if a led
+         test is running, off(0) if no led test is running and
+         notSupported(2) if led test is not supported."
+    ::= { bladeEntry 36 }
+
+bladeMacAddrA OBJECT-TYPE 
+    SYNTAX      MacAddress
+    MAX-ACCESS  read-only    
+    STATUS      current
+    DESCRIPTION
+        "Left side MAC address for Mbus blades.
+ 	 When object is not supported a MAC address 
+         with all zeroes will be returned."
+    ::= { bladeEntry 37 }
+
+bladeMacAddrB OBJECT-TYPE 
+    SYNTAX      MacAddress
+    MAX-ACCESS  read-only    
+    STATUS      current
+    DESCRIPTION
+        "Right side MAC address for Mbus blades.
+	 When object is not supported a MAC address 
+         with all zeroes will be returned."
+    ::= { bladeEntry 38 }
+
+bladeReturnToFactoryDefault OBJECT-TYPE
+    SYNTAX Integer32
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION
+	"Writing a value to this object will 
+         force the blade to factory default.
+
+         Reading this object will always return 0."
+    ::= { bladeEntry 39 }
+
+bladeBootMacAddr OBJECT-TYPE 
+    SYNTAX      MacAddress
+    MAX-ACCESS  read-only    
+    STATUS      current
+    DESCRIPTION
+        "Boot MAC address of the IPMI blade
+         in this slot position.
+         When object is not supported a MAC address 
+         with all zeroes will be returned."
+    ::= { bladeEntry 40 }
+
+bladeIOExpander04 OBJECT-TYPE 
+    SYNTAX      INTEGER {off(0), on(1)}
+    MAX-ACCESS  read-write
+    STATUS      current    
+    DESCRIPTION
+        "IO expander bit 4 on a Mbus blade
+         e.g. used for the FEX LED used used by APZ on MAU blade 
+         0 = off
+	 1 = on
+
+         Reading this object will always return 0."
+    ::={ bladeEntry 41 }
+
+bladeLedType OBJECT-TYPE 
+    SYNTAX      INTEGER {old(0), new(1), notSupported(2)}
+    MAX-ACCESS  read-only
+    STATUS      current    
+    DESCRIPTION
+        "Type of LEDS on blade.
+         0 = old (red, green and yellow LEDs)
+	 1 = on  (red, green, blue and yellow LEDs)
+	 2 = not supported."
+    ::={ bladeEntry 42 }
+
+bladePwr OBJECT-TYPE
+    SYNTAX      INTEGER {off(0), on(1), notSupported(2)}
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+	"Setting this value will cause the power to a 
+         blade to be 'turned off' or to be 'turned on'.
+ 
+	 There is never an acknowledgment to this request,
+	 which means that power 'turn off/on' of a blade is a 
+	 'best effort' approach.
+
+         The following values can be written:
+	 0 = off -> The blade is 'turned off'
+	 1 = on  -> The blade is 'turned on'
+
+         When read this object can return:
+	 0 = off -> The blade is 'turned off'
+	 1 = on  -> The blade is 'turned on'
+	 2 = notSupported -> For mbus blades."
+    ::={ bladeEntry 43 }
+
+-- ---------------------------------------------------------------------
+-- These objects are considered for future inclusion
+-- ---------------------------------------------------------------------
+
+-- bladeEnable OBJECT-TYPE
+--     SYNTAX      INTEGER {ethSwitch(0), ports10Gb(1)}
+--     MAX-ACCESS  read-write
+--     STATUS      current
+--     DESCRIPTION
+--         "Writing a value to this object will enable different
+--          parts of a blade with respect to given arguments:
+--         - ethSwitch 
+--           Will enable the ethernet switch on 
+--           the Base Switch blades.
+--         - ports10Gb
+--           Will enable only the 10Gb transmission ports
+--           on Data Switch blades"
+--     ::={ bladeEntry 43 }
+
+-- bladeDisable OBJECT-TYPE
+--     SYNTAX      INTEGER {ethSwitch(0), ports10Gb(1)}
+--     MAX-ACCESS  read-write
+--     STATUS      current
+--     DESCRIPTION
+--         "Writing a value to this object will disable different
+--          parts of a blade with respect to given arguments:   
+--          - ethSwitch 
+--            Will disable the ethernet switch on MxB blades.
+--          - ports10Gb
+--            Will disable only the 10Gb transmission ports
+--            on ExB blades"
+--     ::={ bladeEntry 44 }
+
+-- ---------------------------------------------------------------------
+-- End of the Blade Table
+-- ---------------------------------------------------------------------
+
+
+
+
+-- *********************************************************************
+-- sensorObjects            OBJECT IDENTIFIER ::= { blade 2 }
+-- *********************************************************************
+
+-- ---------------------------------------------------------------------
+-- Sensor Table
+-- ---------------------------------------------------------------------
+
+sensorTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF SensorEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table contains sensor information."
+    ::= { sensorObjects 1 }
+
+sensorEntry OBJECT-TYPE
+    SYNTAX      SensorEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "A entry in the sensorTable.
+         The table is indexed with SlotValues and SensorIDIndex"
+    INDEX       { sensorSlotIndex, sensorIDIndex }
+    ::= { sensorTable 1 }
+
+
+SensorEntry ::= SEQUENCE {
+    sensorSlotIndex  SlotValues,
+    sensorIDIndex    SensorIDValues,
+    sensorValue      Integer32,
+    sensorState      Integer32,
+    sensorRowStatus  RowStatus
+    }
+
+sensorSlotIndex OBJECT-TYPE  
+    SYNTAX	SlotValues
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Index according to SlotValues"
+    ::={ sensorEntry 1 }  
+
+sensorIDIndex OBJECT-TYPE
+    SYNTAX      SensorIDValues
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Index according to SensorIDValues.
+
+         Trying to read a not existing SensorIDValue
+         will return SNMP exception: No Such Instance.
+
+	 Trying reading SensorIDValues for blades not
+         supporting sensors, i.e. mbus blades, will also 
+         return SNMP exception: No Such Instance."
+    ::= { sensorEntry 2 }      
+                             
+sensorValue OBJECT-TYPE
+    SYNTAX	Integer32
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Sensor Value.
+	 For an example of values see textual convention SensorValues."
+    ::= { sensorEntry 3 }
+
+sensorState OBJECT-TYPE
+    SYNTAX      Integer32 
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Sensor State.
+	 For an example of states see textual convention SensorStates."
+    ::= { sensorEntry 4 }
+
+
+sensorRowStatus OBJECT-TYPE
+    SYNTAX        RowStatus
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   
+        "Status of actual row in table
+         set to active if row exists."
+    ::= { sensorEntry 5 }
+
+
+-- ---------------------------------------------------------------------
+-- End of the Blade Sensor Table
+-- ---------------------------------------------------------------------
+
+
+-- *********************************************************************
+-- gprObjects               OBJECT IDENTIFIER ::= { blade 3 }
+-- *********************************************************************
+
+-- ---------------------------------------------------------------------
+-- The Blade General Purpose Register (GPR) Table
+-- ---------------------------------------------------------------------
+
+bladeGPRTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF BladeGPREntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The table handles blade related data of the blades 
+         in the rack, by using the slot number and the
+         GPR key as an index."
+    ::={ gprObjects 1 } 
+
+bladeGPREntry OBJECT-TYPE
+    SYNTAX      BladeGPREntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "A entry in the Blade GPR Table.
+         The table is indexed with SlotValues and gpr index 0..65535"
+    INDEX   { gprSlotIndex, gprIndex }
+    ::={ bladeGPRTable 1 }
+     
+BladeGPREntry ::= 
+    SEQUENCE { 
+         gprSlotIndex               SlotValues,
+         gprIndex                   Integer32,
+	 gprDataValue               OCTET STRING,
+	 gprRowStatus		    RowStatus  
+	 }
+
+gprSlotIndex OBJECT-TYPE  
+    SYNTAX   SlotValues 
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Index according to SlotValues"
+    ::={ bladeGPREntry 1 }
+                             
+gprIndex OBJECT-TYPE  
+    SYNTAX      Integer32(0..65535)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "GPRIndex is an integer of 2 octets:
+
+	 MSO (Most Significant Octet) represents type of memory
+	 (Note that only 16 bits are used of the 32 bit integer.
+          MSO in this context denotes the upper 8 bits of these)
+	  1  RAM
+	  2  NVRAM
+
+	  LSO (Least Significant Octet) is register number
+	  (LSO denotes the lower 8 bits of the 16 bits used)
+	  0 .. 15.
+
+	  Trying to read a not existing gprIndex 
+	  will return a SNMP exception: No Such Instance.
+
+	  Trying to write a not existing gprIndex will result
+	  in the SNMP error message: noCreation (11 0xB).
+
+	  Trying to read a gprIndex for blades not supporting
+	  supporting General Purpose Registers (GPR), i.e 
+          mbus blades, will return the SNMP exception:
+          No Such Instance.
+
+	  Trying to write a gprIndex for blades not supporting
+	  General Purpose Registers (GPR), i.e mbus blades, 
+          will result in the SNMP error message:  noCreation (11 0xB)."
+   ::={ bladeGPREntry 2 }
+
+gprDataValue OBJECT-TYPE 
+    SYNTAX      OCTET STRING (SIZE (8)) 
+    MAX-ACCESS  read-write   
+    STATUS      current
+    DESCRIPTION
+        "When writing the GPR data consists of 8 octets.
+         An octet is 8 bits.
+         Oct1 - Oct4 represents a mask (for the value) Oct1 is MSO
+         Oct5 - Oct8 represents a value                Oct5 is MSO
+         Only the bits in the value octets that corresponds 
+         to '1'-s in the bits of the mask are written.
+
+	 When reading the GPR data also consists of 8 octets but with
+	 Oct1=Oct2=Oct3=Oct4=255 (0xFF). I.e. they have no significance.
+	 while the actual GPR data value are in
+	 Oct5 - Oct8 represents a value                Oct5 is MSO"
+    ::= { bladeGPREntry 3 }
+
+gprRowStatus OBJECT-TYPE
+    SYNTAX        RowStatus
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   
+        "Status of actual row in table
+         set to active if row exists."
+    ::= { bladeGPREntry 4 }
+
+
+-- ---------------------------------------------------------------------
+-- End of the Blade General Purpose Register (GPR) Table
+-- ---------------------------------------------------------------------
+
+-- *********************************************************************
+-- feObjects                OBJECT IDENTIFIER ::= { blade 4 }   
+-- *********************************************************************
+
+-- ---------------------------------------------------------------------
+-- The Blade Fatal Event Table
+-- ---------------------------------------------------------------------
+
+bladeFatalEventTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF BladeFatalEventEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The table handles blade related data of the blades 
+         in the rack, by using the slot number and the
+         FatalEventIndex key as an index."
+    ::={ feObjects 1 } 
+
+bladeFatalEventEntry OBJECT-TYPE
+    SYNTAX      BladeFatalEventEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry in the bladeFatalEventTable.
+         The table is indexed with SlotValues and fatal event index 0..65535"
+        INDEX  { fatalEventSlotIndex, fatalEventIndex }
+    ::={ bladeFatalEventTable 1 }
+     
+BladeFatalEventEntry ::= 
+     SEQUENCE { 
+         fatalEventSlotIndex               SlotValues,
+         fatalEventIndex                   Integer32,
+	 fatalEventData                    OCTET STRING,
+	 fatalEventRowStatus	   	   RowStatus  
+	 }
+
+fatalEventSlotIndex OBJECT-TYPE  
+    SYNTAX   SlotValues 
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Index according to SlotValues"
+    ::={ bladeFatalEventEntry 1 }       
+                             
+fatalEventIndex OBJECT-TYPE  
+    SYNTAX      Integer32(0..65535)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "FatalEventIndex is an integer of 2 octets.
+         Octet 1 is Most Significant Bit (MSB)
+	 Octets 1 - 2: 1 = most recent fatal event
+                       2 = 2nd recent fatal event
+                       N = Nth recent fatal event
+                       N is depending on IPMI FW version..
+
+	  Trying to read a not existing fatalEventIndex 
+	  will return a SNMP exception: No Such Instance.
+
+	  Trying to write a not existing fatalEventIndex 
+	  will result in the SNMP error message: noCreation (11 0xB).
+
+
+	  Trying to read a fatalEventIndex for blades not
+	  supporting Fatal Events, i.e mbus blades, will
+          return the SNMP exception: No Such Instance.
+
+	  Trying to write a fatalEventIndex for blades not
+	  supporting Fatal Events, i.e mbus blades, will
+          result in the SNMP error message:  noCreation (11 0xB)."
+    ::={ bladeFatalEventEntry 2 }
+
+fatalEventData OBJECT-TYPE 
+    SYNTAX      OCTET STRING (SIZE (17))
+    MAX-ACCESS  read-only    
+    STATUS      current
+    DESCRIPTION
+        "FatalEvent data consisting of 17 octets.
+            Octets   1 - 2: Entry index (fatalEventIndex)
+            Octets   3 - 6: Time Stamp. LSB first.
+            Octet        7: Generator ID
+            Octet        8: Event Message Revision
+ 	    Octet        9: Sensor Type
+ 	    Octet       10: Sensor Number
+            Octet       11: Event Type
+            Octets 12 - 17: Event Data"
+    ::= { bladeFatalEventEntry 3 }
+
+fatalEventRowStatus OBJECT-TYPE
+    SYNTAX        RowStatus
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   
+        "Status of actual row in table
+         set to active if row exists."
+    ::= { bladeFatalEventEntry 4 }
+
+-- ---------------------------------------------------------------------
+-- End of the Blade Fatal Event Table
+-- ---------------------------------------------------------------------
+
+
+
+-- ---------------------------------------------------------------------
+-- Conformance Groups
+-- conformance           OBJECT IDENTIFIER ::= { genShelfMIB 5 }
+--    groups                OBJECT IDENTIFIER ::= { conformance 1 }
+-- ---------------------------------------------------------------------
+
+confNotificationGroup1 NOTIFICATION-GROUP
+      NOTIFICATIONS {
+                     shelfMgrCtrl,
+		     bladePresence,
+		     shelfAddressChange
+                   }
+      STATUS current
+      DESCRIPTION
+           "See corresponding notification description"
+        ::= {groups 1}
+
+confNotificationGroup2 NOTIFICATION-GROUP
+      NOTIFICATIONS {
+                     sensorStateChange
+                   }
+      STATUS current
+      DESCRIPTION
+           "See corresponding notification description"
+        ::= {groups 2}
+
+confNotificationGroup3 NOTIFICATION-GROUP
+      NOTIFICATIONS {
+                     ipmiUpgradeResult,
+		     ipmiRestart
+                   }
+      STATUS current
+      DESCRIPTION
+           "See corresponding notification description"
+        ::= {groups 3}
+
+confNotificationGroup4 NOTIFICATION-GROUP
+      NOTIFICATIONS {
+                     systemEventLogEntry
+                   }
+      STATUS current
+      DESCRIPTION
+           "See corresponding notification description"
+        ::= {groups 4}
+
+confNotificationGroup5 NOTIFICATION-GROUP
+      NOTIFICATIONS {
+                     backplaneIdFaulty
+                   }
+      STATUS current
+      DESCRIPTION
+           "See corresponding notification description"
+        ::= {groups 5}
+
+confNotificationGroup6 NOTIFICATION-GROUP
+      NOTIFICATIONS {
+                     diagnosticTestResult
+                   }
+      STATUS current
+      DESCRIPTION
+           "See corresponding notification description"
+        ::= {groups 6}
+
+
+
+
+confShelfObjectGroup1 OBJECT-GROUP
+    OBJECTS { 
+	     physicalAddress, 
+	     shelfPhysicalAddress
+	    }			    
+     STATUS  current
+     DESCRIPTION
+         "See corresponding shelf object group"
+     ::= {groups 7}
+
+confShelfObjectGroup2 OBJECT-GROUP
+    OBJECTS { 
+             powerState
+	    }			    
+     STATUS  current
+     DESCRIPTION
+         "See corresponding shelf object group"
+     ::= {groups 8}
+
+confShelfObjectGroup3 OBJECT-GROUP
+    OBJECTS { 
+             shelfMgrCmd,
+	     shelfNum,
+	     shmcSlotPos,
+	     shelfMgrState,
+	     neighbour
+	    }			    
+     STATUS  current
+     DESCRIPTION
+         "See corresponding shelf object group"
+     ::= {groups 9}
+
+confShelfObjectGroup4 OBJECT-GROUP
+    OBJECTS { 
+             notificationAck
+	    }			    
+     STATUS  current
+     DESCRIPTION
+         "See corresponding shelf object group"
+     ::= {groups 10}
+
+confShelfObjectGroup5 OBJECT-GROUP
+    OBJECTS { 
+             shelfMgrAliveCmd
+	    }			    
+     STATUS  current
+     DESCRIPTION
+         "See corresponding shelf object group"
+     ::= {groups 11}
+
+confShelfObjectGroup6 OBJECT-GROUP
+    OBJECTS { 
+             shelfMgrAutonomousMode,
+	     shelfMgrCtrlState,
+	     shelfMgrNeighbourPresence
+	    }			    
+     STATUS  current
+     DESCRIPTION
+         "See corresponding shelf object group"
+     ::= {groups 12}
+
+confShelfObjectGroup7 OBJECT-GROUP
+    OBJECTS { 
+             shelfBpProductNumber,
+	     shelfBpProductRevisionState,
+	     shelfBpProductName,
+	     shelfBpSerialNumber,
+	     shelfBpManufacturingDate,
+	     typeOfBpIdError
+	    }			    
+     STATUS  current
+     DESCRIPTION
+         "See corresponding shelf object group"
+     ::= {groups 13}
+
+confShelfObjectGroup8 OBJECT-GROUP
+    OBJECTS { 
+             shelfMgrRPBS 
+	    }			    
+     STATUS  current
+     DESCRIPTION
+         "See corresponding shelf object group"
+     ::= {groups 14}
+
+confShelfObjectGroup9 OBJECT-GROUP
+    OBJECTS { 
+             shelfType
+	    }			    
+     STATUS  current
+     DESCRIPTION
+         "See corresponding shelf object group"
+     ::= {groups 15}
+
+confShelfObjectGroup10 OBJECT-GROUP
+    OBJECTS { 
+             shelfMgrNotificationSending
+	    }			    
+     STATUS  current
+     DESCRIPTION
+         "See corresponding shelf object group"
+     ::= {groups 16}
+
+confBladeObjectGroup1 OBJECT-GROUP
+    OBJECTS { 
+	      bladeProductNumber,
+	      bladeProductRevisionState,
+	      bladeProductName,
+	      bladeSerialNumber,
+	      bladeManufacturingDate,
+	      bladeVendorName,
+	      bladeBusType
+	     }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 17}  
+
+confBladeObjectGroup2 OBJECT-GROUP
+    OBJECTS { 
+	      bladeGreenLed,
+	      bladeRedLed,
+	      bladeYellowLed   
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 18}  
+
+confBladeObjectGroup3 OBJECT-GROUP
+    OBJECTS { 
+	      bladeReset,
+	      bladePwr  
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 19}  
+
+confBladeObjectGroup4 OBJECT-GROUP
+    OBJECTS { 
+	      bladeIPMIData,
+	      bladeIPMIUpgrade,
+	      bladeIPMIUpgradeStatus,
+	      bladeIPMIReset,
+	      ipmiUpgradeResultValue,
+	      ipmiFwType,
+	      ipmiFwVersion,
+	      ipmiFwTimestamp
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 20}  
+
+confBladeObjectGroup5 OBJECT-GROUP
+    OBJECTS { 
+              slotPos,
+	      bladePresenceStatus,
+	      controlBrdIpAddress,
+	      hwBladePresence,
+	      busType
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 21}  
+
+confBladeObjectGroup6 OBJECT-GROUP
+    OBJECTS { 
+	     bladeRowStatus 
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 22} 
+
+confBladeObjectGroup7 OBJECT-GROUP
+    OBJECTS { 
+	      bladeFirstMacAddr,
+	      bladeConsecutiveMAC,
+	      bladeBootMacAddr
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 23} 
+
+confBladeObjectGroup8 OBJECT-GROUP
+    OBJECTS { 
+	      bladeBIOSDefaultImage,
+	      bladeBIOSPointer,
+	      bladeBIOSRunMode  
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 24} 
+
+confBladeObjectGroup9 OBJECT-GROUP
+    OBJECTS { 
+              bladeNotificationAck  
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 25} 
+
+confBladeObjectGroup10 OBJECT-GROUP
+    OBJECTS { 
+              bladeGracefulReset,
+	      bladeGracefulPwrOff 
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 26} 
+
+confBladeObjectGroup11 OBJECT-GROUP
+    OBJECTS { 
+              bladeCommonRedLed,
+	      bladeCommonGreenLed,
+	      bladeCommonBlueLed,
+	      bladeCommonYellowLed 
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 27} 
+
+confBladeObjectGroup12 OBJECT-GROUP
+    OBJECTS { 
+              bladeDiagnosticTest,
+	      bladeDiagnosticTestStatus,
+	      resultOfDiagnosticTest
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 28} 
+
+confBladeObjectGroup13 OBJECT-GROUP
+    OBJECTS { 
+              bladeLedTest
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 29} 
+
+confBladeObjectGroup14 OBJECT-GROUP
+    OBJECTS { 
+              bladeLedTest
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 30} 
+
+confBladeObjectGroup15 OBJECT-GROUP
+    OBJECTS { 
+              bladeMacAddrA,
+	      bladeMacAddrB
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 31} 
+
+confBladeObjectGroup16 OBJECT-GROUP
+    OBJECTS { 
+              bladeReturnToFactoryDefault
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 32} 
+
+confBladeObjectGroup17 OBJECT-GROUP
+    OBJECTS { 
+	      selEntry
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 33} 
+
+confBladeObjectGroup18 OBJECT-GROUP
+    OBJECTS { 
+              bladeIOExpander04
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 34} 
+
+confBladeObjectGroup19 OBJECT-GROUP
+    OBJECTS { 
+              bladeFatalEventLogInfo
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 35} 
+
+confBladeObjectGroup20 OBJECT-GROUP
+    OBJECTS { 
+              bladeLedType
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding bladeObjects group"
+        ::= {groups 36} 
+
+-- ------------------------------------------------------------------
+-- These blade objects are considered for future inclusion
+-- ------------------------------------------------------------------
+
+-- 	      bladeEnable,
+-- 	      bladeDisable
+
+ 
+confSensorObjectGroup OBJECT-GROUP
+    OBJECTS { sensorValue,
+	      sensorState,
+	      sensorRowStatus,
+	      sensorType,
+	      sensorID,
+	      sensorTypeCode,
+	      sensorEventData
+	    }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding sensorObjects group"
+        ::= {groups 37}
+
+confGPRObjectGroup OBJECT-GROUP
+    OBJECTS { gprDataValue,
+	      gprRowStatus
+           }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding gprObjects group"
+    ::= {groups 38}
+
+confFEObjectGroup OBJECT-GROUP
+    OBJECTS { fatalEventData,
+	      fatalEventRowStatus
+           }
+    STATUS  current
+    DESCRIPTION
+        "See corresponding feObjects group"
+    ::= {groups 39}
+
+
+--**********************************************************************
+-- Compliance Statement
+-- compliance     OBJECT IDENTIFIER ::= { conformance 2 }
+--**********************************************************************
+
+genShelfMIBCompliance MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+	"The compliance statement for the SNMP entities supported."
+    MODULE -- this module
+
+    GROUP confNotificationGroup1
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confNotificationGroup2
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confNotificationGroup3
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confNotificationGroup4
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confNotificationGroup5
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confNotificationGroup6
+    DESCRIPTION "Implementation of this group is optional"
+
+
+    GROUP confShelfObjectGroup1
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confShelfObjectGroup2
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confShelfObjectGroup3
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confShelfObjectGroup4
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confShelfObjectGroup5
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confShelfObjectGroup6
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confShelfObjectGroup7
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confShelfObjectGroup8
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confShelfObjectGroup9
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confShelfObjectGroup10
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup1
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup2
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup3
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup4
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup5
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup6
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup7
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup8
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup9
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup10
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup11
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup12
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup13
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup14
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup15
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup16
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup17
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup18
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup19
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confBladeObjectGroup20
+    DESCRIPTION "Implementation of this group is optional"
+
+    GROUP confSensorObjectGroup
+    DESCRIPTION "Implementation of this group is optional"
+
+
+    GROUP confGPRObjectGroup
+    DESCRIPTION "Implementation of this group is optional"
+
+
+    GROUP confFEObjectGroup
+    DESCRIPTION "Implementation of this group is optional"
+
+    ::= { compliance 1 }
+
+
+
+
+END
+   

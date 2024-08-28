@@ -1,0 +1,83 @@
+#!/bin/bash
+
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# get_bios_info
+# A script to check the current BIOS version.
+##
+# Usage:
+#	 get_bios_info
+##
+# Output:
+#      Current BIOS version: 080015
+#	
+##
+# Changelog:
+# - Tue May 31 2012 - Satya Deepthi (xsatdee)
+#       First version.
+##
+#******************************************************************************
+
+set -u
+
+#Global Parameters
+DMIDECODE="/usr/sbin/dmidecode"
+bios_version=
+
+exit_success=0
+exit_failure=1
+
+#function to log to system log
+function log(){
+        /bin/logger -t "$0" "$*"
+}
+
+function abort(){
+        log "ABORTING: <"$1">"
+        exit $exit_failure
+}
+
+#print usage
+function usage(){
+        echo -e "Usage: $0"
+}
+
+# Validate command
+function validateCommand() {
+	if [ $# -ne 0 ]; then
+		echo "Illegal arguments"
+		usage
+		abort "Illegal arguments"
+	fi
+}
+
+function launchCommand() {
+	bios_version=`${DMIDECODE} | grep -i "System Information" -A 3 |awk -F: '/Version/{print $2}'`
+	
+	if [ $? == 0 ]; then
+		log "Command successfully executed"
+		echo "BIOS version: $bios_version"
+	else
+		abort "Command failed"
+	fi
+}
+
+# _____________________ _____________________
+#|    _ _   _  .  _    |    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |   | ) ) (_| | | )   |
+#|_____________________|_____________________|
+# Here begins the "main" function...
+
+log "START:<$0>"
+
+validateCommand $*
+
+launchCommand
+
+log "END:<$0>"
+
+exit $exit_success
+

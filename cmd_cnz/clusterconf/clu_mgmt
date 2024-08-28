@@ -1,0 +1,216 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       clu_update
+#
+# Description:
+#       This is an internal command invoked from clusterconf tool.
+#       This command is used to update the cluster.conf file 
+#	without reloading the cluster.
+##
+# Usage:
+#      	Usage: clu_update <option> <rule>
+#
+# Options:
+#	-r|--reload			To reload cluster configuration
+#	-v|--verify			To verify cluster configuration			
+#	-V|--verbose			To print verbose information
+#	-C|--commit			To commit cluster modifcations
+#	-A|--abort			To rollback cluster modifications
+#	-h|--help			To display help
+#       
+##
+# Changelog:
+# - Thu Jun 17 2021 - Roshini Chilukoti(zchiros)
+#      - Fix for TR HY91147 APG43L 4.1 netdef command end with general error, file [/opt/ap/apos/conf/cluster.conf.mupdt] ...
+#
+# - Sat Aug 01 2012 - Malangsha Shaik(xmalsha)
+#      - First version.
+#
+
+# set -x
+
+# script-wide variables
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+LOG_TAG='clu_mgmt'
+OPT_VERIFY=$FALSE
+OPT_VERBOSE=$FALSE
+OPT_RELOAD=$FALSE
+OPT_COMMIT=$FALSE
+OPT_ABORT=$FALSE
+OPT_HELP=$FALSE
+
+CLUSTER_CONF_MUPDT=/opt/ap/apos/conf/cluster.conf.mupdt
+CLUSTER_CONF=/cluster/etc/cluster.conf
+
+# command-list
+CMD_GETOPT=/usr/bin/getopt
+CMD_LOGGER=/bin/logger
+CMD_CLUSTER=/usr/bin/cluster
+CMD_RM=/bin/rm
+CMD_MV=/bin/mv
+CMD_CAT=/bin/cat
+
+# exit flags
+exit_success=0
+exit_failure=1
+
+#----------------------------------------------------------------------------------------
+# function abort the execution if case of error
+function abort(){
+	local PRIO='-p user.err'
+	local MESSAGE="${*:-error}"
+	${CMD_LOGGER} $PRIO $LOG_TAG "$MESSAGE"
+	exit $exit_failure
+}
+
+#----------------------------------------------------------------------------------------
+function usage(){
+
+${CMD_CAT} << EOF
+
+Usage: clu_mgmt <option>
+Options:
+  -r|--reload          	To reload cluster configuration
+  -v|--verify         	To verify cluster configuration
+  -V|--verbose         	To print verbose information
+  -C|--commit         	To commit cluster modifcations
+  -a|--abort           	To rollback cluster modifications
+  -h|--help            	To display help
+
+EOF
+}
+
+function usage_error(){
+	echo "Incorrect Usage!"
+	usage
+	exit $exit_failure
+}
+
+#----------------------------------------------------------------------------------------
+function parse_args(){
+
+	[ $# -eq 0 ] && usage_error
+        local OPTIONS='a C h r V v'
+	local LONG_OPTIONS='abort commit help reload verbose verify'
+        $CMD_GETOPT --quiet --quiet-output --longoptions="$LONG_OPTIONS" --options="$OPTIONS" -- "$@"
+        [ $? -ne $TRUE ] && usage_error
+
+        ARGS="$@"
+        eval set -- $ARGS
+        while [ $# -gt 0 ]; do
+                case "$1" in
+                        -v|--verify)
+                                OPT_VERIFY=$TRUE
+                        ;;
+			-V|--verbose)
+				OPT_VERBOSE=$TRUE
+			;;
+			-r|--reload)
+				OPT_RELOAD=$TRUE
+			;;
+			-C|--commit)
+				OPT_COMMIT=$TRUE
+			;;
+			-a|--abort)
+				OPT_ABORT=$TRUE
+			;;
+			-h|--help)
+				OPT_HELP=$TRUE
+				usage
+			;;
+			*)
+				usage_error
+			;;
+                esac
+                shift
+        done
+	return $exit_success
+}
+
+#----------------------------------------------------------------------------------------
+function cluster_verify(){
+	local rCode=$exit_failure
+	[ $OPT_VERBOSE -eq $TRUE  ] && ${CMD_CLUSTER} config --validate --verbose &>/dev/null && rCode=$exit_success 
+	[ $OPT_VERBOSE -eq $FALSE ] && ${CMD_CLUSTER} config --validate &>/dev/null && rCode=$exit_success
+
+	echo -en "\nCluster configuration verify: "
+	[ $rCode -eq $exit_success ] && echo -e "Ok\n" || echo -e "Failed\n"
+	return $rCode
+}
+
+#----------------------------------------------------------------------------------------
+function cluster_reload(){
+	local rCode=$exit_failure
+	[ $OPT_VERBOSE -eq $TRUE  ] && ${CMD_CLUSTER} config --reload --all && rCode=$exit_success
+	[ $OPT_VERBOSE -eq $FALSE ] && ${CMD_CLUSTER} config --reload --all &>/dev/null && rCode=$exit_success
+	echo -en "Cluster configuration reload: "
+	[ $rCode -eq $exit_success ] && echo -e "Ok\n" || echo -e "Failed\n"
+	return $rCode
+}
+
+#----------------------------------------------------------------------------------------
+function cluster_commit(){
+	# previous updations to the cluster config is success.
+	# remove the backup file with the old configuration.
+	# if the back file is not found, can we say commit failed?
+	echo -en "Cluster configuration commit: "
+	if [ ! -f "$CLUSTER_CONF_MUPDT" ] && [ "$MULTIPLE_UPDATES" == "YES"]; then
+		echo -e "Failed\n"
+		abort "Backup file [$CLUSTER_CONF_MUPDT] not found"
+	fi
+	$(${CMD_RM} -f $CLUSTER_CONF_MUPDT)
+	echo -e "Ok\n"
+	return $exit_success
+}
+
+#----------------------------------------------------------------------------------------
+function cluster_abort(){
+	# previous updation to the cluster config is failed.
+	# rollback all the udpations done recently by replacing
+	# the old configuration file with the new one.
+	echo -en "Cluster configuration abort: "
+	if [ ! -f $CLUSTER_CONF_MUPDT ]; then
+		echo -e "Failed\n"
+	 	abort "Backup file [$CLUSTER_CONF_MUPDT] not found"
+	fi
+	$(${CMD_MV} $CLUSTER_CONF_MUPDT $CLUSTER_CONF)
+	echo -e "Ok\n"
+	return $exit_success
+}
+
+#----------------------------------------------------------------------------------------
+function cluster_ops(){
+
+	if [ $OPT_VERIFY -eq $TRUE ]; then
+    cluster_verify
+  elif [ $OPT_RELOAD -eq $TRUE ]; then
+    cluster_reload
+  elif [ $OPT_COMMIT -eq $TRUE ]; then
+    cluster_commit
+  elif [ $OPT_ABORT  -eq $TRUE ]; then
+    cluster_abort
+  fi
+
+}
+
+# _____________________
+#|    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |
+#|_____________________|
+# Here begins the "main" function...
+
+# parse the command-line paramters
+parse_args $*
+
+# launch cluster operations
+cluster_ops
+
+#  the script returns the status of the last invoked function
+exit $?
+

@@ -1,0 +1,5 @@
+Usage:  shelfmngr get master [--verbose] [--help]
+
+Retrieves the sc board designed to be the "master" one (prints "none" in the
+case no boards have the mastership).
+

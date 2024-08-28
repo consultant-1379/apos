@@ -1,0 +1,1117 @@
+<?xml version="1.0" encoding="utf-8"?><!-- 
+  Copyright (c) 2011 Ericsson AB.
+  All rights reserved
+
+  DX ECIM Tool-chain generated this file on Oct 7, 2011 4:30:45 PM using 
+    * coremw.m2m (1.3.0.Release)
+    * coremw.m2t (1.3.0.Release)
+    * coremw.dsl (1.3.0.Release)
+    * coremw.imm (1.3.0.Release)
+--><imm:IMM-contents xmlns:imm="http://www.saforum.org/IMMSchema" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.saforum.org/IMMSchema SAI-AIS-IMM-XSD-A.01.01.xsd">
+
+	<object class="Role">
+        <dn>roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>HLR/AUC/MNP Application System Administrator</value>
+        </attr>
+	     <attr>
+            <name>roleName</name>
+            <value>HlrAucMnpSystemAdministrator</value>
+        </attr>
+	</object>
+   
+    <object class="Rule">
+        <dn>ruleId=HlrSaTop_1,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read only permission to ManagedElement MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement</value>
+        </attr>
+    </object>   
+
+	<object class="Rule">
+        <dn>ruleId=HlrSaFunctions_1,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read only permission to AxeFunctions MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaHealthCheck_1,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-Write-Execute permissions to Health Check Management function MOM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,HealthCheckM,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaSystemHandling_1,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC SystemHandling</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaCpFileSystem_1,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-Write access to MOC CpFileSystemM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,CpFileSystemM,*</value>
+        </attr>
+    </object>
+	
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaAlphaDevice_1,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read and action execute permissions to MOC AlphanumericDeviceM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>5</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,*</value>
+        </attr>
+    </object>
+	
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_1,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder etc used to export timezone information on File Transfer session</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=etc,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_2,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to the folder cp and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,*</value>
+        </attr>
+    </object>
+	
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_3,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/mml and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_4,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder cp/mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_5,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_6,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/files and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_7,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in cp/files</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_8,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/files</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_9,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/printouts and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=printouts.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_10,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder cp/printouts</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=printouts,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_11,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/printouts</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=printouts,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_12,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to the folder health_check and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=health_check,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_13,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder health_check and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=health_check.*</value>
+        </attr>
+    </object>	
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_14,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder health_check</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=health_check,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_15,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder health_check</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=health_check,FileInformation,*</value>
+        </attr>
+    </object>
+
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_16,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder data_transfer/source/health_check and it's subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=health_check,*</value>
+        </attr>
+    </object>
+		
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_17,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder data_transfer/source/health_check and full access to folders and files in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=health_check.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_18,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder data_transfer/source/health_check</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=health_check,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_19,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder data_transfer/source/health_check</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=health_check,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_20,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to the folder sw_package/CP and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=CP,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_21,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder sw_package/CP and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=CP.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_22,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder sw_package/CP</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=CP,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_23,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder sw_package/CP</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=CP,FileInformation,*</value>
+        </attr>
+    </object>
+
+        <object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_24,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder /support_data and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,*</value>
+        </attr>
+    </object>
+
+        <object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_25,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder /support_data and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data.*</value>
+        </attr>
+    </object>
+
+        <object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_26,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder /support_data</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileGroup,*</value>
+        </attr>
+    </object>
+
+        <object class="Rule">
+        <dn>ruleId=HlrSaFileManagement_27,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder /support_data</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSaApCmd_1,roleId=HlrAucMnpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Execute permission to some AP commands</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>regexp:acease|alist|alogfind|bupidls|cfeted|clhls|cmdlls|cpdtest|cpfls|cpfrm|cqrhils|cqrhlls|crdls|fixerls|misclhls|mml|tesrvls|xpuls|mktr</value>
+        </attr>
+    </object>
+	
+	<object class="Role">
+        <dn>roleId=HlrAucMnpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>HLR/AUC/MNP Application Security Administrator</value>
+        </attr>
+	     <attr>
+            <name>roleName</name>
+            <value>HlrAucMnpSecurityAdministrator</value>
+        </attr>
+	</object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSecTop_1,roleId=HlrAucMnpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to ManagedElement MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSecFunctions_1,roleId=HlrAucMnpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to AxeFunctions MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSecSystemHandling_1,roleId=HlrAucMnpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC SystemHandling</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling</value>
+        </attr>
+    </object>
+	
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSecAlphaDevice_1,roleId=HlrAucMnpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read and action execute permissions to MOC AlphanumericDeviceM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>5</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrSecApCmd_1,roleId=HlrAucMnpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Execute permission to AP command mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>regexp:mml</value>
+        </attr>
+    </object>
+	
+	<object class="Role">
+        <dn>roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>HLR/AUC/MNP Application Operator</value>
+        </attr>
+	     <attr>
+            <name>roleName</name>
+            <value>HlrAucMnpOperator</value>
+        </attr>
+	</object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeTop_1,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC ManagedElement</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeFunctions_1,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC AxeFunctions</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeSystemHandling_1,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC SystemHandling</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeHealthCheck_1,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to Health Check Management function MOM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,HealthCheckM</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeHealthCheck_2,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to Category and it's child Mos under Health Check Management function MOM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,HealthCheckM,Category,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeHealthCheck_3,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to Job and it's child Mos under Health Check Management function MOM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,HealthCheckM,Job,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeHealthCheck_4,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to RuleFileManager MOM and it's child Mos</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,HealthCheckM,RuleFileManager,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeCpFileSystem_1,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to CpFileSystemM MOM and it's child MOs</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,CpFileSystemM,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeAlphaDevice_1,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read and action execute permissions to MOC AlphanumericDeviceM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>5</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeFileManagement_1,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder etc used to export timezone information on File Transfer session</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=etc,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeFileManagement_2,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to the folder cp and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeFileManagement_3,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/mml and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeFileManagement_4,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder cp/mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeFileManagement_5,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,*</value>
+        </attr>
+    </object>
+		
+	<object class="Rule">
+        <dn>ruleId=HlrOpeFileManagement_6,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/files and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeFileManagement_7,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in cp/files</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeFileManagement_8,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/files</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrOpeApCmd_1,roleId=HlrAucMnpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Execute permission to some AP commands</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>regexp:alist|cpdtest|cpfls|cpfrm|crdls|fixerls|misclhls|mml</value>
+        </attr>
+    </object>
+	
+	<object class="Role">
+        <dn>roleId=HlrAucMnpReadOnly,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>HLR/AUC/MNP Application ReadOnly</value>
+        </attr>
+	     <attr>
+            <name>roleName</name>
+            <value>HlrAucMnpReadOnly</value>
+        </attr>
+	</object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrRoSystemHandling_1,roleId=HlrAucMnpReadOnly,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read only permission to ManagedElement MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement</value>
+        </attr>
+    </object>
+	
+	
+	<object class="Rule">
+        <dn>ruleId=HlrRoSystemHandling_2,roleId=HlrAucMnpReadOnly,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read only permission to AxeFunctions MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrRoApCmd_1,roleId=HlrAucMnpReadOnly,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Execute permission to AP commands alist and mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>regexp:alist|mml</value>
+        </attr>
+    </object>
+	
+	<object class="Role">
+        <dn>roleId=HlrAucMnpScalingAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>HLR/AUC/MNP Application Scaling Administrator</value>
+        </attr>
+	     <attr>
+            <name>roleName</name>
+            <value>HlrAucMnpScalingAdministrator</value>
+        </attr>
+	</object>	
+
+	<object class="Rule">
+        <dn>ruleId=HlrScTop_1,roleId=HlrAucMnpScalingAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read only permission to ManagedElement MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement</value>
+        </attr>
+    </object>
+
+	<object class="Rule">
+        <dn>ruleId=HlrScEquipment_1,roleId=HlrAucMnpScalingAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read only permission to Equipment MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,Equipment,*</value>
+        </attr>
+    </object>
+
+	<object class="Rule">
+        <dn>ruleId=HlrScCrM_1,roleId=HlrAucMnpScalingAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-Write access to MOC CrM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,SysM,CrM,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=HlrScCpFileSystem_1,roleId=HlrAucMnpScalingAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-Write access to MOC CpFileSystemM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,CpFileSystemM,*</value>
+        </attr>
+    </object>
+
+	<object class="Rule">
+        <dn>ruleId=HlrScApCmd_1,roleId=HlrAucMnpScalingAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Execute permission to AP commands</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>regexp:hcstart|prcstate|burbackup|mml</value>
+        </attr>
+    </object>
+	
+</imm:IMM-contents>

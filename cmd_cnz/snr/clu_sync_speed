@@ -1,0 +1,164 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       clu_sync_speed
+#
+# Description:
+# 	This script is to change the DRBD synchronization rate using drbdsetup 
+#	and drbdadm.
+##
+# Usage:
+#	clu_sync_speed -s|--set <<rate>>
+#       clu_sync_speed -r|--reset
+#	clu_sync_speed -h|--help
+##
+# Output:
+#      Setting DRBD syncer rate to default...Done - if sync-rate set to default success
+#      Setting DRBD syncer rate to default failed - if sync-rate set to default failed
+#      
+##
+# Changelog:
+# - Tue May 18 2012 - Satya Deepthi (xsatdee)
+#       Major Rework.
+# - Mon May 21 2012 - Uppada Pratap (xpraupp)
+#       First version.
+##
+
+set -u
+
+#Global Parameters
+DRBDADM="/sbin/drbdadm"
+DRBDSETUP="/sbin/drbdsetup"
+rate=
+
+exit_success=0
+exit_failure=1
+
+#function to log to system log
+function log(){
+        /bin/logger -t "$0" "$*"
+}
+
+function abort(){
+	log "ABORTING: <"$1">"
+	exit $exit_failure
+}
+
+#print usage
+function usage(){
+	echo -e "Usage:" 
+	echo -e "\t $0 -s|--set <<rate>>"
+	echo -e "\t $0 -r|--reset"
+	echo -e "\t $0 -h|--help"
+	echo
+	echo -e "Example:"
+	echo -e "\t $0 --set 1G"
+	echo -e "\t $0 --reset"
+	echo -e "\t $0 --help"
+}
+
+function launchCommand(){
+
+	# To set DRBD rate to default
+	if [ -z $rate ]
+	then
+		echo -n "Setting DRBD syncer rate to default..."
+		$DRBDADM adjust all
+		if [ $? != 0 ]; then
+			echo -e "\nSetting DRBD syncer rate to default failed "
+			abort "Setting DRBD syncer rate to default failed"
+		else
+			echo "Done"
+		fi
+	else
+		echo -n "Setting DRBD syncer rate to $rate..."
+	#	$DRBDADM disk-options --resync-rate=$rate drbd0
+        	$DRBDSETUP disk-options /dev/drbd0 --resync-rate=$rate # For specific rate
+                if [ $? != 0 ]; then
+			echo -e "\nSetting DRBD syncer rate to $rate failed "
+			abort "Setting DRBD syncer rate to $rate failed"
+		else
+			echo "Done"
+                fi
+	fi
+	return $exit_success
+}
+
+function parse_cmdline(){
+	
+	if [ $# -eq 0 -o $# -gt 2 ]; then
+		usage
+		abort "Illegal options"
+	fi
+
+        if [ $1 == "-r" -o $1 == "--reset" ]
+        then
+                if [ $# -gt 1 ]
+                then
+                        usage
+                        abort "No parameter needed for this option"
+                fi
+        fi
+
+	check_option1=`echo $1 | sed -e "s/[^[:alnum:]]//g"`	
+	if [ -z $check_option1 ] 
+	then
+		usage
+		abort "Illegal options"
+	fi
+
+	local LONG_OPTIONS='set: reset help'
+	local OPTIONS='s: r h'
+	ARGS=`getopt --longoptions "$LONG_OPTIONS" -options "$OPTIONS" -- "$@"`
+	rCode=$?
+	if [ $rCode -ne 0 ]; then
+		usage
+		abort "Illegal options"
+	fi	
+	
+	eval set -- "$ARGS"
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			-s|--set)
+				rate=$2
+				shift		
+			;;
+			-r|--reset)
+				rate=
+			;;
+			-h|--help)
+				usage
+				abort ""
+			;;	
+			--)
+				shift
+			;;
+			*)
+				usage	
+				abort "Illegal option ($1)"
+			;;
+		esac
+		shift
+	done	
+}
+
+# _____________________ _____________________
+#|    _ _   _  .  _    |    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |   | ) ) (_| | | )   |
+#|_____________________|_____________________|
+# Here begins the "main" function...
+
+log "START:<$0>"
+
+parse_cmdline $*
+
+launchCommand
+
+log "END:<$0>"
+
+exit $exit_success
+

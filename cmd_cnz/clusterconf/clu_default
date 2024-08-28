@@ -1,0 +1,25 @@
+#!/bin/sh
+#Author: Madhu Aravabhumi
+#
+#Changelog
+# Date : 10-03-2011 -Madhu
+# Change: siteparam and initparam configuration file names changed as per the Maiden Installation 
+
+clu_file="/opt/ap/apos/bin/clusterconf/clu_parse"
+word="defparam"
+
+echo -e "\nSearching for siteparam.conf: "
+if [ -f /cluster/opt/ap/apos/conf/siteparam.conf ] ; then
+        echo "INFO: Site paramters file is Found"
+        path="/cluster/opt/ap/apos/conf/siteparam.conf"
+else
+if [ -f /cluster/opt/ap/apos/conf/initparam.conf ] ; then
+        echo "INFO: Default parameters file is Found"
+        path="/cluster/opt/ap/apos/conf/initparam.conf"
+else
+        echo -e "Error: initparam.conf/siteparam.conf not found in the location /cluster/opt/ap/apos/conf/"
+        exit 1
+fi
+fi
+
+$clu_file $word --other $path

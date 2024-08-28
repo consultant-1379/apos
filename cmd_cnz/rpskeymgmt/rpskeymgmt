@@ -1,0 +1,468 @@
+#!/bin/bash -u
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2021 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       rpskeymgmt
+# Description:
+#       A script to generate new key pair and update the existing keys in APG and RP VMs.
+##
+# Usage:
+#       rpskeymgmt -h
+##
+# Changelog:
+#  - Tue Dec 07 2023 - Neelam Kumar (XNEELKU)
+#    Updated the sanity check for TR IA64324.
+#  - Tue Sep 07 2021 - Neelam Kumar (XNEELKU)
+#    Updated the script to support RP Identity values.
+#  - Fri Aug 27 2021 - Neelam Kumar (XNEELKU)
+#    First version.
+##
+
+# Source apos_common.sh 
+. /opt/ap/apos/conf/apos_common.sh 
+
+LOG_TAG='rpskeymgmt'
+LOG_DIR='/tmp'
+LOG_FILE='rpskeymgmt.log'
+KEY_TYPE='rsa'
+OPT_ARG=''
+FILE_NAME=''
+
+TMP_FILE='/tmp/openssl_check'
+STORAGE_API='/usr/share/pso/storage-paths/config'
+[ -f $STORAGE_API ] && PSO_PATH=$(<$STORAGE_API)
+[ ! -d $PSO_PATH ] && apos_abort 1 "PSO path not Found"
+APOS_PSO="$PSO_PATH/apos"
+SSH_KEYS_PATH_PSO="$APOS_PSO/ssh_keys"
+PRIVATE_KEY="$SSH_KEYS_PATH_PSO/id_rsa"
+PUBLIC_KEY="$SSH_KEYS_PATH_PSO/id_rsa.pub"
+DEFAULT_PRIVATE_KEY="$SSH_KEYS_PATH_PSO/id_rsa_default"
+RP_KEY_FILE='/cluster/home/ts_rp/.ssh/authorized_keys'
+RP_TSUSER='ts_rp'
+
+# Command Variables
+CMD_CAT='/bin/cat'
+CMD_GETOPT='/usr/bin/getopt'
+CMD_ECHO='/bin/echo'
+CMD_CUT='/usr/bin/cut'
+CMD_SCP='/usr/bin/scp'
+CMD_MV='/usr/bin/mv'
+CMD_GREP='/usr/bin/grep'
+CMD_AWK='/usr/bin/awk'
+CMD_TR='/usr/bin/tr'
+CMD_LOGGER='/bin/logger'
+CMD_TOUCH='/usr/bin/touch'
+CMD_CHMOD='/usr/bin/chmod'
+CMD_CHOWN='/usr/bin/chown'
+CMD_SSH='/usr/bin/ssh'
+CMD_SSHKEYGEN='/usr/bin/ssh-keygen'
+CMD_PING='/bin/ping'
+CMD_SED='/usr/bin/sed'
+CMD_OPENSSL='/usr/bin/openssl'
+CMD_GETENT='/usr/bin/getent'
+
+OPT_CREATE=$FALSE
+OPT_INSTALL=$FALSE
+OPT_FILE=$FALSE
+OPT_HELP=$FALSE
+
+# Exit Flags
+exit_success=$TRUE
+exit_fail=$FALSE
+exit_usage=2
+exit_existence_command=9
+exit_existence_group=10
+exit_no_file=127
+exit_skip='254'
+exit_user_value=22
+
+#-----------------------------------------------------------------------------
+# log to system-log
+function log(){
+  $CMD_LOGGER -t "$LOG_TAG" "$*"
+  flog "$*"
+}
+
+#-----------------------------------------------------------------------------
+function flog(){
+  echo "[$(date --utc +'%Y-%m-%d %H:%M:%S')] $@" >>$LOG_DIR/$LOG_FILE
+}
+
+#------------------------------------------------------------------------------
+function INFO(){
+  echo "[$(date --utc +'%Y-%m-%d %H:%M:%S')] $@" >>$LOG_DIR/$LOG_FILE
+}
+
+# ------------------------------------------------------------------------------
+# The function will log an error message in the system log. If the --verbose
+# option has been specified, it will print the same message on stderr too.
+function log_error(){
+  local PRIO='-p user.err'
+  local MESSAGE="${*:-error}"
+  $CMD_LOGGER $PRIO $LOG_TAG "$MESSAGE" &>/dev/null
+}
+
+# ------------------------------------------------------------------------------
+function abort(){
+  console_print ''
+  ${CMD_ECHO} "$1"
+  log_error "$1"
+  console_print ''
+  exit $2
+}
+
+# ------------------------------------------------------------------------------
+function console_abort(){
+  console_print ''
+  console_print "$1"
+  console_print ''
+  exit $exit_skip
+}
+
+# ------------------------------------------------------------------------------
+# function to print the message on stdout
+function console_print(){
+  ${CMD_ECHO} -e "$1"
+}
+
+#-------------------------------------------------------------------------------
+function handle_int(){
+  log "SIGINT received... ignoring it"
+}
+
+#-------------------------------------------------------------------------------
+function handle_hup(){
+  log "SIGHUP received... ignoring it"
+}
+
+#-------------------------------------------------------------------------------
+function handle_term(){
+  log "SIGTERM received... exiting"
+  undo_configuration
+  exit $TRUE
+}
+
+#-------------------------------------------------------------------------------
+function TRACE_ENTER(){
+        INFO "$1() >>"
+}
+
+#-------------------------------------------------------------------------------
+function TRACE_LEAVE(){
+        INFO "$1() <<"
+}
+
+#-------------------------------------------------------------------------------
+function isValidIPv4() {
+  local rCode=$FALSE
+
+  local ip_address="$1"
+  local letters=$(echo $ip_address | tr -dc "([0-9]|\.)")
+  local diff=$( echo $(( ${#ip_address} - ${#letters} )))
+
+  if [ $diff -eq 0 ] ; then
+    local ip_address_components=(${ip_address//./ })
+    if [ ${#ip_address_components[@]} -eq 4 ] ; then
+      local dots=$(echo $ip_address | tr -dc "(\.)")
+      if [ ${#dots} -eq 3 ] ; then
+        local status=$TRUE
+        local ip_component
+        for ip_component in "${ip_address_components[@]}" ; do
+          if [ ${#ip_component} -le 0 ] || [ ${#ip_component} -gt 3 ] || \
+             [ $ip_component -lt 0 ] || [ $ip_component -gt 255 ]; then
+            status=$FALSE;
+            break;
+          fi
+        done
+
+        [[ $status -eq $TRUE ]] && rCode=$TRUE
+      fi
+    fi
+  fi
+  return $rCode
+}
+
+# -----------------------------------------------------------------------------
+function sanity_check() {
+
+  TRACE_ENTER $FUNCNAME
+
+  # verify if the configuration is vBSC.
+  if ! isvBSC; then
+    console_abort 'Illegal command in this system configuration'
+  fi
+
+  # verify the existence of SSH keys directory.
+  [ ! -d $SSH_KEYS_PATH_PSO ] && abort 'ERROR: SSH keys directory not found' $exit_no_file  
+  [ ! -f $PRIVATE_KEY ] && abort 'ERROR: Default private key not found' $exit_no_file
+
+  # verify the existence of required commands
+  [ ! -x $CMD_SSHKEYGEN ] && abort "ERROR: $CMD_SSHKEYGEN not found or not executable" $exit_existence_command
+  [ ! -x $CMD_OPENSSL ] && abort "ERROR: $CMD_OPENSSL not found or not executable" $exit_existence_command
+  [ ! -x $CMD_GETENT ] && abort "ERROR: $CMD_GETENT not found or not executable" $exit_existence_command
+
+  flog "Verifying the existence of required user groups"
+  # verify the existence of tsgroup.
+  $CMD_GETENT group tsgroup &>/dev/null || \
+    abort "ERROR: User group tsgroup not found" $exit_existence_group
+  flog "User group tsgroup exists on the system"
+
+  TRACE_LEAVE $FUNCNAME
+  return $TRUE
+
+}
+
+# -----------------------------------------------------------------------------
+function install_keys_from_file() {
+
+  TRACE_ENTER $FUNCNAME
+
+  local FILENAME=$1
+  local count=0
+
+  while read line; do
+    # reading each RP VM ip from the file
+    if [ -n "$line" ];then
+	    install_keys $line
+        [ $? -ne 0 ] && count=$((count+1))
+    fi
+  done < $FILENAME
+
+  if [ "$count" -ne 0 ];then
+     console_abort "Warning: Installation failed for one or more RPs."
+  fi
+
+  TRACE_LEAVE $FUNCNAME
+  return $TRUE
+
+}
+# ------------------------------------------------------------------------------
+function install_keys() {
+
+  TRACE_ENTER $FUNCNAME
+
+  local HOST_IDENTITY=$1
+  local PORT=22
+  local PATTERN_MATCH_STR='Verify return code: 0 (ok)'
+  
+  if [[ $HOST_IDENTITY =~ ^[a-zA-Z] ]] && [[ $HOST_IDENTITY =~ ^[Rr][Pp] ]];then
+    HOST_IDENTITY=${HOST_IDENTITY^^}
+    if ! grep -wq $HOST_IDENTITY /etc/hosts;then
+      [ $OPT_FILE -eq $TRUE ] && return $exit_skip
+      console_abort "Unreasonable value < $HOST_IDENTITY >" $exit_user_value
+    fi
+  elif ! isValidIPv4 $HOST_IDENTITY; then
+    [ $OPT_FILE -eq $TRUE ] && return $exit_skip
+    console_abort "Unreasonable value < $OPT_ARG >" $exit_user_value
+  fi
+
+  flog "Verifying the existence of default ssh keys"
+  [ ! -f $DEFAULT_PRIVATE_KEY ] && abort 'ERROR: Default private key not found' $exit_no_file
+  flog "Default ssh keys exists"
+  
+  flog "Verifying the existence of current ssh keys"
+  [ ! -f $PUBLIC_KEY ] && [ ! -f $PRIVATE_KEY ] && abort 'ERROR: Current ssh keys not found.' $exit_fail
+  flog "Current ssh keys exists"
+
+  flog "Checking if RP VM ip $HOST_IDENTITY is reachable"
+  timeout 6 openssl s_client -connect $HOST_IDENTITY:$PORT -status &>/dev/null > $TMP_FILE
+  if ! grep -q "$PATTERN_MATCH_STR" $TMP_FILE ; then 
+    log "Openssl command execution failed, The RP VM $HOST_IDENTITY is unreachable"
+    log "Failed to install ssh key pair on $HOST_IDENTITY."
+    return $exit_fail
+  fi
+  flog "RP VM ip $HOST_IDENTITY is reachable"
+
+  kill_after 5 "$CMD_SCP -q -i $DEFAULT_PRIVATE_KEY -o StrictHostKeyChecking=no $PUBLIC_KEY $RP_TSUSER@$HOST_IDENTITY:$RP_KEY_FILE" &>/dev/null
+  if [ $? -ne $TRUE ];then
+    log "Failed to install ssh keys on $HOST_IDENTITY"
+    return $exit_fail
+  else
+    log "ssh keys are successfully installed on $HOST_IDENTITY"
+  fi
+
+  TRACE_LEAVE $FUNCNAME
+  return $TRUE
+}
+
+# ------------------------------------------------------------------------------
+function generate_ssh_keys() {
+
+  TRACE_ENTER $FUNCNAME
+
+  #For the key generation the default key type (i.e. rsa) is being used.
+  #check if the keys were not generated earlier
+  flog "Checking the existence of ssh keys"
+  [ -f $PRIVATE_KEY ] && [ -f $PUBLIC_KEY ] && console_abort "ssh keys already present."
+  flog "ssh keys are not available, need to be generated"
+
+  #Renaming default ssh key from id_rsa to id_rsa_default
+  flog "Renaming the default ssh key."
+  if [ -f $PRIVATE_KEY ] ; then
+    $CMD_MV $PRIVATE_KEY $DEFAULT_PRIVATE_KEY
+  else
+    console_abort 'ERROR: Default private key not found.' $exit_no_file
+  fi
+
+  flog "Generating new ssh key pair"
+  $CMD_SSHKEYGEN -f $PRIVATE_KEY -q -P "" -C "" -t "$KEY_TYPE" &>/dev/null
+  [ $? -ne $TRUE ] && console_abort 'ERROR: ssh keys generation failed.' $exit_fail
+  console_print "ssh keys successfully generated."
+  flog "New ssh key pair is generated successfully"
+
+  $CMD_CHMOD 640 $PRIVATE_KEY
+  $CMD_CHMOD 640 $PUBLIC_KEY
+  $CMD_CHOWN tsadmin:tsgroup $PRIVATE_KEY
+  $CMD_CHOWN tsadmin:tsgroup $PUBLIC_KEY
+
+  TRACE_LEAVE $FUNCNAME
+  return $TRUE
+}
+
+# function to invoke the right action as per the options provided
+# ------------------------------------------------------------------------------
+function invoke(){
+
+   TRACE_ENTER $FUNCNAME
+
+   # Register for signals
+   trap handle_int SIGINT
+   trap handle_hup SIGHUP
+   trap handle_term SIGTERM
+
+   if [ $OPT_CREATE -eq $TRUE ];then
+     generate_ssh_keys
+   elif [ $OPT_FILE -eq $TRUE ];then
+     install_keys_from_file $FILE_NAME
+     [ $? -eq 0 ] && console_print "ssh keys successfully installed."
+   elif [ $OPT_INSTALL -eq $TRUE ];then
+     install_keys $OPT_ARG
+     if [ $? -eq 0 ];then
+       console_print "ssh keys successfully installed."
+     else
+       console_abort 'ERROR: ssh keys installation failed.'
+     fi
+   fi
+   
+   ## remove temp file
+   rm -f $TMP_FILE
+
+   TRACE_LEAVE $FUNCNAME
+   trap - SIGINT SIGHUP SIGTERM
+}
+
+# -----------------------------------------------------------------------------
+# function to print rpskeymgmt command usage on stdout
+function usage(){
+       $CMD_CAT << HEREDOC
+usage:
+    rpskeymgmt -c
+    rpskeymgmt -i rp_id|-f file_name
+    rpskeymgmt -h
+
+HEREDOC
+}
+
+# function to print the error when used incorrect format
+# ------------------------------------------------------------------------------
+function usage_error(){
+  console_print ''
+  if [ $# -gt 0 ]; then
+    console_print "$1"
+  else
+    console_print "Incorrect usage"
+  fi
+  usage
+  exit $exit_usage
+}
+
+# ------------------------------------------------------------------------------
+function parse_cmdline(){
+  log "Parsing the arguments.."
+  [ $# -lt 1 ] && usage_error
+
+  local OPTIONS='c i f h'
+  local long_options=''
+  
+
+  $CMD_GETOPT --quiet --quiet-output --options="$OPTIONS" --longoptions="$long_options" -- "$@"
+  [ $? -ne $TRUE ] && console_print "Incorrect Usage!" && usage_error
+
+  eval set -- "$@"
+  
+  while [ $# -gt 0 ];do
+    case "$1" in
+      -c)
+         [[ $OPT_CREATE -eq $TRUE || $OPT_INSTALL -eq $TRUE ]] && usage_error
+         OPT_CREATE=$TRUE
+         flog "OPT_CREATE option is set"
+      ;;
+      -i)
+             [[ $# -lt 2 || $OPT_INSTALL -eq $TRUE || $OPT_CREATE -eq $TRUE ]] && usage_error
+                 OPT_INSTALL=$TRUE
+                 if [[ "$2" != '-f' ]]; then
+                   OPT_ARG=${2:-''}
+				   [[ $# -gt 2 && -n "$3" ]] && usage_error
+                 shift
+                 fi
+         flog "install option is set"
+      ;;
+      -f)
+             [[ $# -lt 2 || $OPT_FILE -eq $TRUE || $OPT_INSTALL -eq $FALSE ]] && usage_error
+              OPT_FILE=$TRUE
+                 if [[ $2 =~ ^-.*$ ]]; then
+                   usage_error
+                 else
+                   FILE_NAME=${2:-''}
+				   [ ! -s $FILE_NAME ] && usage_error "$FILE_NAME does not exist or $FILE_NAME is empty"
+                 shift
+                 fi
+                 
+         flog "file option is set"
+      ;;
+      -h)
+         [ $OPT_HELP -eq $TRUE ] && usage_error
+         OPT_HELP=$TRUE
+         usage
+         flog "help option is set"
+      ;;
+      *)
+        console_print 'Invalid options'
+        usage
+        exit $FALSE
+      ;;
+    esac
+  shift
+  done
+}
+
+# Functions ------------------------------------------END
+
+# _____________________
+#|    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |
+#|_____________________|
+# Here begins the "main" function...
+# Set the interpreter to exit if a non-initialized variable is used.
+set -u
+
+# Log the parameters in the system log
+log "START: <$0 $*>"
+
+# sanity checks to check the state of the node
+sanity_check
+
+# parse the command line options
+parse_cmdline $*
+
+# invokes the required action
+invoke
+
+log "END: <$0>"
+
+exit $TRUE
+
+# END

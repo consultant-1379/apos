@@ -1,0 +1,16 @@
+# sd_subsystem.list
+# This file lists all the subsystem installed on the system disk of AP2 APG43L.
+# Lines beginning with a '#' char will be ignored.
+#
+
+# The Adjunct Processor Operating System
+apos
+
+# Other subsystems
+acs
+aes
+cqs
+mas
+ocs
+pes
+sgs

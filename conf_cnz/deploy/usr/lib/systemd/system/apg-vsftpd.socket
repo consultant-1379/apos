@@ -1,0 +1,10 @@
+[Unit]
+Conflicts=vsftpd.service
+DefaultDependencies=no
+
+[Socket]
+ListenStream=<node_public_network_ip_address>:21
+Accept=yes
+
+[Install]
+WantedBy=lde-servicestart.target

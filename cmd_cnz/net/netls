@@ -1,0 +1,1880 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2020 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       netls
+#
+# Description:
+#       netls command is used to list the Public & Vlan Inteface details
+#	like,IP,Gateway for both the nodes
+##
+# Usage:
+#      netls [-l]
+#      netls [-l] [-v {4|6}]
+# 
+##
+# Output:
+#       Command output is directly printed on console.
+##
+# Changelog:
+# - Fri 04 Aug 2023 - Surya Mahit Jonnalagadda (ZSURJON)
+#       - Fix for IA45798 TR
+# - Tue 07 Mar 2023 - P S SOUMYA (ZPSXSOU)
+#       - Fix for IA30157 TR
+# - Mon 23 Jan 2023 - Surya Mahit Jonnalagadda (ZSURJON)
+#       - Fix for TR IA12546
+# - Wed 29 Jun 2022 - Sowjanya Medak (XSOWMED)
+#       - Updated the script for VEN feature
+# - Mon 24 Jan 2022 - Roshini Chilukoti (ZCHIROS)
+#	- Fix for TR HY87206
+# - Thu 24 Dec 2020 - Dharma Teja (XDHATEJ)
+#       - Fix for TR HY79216
+# - Fri 31 Jan 2020 - Rajeshwari Padavala(XCSRPAD)
+#       -  Modifying for IPv6 Support
+# - Tue 6 Mar 2018 - Rajashekar Narla(xcsrajn)
+#       - Fixed a minor issue with "Reboot needed" message when dscp is configured.
+# - Fri 10 Feb 2017 - Pratap Reddy (xpraupp)
+#       - updated opt_network_netls function support virtual environment
+# - Tuesday 07 June 2016 - Raghavendra Koduri (xkodrag)
+#       - Support to list DSCP  value for SMX architecture
+# - Fri 28 Jul 2016 - Rajashekar Narla (XCSRAJN)
+#     	- Removed Optional word from the netls output.
+# - Fri 22 Jul 2016 - Rajashekar Narla (XCSRAJN)
+#     	- Fixed issue with deletion or additon of static routes
+# - Mon 30 May 2016 - Rajashekar Narla (XCSRAJN)
+#     	- Implemented code review comments.
+# - Thu 18 May 2016 - Gvl Sowjanya (XSOWGVL)
+#     	- Updated netls command to list static routes information not belonging to vlan networks
+# - Thurs 16 July 2015 - Raghavendra Koduri (xkodrag)
+#       - Fix for TR HT91324 
+# - Mon 04 May 2015 - Pranshu Sinha (xpransi)
+#       - Fix for TR HT70711
+# - Mon 06 April 2015 - Sarita Gundeboina/Pranshu Sinha (xgunsar/xpransi)
+#       - Support to list dscp value on BSP architecture
+# - Mon 05 Jan 2015 - Madhu Muthyala (XMADMUT)
+#	- Added opt_network_netls function to list optinal networks [ex: cdr, li... ] for virtualization POC
+# - Mon 09 Jun 2014 - Fabio Imperato (xfabimp)
+#       - Updated long format (-l option) according new MAN-Page rev.
+# - Tue 20 May 2014 - Fabrizio Paglia (xfabpag)
+#       - Print active node first in long format (-l option)
+# - Mon 19 May 2014 - Fabrizio Paglia (xfabpag)
+#       - Bug fixed
+# - Thu 17 April 2014 - Torgny Wilhelmsson/Fabrizio Paglia (xtorwil/xfabpag)
+#       - Robustness improvements
+# - Wed 16 April 2014 - Fabrizio Paglia (xfabpag)
+#       - Updated according to 24/190 80-CNZ 226 23 Uen PB4
+# - Mon 07 April 2014 - Fabrizio Paglia (xfabpag)
+#       - Printout changed to show Public VLAN id and destination networks
+# - Mon 07 April 2014 - Torgny Wilhelmsson (xtorwil)
+#       - TR fix HS40132, initiation of PS printout variables. 
+# - Fri Mar 21 2014 - Fabrizio Paglia (xfabpag)
+#	- Adaptation to the new behaviour of VLAN Public
+# - Thu Jan 30 2014 - Gianluigi Crispino (xgiacri)
+#	- updated printout according to 24/190 80-CNZ 226 23 Uen PA2
+# - Wed Jan 15 2014 - Marco Zambonelli (xmarzam)
+#	- added output about Physically Separated Network when configured
+#         according to 24/190 80-CNZ 226 23 Uen PA1
+# - Mon Nov 26 2012 - Satish Kumar Jaiswal (xkusati)
+#	- Fixed TR HQ63648
+# - Sat Jul 28 2012 - Sameer Chandra (xsamech)
+#	-First revision
+#	
+
+
+APOS_COMMON="${AP_HOME:-/opt/ap}/apos/conf/apos_common.sh"
+source $APOS_COMMON
+
+# paths and files variables
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+LOG_TAG='netls'
+CLUSTER_CONF=/cluster/etc/cluster.conf
+NODE_ID=/etc/cluster/nodes/this/id
+is_swm_2_0="/cluster/storage/system/config/apos/swm_version"
+# command-list
+CMD_IMMLIST=/usr/bin/immlist
+CMD_AWK=/usr/bin/awk
+CMD_CAT=/bin/cat
+CMD_CLUSTERCONF=/opt/ap/apos/bin/clusterconf/clusterconf
+CMD_CUT=/usr/bin/cut
+CMD_HEAD=/usr/bin/head
+CMD_TAIL=/usr/bin/tail
+CMD_GREP=/usr/bin/grep
+CMD_IFCONFIG=/sbin/ifconfig
+CMD_IP=/sbin/ip
+CMD_PING=/bin/ping
+CMD_SSH=/usr/bin/ssh
+CMD_ROUTE=/sbin/route
+CMD_VLANLS=/usr/bin/vlanls
+CMD_WC=/usr/bin/wc
+CMD_IPTABLES=/usr/sbin/iptables
+CMD_RM=/bin/rm
+CMD_LDE_CONFIG=/usr/sbin/lde-config
+CMD_IP=/usr/sbin/ip
+
+# script wide variables
+INTERFACE=''
+RM_INTERFACE=''
+NETWORe=''
+PEER_NODE_UP=''
+RHOST=''
+RNODE=''
+IP_ADDRA=''
+IP_ADDRB=''
+SUBNET_ADDRA=''
+SUBNET_ADDRB=''
+MAC_ADDRA=''
+MAC_ADDRB=''
+GW_ADDR=''
+CLU_ADDR=''
+IP_ADDR_VLANA=''
+IP_ADDR_VLANB=''
+SUBNET_ADDR_VLANA=''
+SUBNET_ADDR_VLANB=''
+MAC_ADDR_VLANA=''
+MAC_ADDR_VLANB=''
+GW_ADDR_VLAN=''
+CLU_ADDR_VLAN=''
+PS_ADAPTER="eth2"
+IP_ADDR_PSA=''
+MAC_ADDR_PSA=''
+SUBNET_ADDR_PSA=''
+IP_ADDR_PSB=''
+MAC_ADDR_PSB=''
+SUBNET_ADDR_PSB=''
+GW_ADDR_PS=''
+CLU_ADDR_PS=''
+VLAN_MAPING_CONF=/cluster/etc/ap/apos/vlan_adapter_maping.conf
+ACTIVE_NODE_ID=''
+A_STATUS='P'
+B_STATUS='P'
+VLANINFO_TAGS=''
+SHELF_ARCH=''
+VIRTL_ARCH=$FALSE
+VERSION_4=$FALSE
+VERSION_6=$FALSE
+SCOPE="Scope:Global"
+
+# exit codes
+exit_fail=1
+exit_sucs=0
+exit_usge=2
+
+#Flag settings for options checks
+lflag=$FALSE
+vflag=$FALSE
+
+#----------------------------------------------------------------------------------------
+# log to system-log
+function log(){
+        /bin/logger -t "$LOG_TAG" "$*"
+}
+
+#----------------------------------------------------------------------------------------
+function abort(){
+        console_print "Error when executing (general fault)"
+        log "ABORTING: <"ERROR: $1">"
+        log "END: <$0>"
+        exit $exit_fail
+}
+
+#----------------------------------------------------------------------------------------
+function console_print(){
+        echo -e
+        echo -e "$@"
+        echo -e
+}
+
+#----------------------------------------------------------------------------------------
+function usage(){
+if is_vAPG ; then
+$CMD_CAT << EOF
+
+Usage: netls [-l] [-v {4|6}] 
+
+EOF
+else
+
+$CMD_CAT << EOF
+Usage: netls [-l] 
+
+EOF
+fi
+}
+
+#----------------------------------------------------------------------------------------
+function ping_peer(){
+        
+	RHOST=$(</etc/cluster/nodes/peer/hostname)
+        RNODE=$(</etc/cluster/nodes/peer/id)
+	
+	PEER_NODE_UP=$FALSE
+        ${CMD_PING} -c 1 -W 1 $RHOST &>/dev/null
+        [ $? -eq 0 ] && PEER_NODE_UP=$TRUE
+}
+
+#----------------------------------------------------------------------------------------
+function usage_error(){
+        echo -e
+        echo "netls: Incorrect usage"
+        usage
+        exit $exit_usge
+}
+
+#----------------------------------------------------------------------------------------
+function parse_args(){
+if is_vAPG ; then
+    parse_args_2 $*;
+else
+    parse_args_1 $*;
+fi
+}
+#----------------------------------------------------------------------------------------
+function parse_args_1(){
+if [ $# -gt 1 ] ; then
+                usage_error
+        elif [ $# -eq 1 ] && [ "$1" != "-l" ] ; then
+                usage_error
+        fi
+
+        (( $# )) || { lflag=$FALSE; }
+        local options=':l'
+        while getopts $options option
+        do
+                case $option in
+                        l) lflag=$TRUE;;
+                esac
+        done
+		VERSION_4=$TRUE
+}        
+#----------------------------------------------------------------------------------------
+function parse_args_2(){
+        if [ $# -gt 3 ] ; then
+                usage_error
+        elif [ $# -eq 1 ] && [ "$1" != "-l" ] ; then
+                usage_error
+        elif [ $# -eq 2 ] && [ "$1" == "-l" ]|| [ "$2" == "-l" ] ; then
+                usage_error
+        elif [ $# -eq 2 ] && ([ "$1" != "-l" ] && [ "$1" != "-v" ]) ; then
+                usage_error
+        elif [ $# -eq 3 ] && ([ "$1" == "-l" ] && [ "$2" != "-v" ]); then
+                usage_error
+        elif [ $# -eq 3 ] && ([ "$1" == "-v" ] && [ "$3" != "-l" ]) ; then
+                usage_error
+        fi
+
+        (( $# )) || { lflag=$FALSE; } || { vflag=$FALSE;  }
+        local options=':lv:'
+		local v4allow=$($CMD_LDE_CONFIG mip show |$CMD_GREP -w "public" |wc -l )
+		local v6allow=$($CMD_LDE_CONFIG mip show |$CMD_GREP -w "public_v6" |wc -l )
+        while getopts $options option
+        do
+              case $option in
+                        'l') lflag=$TRUE;;
+                        'v') vflag=$TRUE
+                             ver=$OPTARG
+                             if isDualStack ; then
+                                if [ "$ver" == "4" ] ; then
+	                           VERSION_4=$TRUE
+                                elif [ "$ver" == "6" ] ; then
+	                           VERSION_6=$TRUE
+                                elif [ "$ver" != "6" ] && [ "$ver" != "4" ] ; then
+                                   usage_error
+                                fi
+                             else
+                                 if [ $v4allow -eq 1 ] && [ $v6allow -eq 0 ]; then
+                                    if [ "$ver" == "6" ]; then
+                                       console_abort "Illegal value in this system configuration" $exit_usage
+                                    elif [ "$ver" != "4" ]; then
+                                       usage_error
+                                    fi
+                                 elif [ $v6allow -eq 1 ] && [ $v4allow -eq 0 ]; then
+                                    if [ "$ver" == "4" ]; then
+                                       console_abort "Illegal value in this system configuration" $exit_usage
+                                    elif [ "$ver" != "6" ]; then
+                                       usage_error
+                                    fi
+                                 elif [ $v4allow -eq 1 ] && [ $v6allow -eq 1 ]; then
+                                    if [ "$ver" != "6" ] && [ "$ver" != "4" ] ; then
+                                       usage_error
+                                    fi
+                                 fi
+                                 if [ "$ver" == "4" ] ; then
+                                    VERSION_4=$TRUE
+                                 elif [ "$ver" == "6" ] ; then
+                                    VERSION_6=$TRUE
+                                 fi
+	                     fi
+			     ;;
+                         *)
+               		     usage_error
+		esac
+	done
+        if [ $vflag -eq $FALSE ] ; then
+           if isDualStack ; then
+              VERSION_4=$TRUE
+              VERSION_6=$TRUE
+           else
+	     [ $v4allow -eq 1 ] && VERSION_4=$TRUE
+	     [ $v6allow -eq 1 ] && VERSION_6=$TRUE
+           fi
+        fi
+}
+
+#----------------------------------------------------------------------------------------
+function console_abort(){
+        console_print "$1"
+        exit $2
+}
+
+#----------------------------------------------------------------------------------------
+function vlan_netls(){
+	local physical_interface=$(echo $INTERFACE | ${CMD_AWK} -F'.' '{ print $1 }')
+	local VNAME
+	local LINE=0
+	local CNT=0
+	local VLAN_ADAPTER
+	local NWK_EXIST
+	local node_id=$(</etc/cluster/nodes/this/id)
+   
+	if [ -z "$VLANINFO_TAGS" ]; then
+		return $exit_sucs
+	fi
+
+	for VNAME in $VLANINFO_TAGS
+	do
+		local vlan_logical_name=$($CMD_VLANLS | $CMD_GREP -w $VNAME | ${CMD_AWK} '{ print $1 }')
+		[ "$vlan_logical_name" == "Public" ] && continue
+	
+		VLAN_ADAPTER=$physical_interface.$VNAME
+		#Check if network exists for the vlan
+		NWK_EXIST=$($CMD_IFCONFIG $VLAN_ADAPTER | $CMD_GREP -w inet )
+		[ $? -ne $TRUE ] && continue	
+
+		CLU_ADDR_VLAN=$($CMD_IFCONFIG $VLAN_ADAPTER:1 | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+		
+		[ $node_id -eq 1 ]&& {
+			#Get Network configuration details for Vlan on current node
+			IP_ADDR_VLANA=$($CMD_IFCONFIG $VLAN_ADAPTER | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+        		SUBNET_ADDR_VLANA=$($CMD_IFCONFIG $VLAN_ADAPTER | $CMD_GREP -w inet | $CMD_AWK '{print $4}' | $CMD_CUT -d ":" -f2)
+	        	MAC_ADDR_VLANA=$($CMD_IFCONFIG $VLAN_ADAPTER | $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+			GW_ADDR_VLAN=$($CMD_ROUTE |$CMD_GREP -w $VLAN_ADAPTER | $CMD_GREP UG | $CMD_AWK '{ print $2 }' )
+			GW_ADDR_VLAN_W_ROUTES=$($CMD_ROUTE |$CMD_GREP -w $VLAN_ADAPTER | $CMD_GREP UG | $CMD_AWK '{ print $2"-"$1"-"$3 }' )
+
+			# fetching cluster ip address
+			CLU_ADDR_VLAN=$($CMD_IFCONFIG $VLAN_ADAPTER:1 | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+			[ $PEER_NODE_UP -eq $TRUE ]&& {
+				#Get Network configuration details for Vlan of peer node
+				IP_ADDR_VLANB=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $VLAN_ADAPTER  2>/dev/null| $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2 )
+				SUBNET_ADDR_VLANB=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $VLAN_ADAPTER 2>/dev/null| $CMD_GREP -w inet | $CMD_AWK '{print $4}' | $CMD_CUT -d ":" -f2 )
+				MAC_ADDR_VLANB=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $VLAN_ADAPTER 2>/dev/null| $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+				[ -z $CLU_ADDR_VLAN ] && CLU_ADDR_VLAN=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $VLAN_ADAPTER:1 2>/dev/null| $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+        		}
+		}
+
+		[ $node_id -eq 2 ]&& {
+			# Get Network configuration details for Vlan on current node
+			IP_ADDR_VLANB=$($CMD_IFCONFIG $VLAN_ADAPTER | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+			SUBNET_ADDR_VLANB=$($CMD_IFCONFIG $VLAN_ADAPTER | $CMD_GREP -w inet | $CMD_AWK '{print $4}' | $CMD_CUT -d ":" -f2)
+			MAC_ADDR_VLANB=$($CMD_IFCONFIG $VLAN_ADAPTER | $CMD_GREP HWaddr | $CMD_AWK '{print $5}')
+			GW_ADDR_VLAN=$($CMD_ROUTE |$CMD_GREP -w $VLAN_ADAPTER | $CMD_GREP UG | $CMD_AWK '{ print $2 }' )
+			GW_ADDR_VLAN_W_ROUTES=$($CMD_ROUTE |$CMD_GREP -w $VLAN_ADAPTER | $CMD_GREP UG | $CMD_AWK '{ print $2"-"$1"-"$3 }' )
+			
+			# fetching cluster ip address
+			CLU_ADDR_VLAN=$($CMD_IFCONFIG $VLAN_ADAPTER:1 | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+
+			[ $PEER_NODE_UP -eq $TRUE ]&& {
+				#Get Network configuration details for Vlan of peer node
+				IP_ADDR_VLANA=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $VLAN_ADAPTER 2>/dev/null| $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2 )
+				SUBNET_ADDR_VLANA=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $VLAN_ADAPTER 2>/dev/null| $CMD_GREP -w inet | $CMD_AWK '{print $4}' | $CMD_CUT -d ":" -f2 )
+				MAC_ADDR_VLANA=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $VLAN_ADAPTER 2>/dev/null| $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+				[ -z $CLU_ADDR_VLAN ] && CLU_ADDR_VLAN=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $VLAN_ADAPTER:1 2>/dev/null | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+			}
+		}
+		
+		local vlan_id=$(echo "$VLAN_ADAPTER" | awk -F'.' '{ print $2 }')
+		local routes=($GW_ADDR_VLAN_W_ROUTES)
+		
+		((CNT=CNT+1))
+		if [ $lflag -ne $TRUE ] ; then
+			echo -e
+			echo -e "VLAN Network $VNAME:"
+			echo -e "NODE-A"
+			echo -e "IP Address : "$IP_ADDR_VLANA
+			echo -e "MAC Address: "$MAC_ADDR_VLANA
+			echo -e "Subnet Mask: "$SUBNET_ADDR_VLANA
+			echo -e
+			echo -e "NODE-B"
+			echo -e "IP Address : "$IP_ADDR_VLANB
+			echo -e "MAC Address: "$MAC_ADDR_VLANB
+			echo -e "Subnet Mask: "$SUBNET_ADDR_VLANB
+			echo -e
+			echo -e "Gateway IP Address: "$GW_ADDR_VLAN
+			echo -e "Cluster IP Address: "$CLU_ADDR_VLAN
+		else
+			local subnet_mask
+			[[ "$SUBNET_ADDR_VLANA" != "" ]] && subnet_mask="$SUBNET_ADDR_VLANA"
+			[[ "$SUBNET_ADDR_VLANB" != "" ]] && subnet_mask="$SUBNET_ADDR_VLANB"
+			local network_id=""
+			if [ "$CLU_ADDR_VLAN" != "" ] ; then
+				network_id="$(compute_network $CLU_ADDR_VLAN $subnet_mask)"
+			elif [ "$IP_ADDR_VLANA" != "" ] ; then
+				network_id="$(compute_network $IP_ADDR_VLANA $subnet_mask)"
+			else
+				network_id="$(compute_network $IP_ADDR_VLANB $subnet_mask)"
+			fi
+			
+			local vlan_logical_name=$($CMD_CAT $VLAN_MAPING_CONF | $CMD_GREP -w "$VLAN_ADAPTER" | $CMD_AWK '{ print $1 }')
+			
+			echo -e
+			echo -e "$vlan_logical_name Network:    $network_id"
+			echo -e "VLAN Id:           $VNAME"
+
+			[[ "$IP_ADDR_VLANA" != "" ]] && printf  "NODE A (%s):        %-15s (%-17s)\n" "$A_STATUS" "$IP_ADDR_VLANA" "$MAC_ADDR_VLANA"
+			[[ "$IP_ADDR_VLANA" == "" ]] && echo -e "NODE A ($A_STATUS):"
+			[[ "$IP_ADDR_VLANB" != "" ]] && printf  "NODE B (%s):        %-15s (%-17s)\n" "$B_STATUS" "$IP_ADDR_VLANB" "$MAC_ADDR_VLANB"
+			[[ "$IP_ADDR_VLANB" == "" ]] && echo -e "NODE B ($B_STATUS):"
+
+			echo -e "CLUSTER:           $CLU_ADDR_VLAN"
+			if is_dscp_supported ; then
+				echo -e "Gateway            Destination            DSCP"
+			else
+				echo -e "Gateway            Destination"
+			fi
+			local route
+			local gateway
+			local destination_id
+			local destination_subnet_mask
+			local destination_cidr
+			local dscp
+			if [ "$GW_ADDR_VLAN_W_ROUTES" == "" ] ; then
+			        default_gateway=$(echo "$GW_ADDR_W_ROUTES" | $CMD_AWK -F'-' '{ print $1 }')
+			
+				if is_dscp_supported ; then
+	                		dscp=$((16#$(iptables -t mangle --list | grep DSCP | awk '{print $5"   " $8}' | grep anywhere | awk '{print $2}' | cut -d "x" -f2)))
+					printf "%-15s    %-18s     %-18s\n" "$default_gateway" "0.0.0.0/0" "$dscp"
+				else
+					printf "%-15s    0.0.0.0/0 (default)\n" "$default_gateway"
+				fi
+			else
+				for route in "${routes[@]}" ; do
+					gateway=$(echo "$route" | $CMD_AWK -F'-' '{ print $1 }')
+					destination_id=$(echo "$route" | $CMD_AWK -F'-' '{ print $2 }')
+					destination_subnet_mask=$(echo "$route" | $CMD_AWK -F'-' '{ print $3 }')
+					destination_cidr=$(subnet_mask_to_CIDR "$destination_subnet_mask")
+					network_id="$destination_id/$destination_cidr"
+					if is_dscp_supported ; then
+						[ "$destination_cidr" -eq 32 ] && network_id="$destination_id"
+						dscp=$((16#$(iptables -t mangle --list | $CMD_AWK '/DSCP/{print $5"   " $8}' | grep -E "$network_id[[:space:]]+" |   $CMD_AWK -F "x" '{print $2}')))
+
+						printf "%-15s    %-18s     %-18s\n" "$gateway" "$destination_id/$destination_cidr" "$dscp"
+					else
+						printf "%-15s    %-18s\n" "$gateway" "$destination_id/$destination_cidr"
+					fi
+				done	
+			fi
+		fi
+		 
+	done
+	return $exit_sucs
+}
+
+#----------------------------------------------------------------------------------------
+function ps_netls(){
+	
+	local PSNAME
+	local SNWK_EXIST
+	local node_id=$(</etc/cluster/nodes/this/id)
+	
+	#Check if network exists for the PS
+        SNWK_EXIST=$($CMD_IFCONFIG $PS_ADAPTER | $CMD_GREP -w inet )
+        if [ $? == 0 ]; then
+	    CLU_ADDR_PS=$($CMD_IFCONFIG $PS_ADAPTER | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+	    
+	    [ $node_id -eq 1 ]&& {
+	    	#Get Network configuration details for PS on current node
+	    	IP_ADDR_PSA=$($CMD_IFCONFIG $PS_ADAPTER | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+            	SUBNET_ADDR_PSA=$($CMD_IFCONFIG $PS_ADAPTER | $CMD_GREP -w inet | $CMD_AWK '{print $4}' | $CMD_CUT -d ":" -f2)
+	    	MAC_ADDR_PSA=$($CMD_IFCONFIG $PS_ADAPTER | $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+	    	GW_ADDR_PS=$($CMD_ROUTE |$CMD_GREP -w $PS_ADAPTER | $CMD_GREP UG | $CMD_AWK '{ print $2 }' )
+	    	GW_ADDR_PS_W_ROUTES=$($CMD_ROUTE |$CMD_GREP -w $PS_ADAPTER | $CMD_GREP UG | $CMD_AWK '{ print $2"-"$1"-"$3 }' )
+            
+	    	# fetching cluster ip address
+	    	CLU_ADDR_PS=$($CMD_IFCONFIG $PS_ADAPTER:1 | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+	    	[ $PEER_NODE_UP -eq $TRUE ]&& {
+	    		#Get Network configuration details for PS of peer node
+			IP_ADDR_PSB=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $PS_ADAPTER 2>/dev/null| $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2 )
+			SUBNET_ADDR_PSB=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $PS_ADAPTER 2>/dev/null| $CMD_GREP -w inet | $CMD_AWK '{print $4}' | $CMD_CUT -d ":" -f2 )
+			MAC_ADDR_PSB=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $PS_ADAPTER 2>/dev/null| $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+			[ -z $CLU_ADDR_PS ] && CLU_ADDR_PS=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $PS_ADAPTER:1 2>/dev/null| $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+            	}
+	    }
+            
+	    [ $node_id -eq 2 ]&& {
+	    	# Get Network configuration details for PS on current node
+	    	IP_ADDR_PSB=$($CMD_IFCONFIG $PS_ADAPTER | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+	    	SUBNET_ADDR_PSB=$($CMD_IFCONFIG $PS_ADAPTER | $CMD_GREP -w inet | $CMD_AWK '{print $4}' | $CMD_CUT -d ":" -f2)
+	    	MAC_ADDR_PSB=$($CMD_IFCONFIG $PS_ADAPTER | $CMD_GREP HWaddr | $CMD_AWK '{print $5}')
+	    	GW_ADDR_PS=$($CMD_ROUTE |$CMD_GREP -w $PS_ADAPTER | $CMD_GREP UG | $CMD_AWK '{ print $2 }' )
+	    	GW_ADDR_PS_W_ROUTES=$($CMD_ROUTE |$CMD_GREP -w $PS_ADAPTER | $CMD_GREP UG | $CMD_AWK '{ print $2"-"$1"-"$3 }' )
+	    	
+	    	# fetching cluster ip address
+	    	CLU_ADDR_PS=$($CMD_IFCONFIG $PS_ADAPTER:1 | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+            
+	    	[ $PEER_NODE_UP -eq $TRUE ]&& {
+			#Get Network configuration details for PS of peer node
+			IP_ADDR_PSA=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $PS_ADAPTER 2>/dev/null| $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2 )
+			SUBNET_ADDR_PSA=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $PS_ADAPTER 2>/dev/null| $CMD_GREP -w inet | $CMD_AWK '{print $4}' | $CMD_CUT -d ":" -f2 )
+			MAC_ADDR_PSA=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $PS_ADAPTER 2>/dev/null| $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+			[ -z $CLU_ADDR_PS ] && CLU_ADDR_PS=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $PS_ADAPTER:1 2>/dev/null| $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+		}
+	    }
+	    
+	    local routes=($GW_ADDR_PS_W_ROUTES)
+	    
+	    if [ $lflag -ne $TRUE ] ; then
+		echo -e
+		echo -e "Separated Public Network:"
+		echo -e "NODE-A"
+		echo -e "IP Address : "$IP_ADDR_PSA
+		echo -e "MAC Address: "$MAC_ADDR_PSA
+		echo -e "Subnet Mask: "$SUBNET_ADDR_PSA
+		echo -e
+		echo -e "NODE-B"
+		echo -e "IP Address : "$IP_ADDR_PSB
+		echo -e "MAC Address: "$MAC_ADDR_PSB
+		echo -e "Subnet Mask: "$SUBNET_ADDR_PSB
+		echo -e
+		echo -e "Gateway IP Address: "$GW_ADDR_PS
+		echo -e "Cluster IP Address: "$CLU_ADDR_PS
+	    else
+		local subnet_mask
+		[[ "$SUBNET_ADDR_PSA" != "" ]] && subnet_mask="$SUBNET_ADDR_PSA"
+		[[ "$SUBNET_ADDR_PSB" != "" ]] && subnet_mask="$SUBNET_ADDR_PSB"
+		local network_id=""
+		if [ "$CLU_ADDR_PS" != "" ] ; then
+			network_id="$(compute_network $CLU_ADDR_PS $subnet_mask)"
+		elif [ "$IP_ADDR_PSA" != "" ] ; then
+			network_id="$(compute_network $IP_ADDR_PSA $subnet_mask)"
+		else
+			network_id="$(compute_network $IP_ADDR_PSB $subnet_mask)"
+		fi
+		
+		echo -e
+		echo -e "Separated Network: $network_id"
+		echo -e "VLAN Id:           $public_id"
+                
+		[[ "$IP_ADDR_PSA" != "" ]] && printf  "NODE A (%s):        %-15s (%-17s)\n" "$A_STATUS" "$IP_ADDR_PSA" "$MAC_ADDR_PSA"
+                [[ "$IP_ADDR_PSA" == "" ]] && echo -e "NODE A ($A_STATUS):"
+                [[ "$IP_ADDR_PSB" != "" ]] && printf  "NODE B (%s):        %-15s (%-17s)\n" "$B_STATUS" "$IP_ADDR_PSB" "$MAC_ADDR_PSB"
+                [[ "$IP_ADDR_PSB" == "" ]] && echo -e "NODE B ($B_STATUS):"
+
+                echo -e "CLUSTER:           $CLU_ADDR_PS"
+				if is_dscp_supported && [ "$public_id" == "untagged" ]; then
+                        echo -e "Gateway            Destination            DSCP"
+                else
+                        echo -e "Gateway            Destination"
+                fi
+                local route
+                local gateway
+                local destination_id
+                local destination_subnet_mask
+                local destination_cidr
+                if [ "$GW_ADDR_PS_W_ROUTES" == "" ] ; then
+                        default_gateway=$(echo "$GW_ADDR_W_ROUTES" | $CMD_AWK -F'-' '{ print $1 }')
+                        printf "%-15s    0.0.0.0/0 (default)\n" "$default_gateway"
+                else
+                        for route in "${routes[@]}" ; do
+                                gateway=$(echo "$route" | $CMD_AWK -F'-' '{ print $1 }')
+                                destination_id=$(echo "$route" | $CMD_AWK -F'-' '{ print $2 }')
+                        if [ "$destination_id" == "default" ] ; then
+                                if is_dscp_supported && [ "$public_id" == "untagged" ]; then
+                                        dscp=$((16#$(iptables -t mangle --list | $CMD_AWK '/DSCP/{print $5"   " $8}' | $CMD_AWK '/anywhere/{print $2}' | $CMD_AWK -F "x" '{print $2}')))
+                                        printf "%-15s    %-18s     %-18s\n" "$gateway" "0.0.0.0/0(default)" "$dscp"
+                                else
+                                        printf "%-15s    0.0.0.0/0 (default)\n" "$gateway"
+                                fi
+                        else
+                                destination_subnet_mask=$(echo "$route" | $CMD_AWK -F'-' '{ print $3 }')
+                                destination_cidr=$(subnet_mask_to_CIDR "$destination_subnet_mask")
+                                network_id="$destination_id/$destination_cidr"
+                                if is_dscp_supported ; then
+                                        [ "$destination_cidr" -eq 32 ] && network_id="$destination_id"
+                                        dscp=$((16#$(iptables -t mangle --list | $CMD_AWK '/DSCP/{print $5"   " $8}' | grep -E "$network_id[[:space:]]+" |  $CMD_AWK -F "x" '{print $2}')))
+                                        printf "%-15s    %-18s     %-18s\n" "$gateway" "$destination_id/$destination_cidr" "$dscp"
+                                else
+                                        printf "%-15s    %-18s\n" "$gateway" "$destination_id/$destination_cidr"
+                                fi
+                        fi
+
+                        done	
+		fi
+	    fi
+	    
+	fi	 
+	return $exit_sucs
+}
+
+#----------------------------------------------------------------------------------------
+function fetch_network_name() {
+
+  local my_mac="$1"
+  local hostId='AP1A'
+  local AVAILABLE_MAC=''
+  local INTERFACE_DN=''
+  local NETWORK_NAME=''
+  local nodeId=$(get_node_id)
+  [ "$nodeId" -eq 2 ] && hostId='AP1B'
+  local PATTERN="interfaceId=.*,hostId=$hostId,AxeTransportMtransportMId=1"
+
+  for dn in $(kill_after_try 3 3 4 /usr/bin/immfind -c AxeTransportMExternalNetwork)
+  do
+   INTERFACE_DN=$(kill_after_try 3 3 4 /usr/bin/immlist -a attachedInterfaces $dn 2>/dev/null | \
+awk -F'attachedInterfaces=' '{print $2}'| tr ':' '\n' | grep "$PATTERN")
+   if [ -n "$INTERFACE_DN" ]; then
+     AVAILABLE_MAC=$(kill_after_try 3 3 4 /usr/bin/immlist -a mac $INTERFACE_DN 2>/dev/null | awk -F= '{print $2}')
+     if [ -n "$AVAILABLE_MAC" ]; then
+       if [ "$AVAILABLE_MAC" == "$my_mac" ]; then
+        NETWORK_NAME=$(kill_after_try 3 3 4 /usr/bin/immlist -a name $dn 2>/dev/null | awk -F= '{print $2}')
+        [ -z "$NETWORK_NAME" ] && abort "Failed to fetch the network name from IMM"
+        break
+       fi
+     else
+       abort "Failed to fetch the mac address from IMM"
+     fi
+   fi
+   done
+   echo $NETWORK_NAME
+}
+
+#----------------------------------------------------------------------------------------
+function fetch_network_name_v6() {
+ $CMD_CLUSTERCONF ip -D | $CMD_GREP -vwE "public|public_v6|ipn[a-b]|internal|data_network|default|present" > $tmp_file
+ local intf=$1
+    if [ ! -s $tmp_file ] ; then
+       $CMD_RM -f $tmp_file   
+    echo ""
+    fi
+
+    local ip=$($CMD_CAT $tmp_file |$CMD_GREP $intf| $CMD_GREP "ip 1" | $CMD_AWK '{if ($6!~"[.]") print $6}'| tr '\n' ' ')
+	if  isValidIPv6 $ip; then
+      local netname=$($CMD_LDE_CONFIG ip show |$CMD_GREP -A 2 "ip-address          : "$ip  |grep "network"| $CMD_AWK  '{print $3}' )
+	
+      echo $netname
+	else
+	  echo ""
+    fi	  
+}
+#----------------------------------------------------------------------------------------
+function opt_network_netls()
+{
+if is_vAPG && isDualStack ; then
+   local IPV6CUST=$FALSE
+   local IPV4CUST=$FALSE
+   local v4custcount=$($CMD_LDE_CONFIG mip show |$CMD_GREP -i "_mip" |$CMD_GREP -v "v6" |wc -l)
+   local v6custcount=$($CMD_LDE_CONFIG mip show |$CMD_GREP -i "v6_mip" |wc -l)
+   [ $v4custcount -ne 0 ] && IPV4CUST=$TRUE
+   [ $v6custcount -ne 0 ] && IPV6CUST=$TRUE
+   if [ $IPV4CUST -eq $TRUE ] && [ $VERSION_4 == $TRUE ] ; then
+      opt_network_netls_v4
+   fi
+   if [ $IPV6CUST -eq $TRUE ] && [ $VERSION_6 == $TRUE ] ; then
+      opt_network_netls_v6
+   fi
+else
+    if [ $VERSION_4 == $TRUE ]; then
+       opt_network_netls_v4
+    fi
+    if [ $VERSION_6 == $TRUE ]; then
+       opt_network_netls_v6
+    fi
+fi
+}
+function opt_network_netls_v4()
+{
+	local IP_ADDR_OPTA=''
+	local MAC_ADDR_OPTA=''
+	local SUBNET_ADDR_OPTA=''
+	local IP_ADDR_OPTB=''
+	local MAC_ADDR_OPTB=''
+	local SUBNET_ADDR_OPTB=''
+	local CLU_ADDR_OPT=''
+	local GW_ADDR_OPT=''
+    local net_name=""
+  local node_id=$(</etc/cluster/nodes/this/id)
+  local tmp_file="/tmp/network_list.txt"
+
+  $CMD_CLUSTERCONF ip -D | $CMD_GREP -vwE "public|public_v6|ipn[a-b]|internal|data_network|default|present" > $tmp_file
+
+	if [ ! -s $tmp_file ] ; then
+		$CMD_RM -f $tmp_file
+		return $exit_sucs	
+	fi
+
+  local INTERFACE1=$($CMD_CAT $tmp_file | $CMD_GREP "ip 1" | $CMD_AWK '{if ($6!~"[::]") print $4}'| tr '\n' ' ')
+  local IPADDR=$($CMD_CAT $tmp_file | $CMD_GREP "ip 1" | $CMD_AWK '{print $6}' | tr '\n' ' ')
+  local interface_array=( $INTERFACE1 )
+  local ipaddr_array=( $IPADDR )
+
+  for interface in ${interface_array[@]}; do
+    mac=$(nic2mac $interface)
+    local NETWORK1="$NETWORK1 $(fetch_network_name "$mac")"
+  done
+
+  local network_array=( $NETWORK1 )
+
+	loopcount=0
+	loopmax=${#interface_array[@]}
+
+	while [ $loopcount -lt $loopmax ]
+	do
+		IP_ADDR_OPTA=''
+		SUBNET_ADDR_OPTA=''
+		GW_ADDR_OPT=''
+		MAC_ADDR_OPTA=''
+		CLU_ADDR_OPT=''
+
+    [ $node_id -eq 1 ]&& {
+			#Get Network configuration details for Optional Network on current node
+			IP_ADDR_OPTA=$($CMD_IFCONFIG ${interface_array[$loopcount]} | $CMD_GREP -w inet | $CMD_AWK '{if ($2~"[.]") print $2}' | $CMD_CUT -d ":" -f2)
+                        if [ -z "$IP_ADDR_OPTA" ]; then
+                           (( loopcount=loopcount+1 ))
+                        continue
+                        fi
+
+			SUBNET_ADDR_OPTA=$($CMD_IFCONFIG ${interface_array[$loopcount]} | $CMD_GREP -w inet | $CMD_AWK '{print $4}' | $CMD_CUT -d ":" -f2)
+			MAC_ADDR_OPTA=$($CMD_IFCONFIG ${interface_array[$loopcount]} | $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+			GW_ADDR_OPT=$($CMD_ROUTE | $CMD_GREP -w ${interface_array[$loopcount]} | $CMD_GREP UG | $CMD_AWK '{ print $2 }' | uniq )
+			GW_ADDR_OPT_W_ROUTES=$($CMD_ROUTE |$CMD_GREP -w ${interface_array[$loopcount]} | $CMD_GREP UG | $CMD_AWK '{ print $2"-"$1"-"$3 }' )
+
+			# fetching cluster ip address
+			CLU_ADDR_OPT=$($CMD_IFCONFIG ${interface_array[$loopcount]}:1 | $CMD_GREP -w inet | $CMD_AWK '{if ($2~"[.]") print $2}' | $CMD_CUT -d ":" -f2)
+                        # check if the peer node is up
+		        ping_peer
+		
+			[ $PEER_NODE_UP -eq $TRUE ]&& {
+				#Get Network configuration details for Optional Network of peer node
+				IP_ADDR_OPTB=$(${CMD_SSH} $RHOST $CMD_IFCONFIG ${interface_array[$loopcount]} 2>/dev/null| $CMD_GREP -w inet | $CMD_AWK '{if ($2~"[.]") print $2}' | $CMD_CUT -d ":" -f2 )
+				SUBNET_ADDR_OPTB=$(${CMD_SSH} $RHOST $CMD_IFCONFIG ${interface_array[$loopcount]} 2>/dev/null | $CMD_GREP -w inet | $CMD_AWK '{print $4}' | $CMD_CUT -d ":" -f2 )
+				MAC_ADDR_OPTB=$(${CMD_SSH} $RHOST $CMD_IFCONFIG ${interface_array[$loopcount]} 2>/dev/null| $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+					[ -z $CLU_ADDR_OPT ] && CLU_ADDR_OPT=$(${CMD_SSH} $RHOST $CMD_IFCONFIG ${interface_array[$loopcount]}:1 2>/dev/null| $CMD_GREP -w inet | $CMD_AWK '{if ($2~"[.]") print $2}' | $CMD_CUT -d ":" -f2) 
+			}
+		}
+
+		[ $node_id -eq 2 ]&& {
+			# Get Network configuration details for Optional Network on current node
+			IP_ADDR_OPTB=$($CMD_IFCONFIG ${interface_array[$loopcount]} | $CMD_GREP -w inet | $CMD_AWK '{if ($2~"[.]") print $2}' | $CMD_CUT -d ":" -f2)
+                        if [ -z "$IP_ADDR_OPTB" ]; then
+                           (( loopcount=loopcount+1 ))
+                        continue
+                        fi
+			SUBNET_ADDR_OPTB=$($CMD_IFCONFIG ${interface_array[$loopcount]} | $CMD_GREP -w inet | $CMD_AWK '{print $4}' | $CMD_CUT -d ":" -f2)
+			MAC_ADDR_OPTB=$($CMD_IFCONFIG ${interface_array[$loopcount]} | $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+			GW_ADDR_OPT=$($CMD_ROUTE | $CMD_GREP -w ${interface_array[$loopcount]} | $CMD_GREP UG | $CMD_AWK '{ print $2 }' | uniq )
+			GW_ADDR_OPT_W_ROUTES=$($CMD_ROUTE |$CMD_GREP -w ${interface_array[$loopcount]} | $CMD_GREP UG | $CMD_AWK '{ print $2"-"$1"-"$3 }' )
+
+			# fetching cluster ip address
+			CLU_ADDR_OPT=$($CMD_IFCONFIG ${interface_array[$loopcount]}:1 | $CMD_GREP -w inet | $CMD_AWK '{if ($2~"[.]") print $2}' | $CMD_CUT -d ":" -f2)
+                        # check if the peer node is up
+                        ping_peer
+			[ $PEER_NODE_UP -eq $TRUE ]&& {
+				#Get Network configuration details for Optional Network of peer node
+				IP_ADDR_OPTA=$(${CMD_SSH} $RHOST $CMD_IFCONFIG ${interface_array[$loopcount]} 2>/dev/null | $CMD_GREP -w inet | $CMD_AWK '{if ($2~"[.]") print $2}' | $CMD_CUT -d ":" -f2 )
+				SUBNET_ADDR_OPTA=$(${CMD_SSH} $RHOST $CMD_IFCONFIG ${interface_array[$loopcount]} 2>/dev/null | $CMD_GREP -w inet | $CMD_AWK '{print $4}' | $CMD_CUT -d ":" -f2 )
+				MAC_ADDR_OPTA=$(${CMD_SSH} $RHOST $CMD_IFCONFIG ${interface_array[$loopcount]}  2>/dev/null| $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+					[ -z $CLU_ADDR_OPT ] && CLU_ADDR_OPT=$(${CMD_SSH} $RHOST $CMD_IFCONFIG ${interface_array[$loopcount]}:1 2>/dev/null | $CMD_GREP -w inet | $CMD_AWK '{if ($2~"[.]") print $2}' | $CMD_CUT -d ":" -f2)
+			}
+		}
+
+		GW_ADDR_OPT_W_ROUTES=$($CMD_ROUTE |$CMD_GREP -w ${interface_array[$loopcount]} | $CMD_GREP UG | $CMD_AWK '{ print $2"-"$1"-"$3 }' )
+		local routes=($GW_ADDR_OPT_W_ROUTES)
+
+		if [ $lflag -ne $TRUE ] ; then
+			echo -e
+			echo -e "${network_array[$loopcount]} Network: "
+			echo -e "NODE-A"
+			echo -e "IP Address : "$IP_ADDR_OPTA
+			echo -e "MAC Address: "$MAC_ADDR_OPTA
+			echo -e "Subnet Mask: "$SUBNET_ADDR_OPTA
+			echo -e
+			echo -e "NODE-B"
+			echo -e "IP Address : "$IP_ADDR_OPTB
+			echo -e "MAC Address: "$MAC_ADDR_OPTB
+			echo -e "Subnet Mask: "$SUBNET_ADDR_OPTB
+			echo -e
+			echo -e "Gateway IP Address: "$GW_ADDR_OPT
+			echo -e "Cluster IP Address: "$CLU_ADDR_OPT
+		else
+			local subnet_mask
+			[[ "$SUBNET_ADDR_OPTA" != "" ]] && subnet_mask="$SUBNET_ADDR_OPTA"
+			[[ "$SUBNET_ADDR_OPTB" != "" ]] && subnet_mask="$SUBNET_ADDR_OPTB"
+			local network_id=""
+			if [ "$CLU_ADDR_OPT" != "" ] ; then
+					network_id="$(compute_network $CLU_ADDR_OPT $subnet_mask)"
+			elif [ "$IP_ADDR_PSA" != "" ] ; then
+					network_id="$(compute_network $IP_ADDR_OPTA $subnet_mask)"
+			else
+					network_id="$(compute_network $IP_ADDR_OPTB $subnet_mask)"
+			fi
+
+			echo -e
+			net_name=${network_array[$loopcount]}
+            printf "%-17s  %s" "$net_name Network:"  "$network_id"			
+			echo -e
+			[[ "$IP_ADDR_OPTA" != "" ]] && printf  "NODE A (%s):        %-15s (%-17s)\n" "$A_STATUS" "$IP_ADDR_OPTA" "$MAC_ADDR_OPTA"
+			[[ "$IP_ADDR_OPTA" == "" ]] && echo -e "NODE A ($A_STATUS):"
+			[[ "$IP_ADDR_OPTB" != "" ]] && printf  "NODE B (%s):        %-15s (%-17s)\n" "$B_STATUS" "$IP_ADDR_OPTB" "$MAC_ADDR_OPTB"
+			[[ "$IP_ADDR_OPTB" == "" ]] && echo -e "NODE B ($B_STATUS):"
+
+			echo -e "CLUSTER:           $CLU_ADDR_OPT"
+			if is_dscp_supported ; then
+				echo -e "Gateway            Destination            DSCP"
+			else
+				echo -e "Gateway            Destination"
+			fi
+
+			local route
+			local gateway
+			local destination_id
+			local destination_subnet_mask
+			local destination_cidr
+			if [ "$GW_ADDR_OPT_W_ROUTES" == "" ] ; then
+				default_gateway=$(echo "$GW_ADDR_W_ROUTES" | $CMD_AWK -F'-' '{ print $1 }')
+				if is_dscp_supported ; then
+					dscp=$((16#$(iptables -t mangle --list | grep DSCP | awk '{print $5"   " $8}' | grep anywhere | awk '{print $2}' | cut -d "x" -f2)))
+					printf "%-15s    %-18s     %-18s\n" "$default_gateway" "0.0.0.0/0" "$dscp"
+				else
+					printf "%-15s    0.0.0.0/0 (default)\n" "$default_gateway"
+				fi
+			else
+				for route in "${routes[@]}" ; do
+					gateway=$(echo "$route" | $CMD_AWK -F'-' '{ print $1 }')
+					destination_id=$(echo "$route" | $CMD_AWK -F'-' '{ print $2 }')
+					destination_subnet_mask=$(echo "$route" | $CMD_AWK -F'-' '{ print $3 }')
+					destination_cidr=$(subnet_mask_to_CIDR "$destination_subnet_mask")
+					network_id="$destination_id/$destination_cidr"
+					if is_dscp_supported ; then
+						[ "$destination_cidr" -eq 32 ] && network_id="$destination_id"
+						dscp=$((16#$(iptables -t mangle --list | $CMD_AWK '/DSCP/{print $5"   " $8}' | grep -E "$network_id[[:space:]]+" |   $CMD_AWK -F "x" '{print $2}')))
+						printf "%-15s    %-18s     %-18s\n" "$gateway" "$destination_id/$destination_cidr" "$dscp"
+					else
+						printf "%-15s    %-18s\n" "$gateway" "$destination_id/$destination_cidr"
+					fi
+				done
+			fi
+		fi
+		(( loopcount=loopcount+1 ))
+	done
+	$CMD_RM -f $tmp_file
+}
+function opt_network_netls_v6()
+{
+        local IP_ADDR_OPTA=''
+        local MAC_ADDR_OPTA=''
+        local SUBNET_ADDR_OPTA=''
+        local IP_ADDR_OPTB=''
+        local MAC_ADDR_OPTB=''
+        local SUBNET_ADDR_OPTB=''
+        local CLU_ADDR_OPT=''
+        local GW_ADDR_OPT=''
+		local net_name=""
+    local node_id=$(</etc/cluster/nodes/this/id)
+    local tmp_file="/tmp/network_list.txt"
+
+    $CMD_CLUSTERCONF ip -D | $CMD_GREP -vwE "public|public_v6|ipn[a-b]|internal|data_network|default|present" > $tmp_file
+
+    if [ ! -s $tmp_file ] ; then
+       $CMD_RM -f $tmp_file
+       return $exit_sucs	
+    fi
+
+    local INTERFACE1=$($CMD_CAT $tmp_file | $CMD_GREP "ip 1" | $CMD_AWK '{if ($6!~"[.]") print $4}'| tr '\n' ' ')
+    local IPADDR=$($CMD_CAT $tmp_file | $CMD_GREP "ip 1" | $CMD_AWK '{print $6}' | tr '\n' ' ')
+    local interface_array=( $INTERFACE1 )
+    local ipaddr_array=( $IPADDR )
+
+    for interface in ${interface_array[@]}; do
+        mac=$(nic2mac $interface)
+        local NETWORK1="$NETWORK1 $(fetch_network_name "$mac")" 
+    done
+
+    local network_array=( $NETWORK1 )
+
+    loopcount=0
+    loopmax=${#interface_array[@]}
+
+    while [ $loopcount -lt $loopmax ]
+    do
+        IP_ADDR_OPTA=''
+        SUBNET_ADDR_OPTA=''
+        GW_ADDR_OPT=''
+        MAC_ADDR_OPTA=''
+        CLU_ADDR_OPT=''
+
+    [ $node_id -eq 1 ]&& {
+        #Get Network configuration details for Optional Network on current node	
+	    local counta=0
+        counta=$($CMD_IFCONFIG ${interface_array[$loopcount]} | $CMD_GREP -w inet6 | $CMD_GREP -w $SCOPE  | wc -l)
+      
+             IP_ADDR_OPTA=$( $CMD_CLUSTERCONF ip -D | grep ${interface_array[$loopcount]} |  $CMD_HEAD -1 | $CMD_AWK  '{print $6}')
+			 # fetching cluster ip address
+             CLU_ADDR_OPT=$($CMD_CLUSTERCONF mip -D | grep ${interface_array[$loopcount]} |  grep -i v6 | $CMD_AWK  '{print $7}')
+       
+        if [ -z "$IP_ADDR_OPTA" ]; then
+              (( loopcount=loopcount+1 ))
+              continue
+        fi
+		
+        PREFIX_LENGTHA=$($CMD_CAT $CLUSTER_CONF | $CMD_GREP -w ^network | $CMD_GREP -i ${network_array[$loopcount]} | $CMD_HEAD -1 | $CMD_AWK '{print $3}' | $CMD_AWK -F\/ '{print $2}')
+        MAC_ADDR_OPTA=$($CMD_IFCONFIG ${interface_array[$loopcount]} | $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+        GW_ADDR_OPT=$($CMD_ROUTE -A inet6 | $CMD_GREP -w ${interface_array[$loopcount]} | $CMD_GREP UG | $CMD_AWK '{ print $2 }' )
+        GW_ADDR_OPT_W_ROUTES=$($CMD_ROUTE -A inet6 |$CMD_GREP -w ${interface_array[$loopcount]} | $CMD_GREP UG | $CMD_AWK '{ print $2"-"$1 }' )
+	
+# check if the peer node is up
+        ping_peer			
+        [ $PEER_NODE_UP -eq $TRUE ]&& {
+            #Get Network configuration details for Optional Network of peer node
+            local countb=0
+            countb=$(${CMD_SSH} $RHOST $CMD_IFCONFIG ${interface_array[$loopcount]} 2>/dev/null | $CMD_GREP -w inet6 | $CMD_GREP -w $SCOPE  | wc -l)
+            #Get Network configuration details for Optional Network of peer node
+        
+                 IP_ADDR_OPTB=$(${CMD_SSH} $RHOST $CMD_CLUSTERCONF ip -D | grep ${interface_array[$loopcount]} |  grep -i v6 | $CMD_TAIL -1 | $CMD_AWK  '{print $6}')
+				 [ -z "$CLU_ADDR_OPT" ] && CLU_ADDR_OPT=$(${CMD_SSH} $RHOST $CMD_CLUSTERCONF mip -D | grep ${interface_array[$loopcount]} | grep -i v6 |  $CMD_AWK  '{print $7}')
+
+			
+			if [ -z "$IP_ADDR_OPTB" ]; then
+              (( loopcount=loopcount+1 ))
+              continue
+            fi
+            PREFIX_LENGTHB=$(${CMD_SSH} $RHOST $CMD_CAT $CLUSTER_CONF | $CMD_GREP -w ^network | $CMD_GREP -i ${network_array[$loopcount]} | $CMD_TAIL -1 | $CMD_AWK '{print $3}' | $CMD_AWK -F\/ '{print $2}')
+            MAC_ADDR_OPTB=$(${CMD_SSH} $RHOST $CMD_IFCONFIG ${interface_array[$loopcount]} 2>/dev/null| $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')					
+         }
+	}
+
+	[ $node_id -eq 2 ]&& {
+            local countb=0
+            countb=$($CMD_IFCONFIG ${interface_array[$loopcount]} | $CMD_GREP -w inet6 | $CMD_GREP -w $SCOPE  | wc -l)
+            # Get Network configuration details for Optional Network on current node
+           
+                IP_ADDR_OPTB=$($CMD_CLUSTERCONF ip -D | grep ${interface_array[$loopcount]} |  grep -i v6 | $CMD_TAIL -1 | $CMD_AWK  '{print $6}')
+				# fetching cluster ip address 
+				CLU_ADDR_OPT=$($CMD_CLUSTERCONF mip -D | grep ${interface_array[$loopcount]} | grep -i v6 | $CMD_AWK  '{print $7}')																																												   
+           
+
+            if [ -z "$IP_ADDR_OPTB" ]; then
+                (( loopcount=loopcount+1 ))
+                 continue
+            fi
+			PREFIX_LENGTHB=$($CMD_CAT $CLUSTER_CONF | $CMD_GREP -w ^network | $CMD_GREP -i ${network_array[$loopcount]} | $CMD_TAIL -1 | $CMD_AWK '{print $3}' | $CMD_AWK -F\/ '{print $2}')
+			MAC_ADDR_OPTB=$($CMD_IFCONFIG ${interface_array[$loopcount]} | $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+            GW_ADDR_OPT=$($CMD_ROUTE -A inet6 | $CMD_GREP -w ${interface_array[$loopcount]} | $CMD_GREP  UG | $CMD_AWK '{ print $2 }' )
+            GW_ADDR_OPT_W_ROUTES=$($CMD_ROUTE -A inet6 |$CMD_GREP -w ${interface_array[$loopcount]} | $CMD_GREP  UG | $CMD_AWK '{ print $2"-"$1 }' )
+# check if the peer node is up
+            ping_peer			
+            [ $PEER_NODE_UP -eq $TRUE ]&& {
+                local counta=0
+                counta=$(${CMD_SSH} $RHOST $CMD_IFCONFIG ${interface_array[$loopcount]} 2>/dev/null| $CMD_GREP -w inet6 | $CMD_GREP -w $SCOPE  | wc -l)
+             
+                #Get Network configuration details for Optional Network of peer node
+                 IP_ADDR_OPTA=$(${CMD_SSH} $RHOST $CMD_CLUSTERCONF ip -D | grep ${interface_array[$loopcount]} |  $CMD_HEAD -1 | $CMD_AWK  '{print $6}')
+				 [ -z "$CLU_ADDR_OPT" ] && CLU_ADDR_OPT=$(${CMD_SSH} $RHOST $CMD_CLUSTERCONF mip -D | grep ${interface_array[$loopcount]} | grep -i v6 |  $CMD_AWK  '{print $7}')
+				
+				if [ -z "$IP_ADDR_OPTA" ]; then
+                  (( loopcount=loopcount+1 ))
+                continue
+                fi
+				PREFIX_LENGTHA=$(${CMD_SSH} $RHOST $CMD_CAT $CLUSTER_CONF | $CMD_GREP -w ^network | $CMD_GREP -i ${network_array[$loopcount]} | $CMD_HEAD -1 | $CMD_AWK '{print $3}' | $CMD_AWK -F\/ '{print $2}')
+                MAC_ADDR_OPTA=$(${CMD_SSH} $RHOST $CMD_IFCONFIG ${interface_array[$loopcount]} 2>/dev/null | $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+		}
+	}
+
+               GW_ADDR_OPT_W_ROUTES=$($CMD_ROUTE -A inet6 |$CMD_GREP -w ${interface_array[$loopcount]} | $CMD_GREP  UG | $CMD_AWK '{ print $2"-"$1}' )
+               local routes=($GW_ADDR_OPT_W_ROUTES)
+
+			   net_name="${network_array[$loopcount]} Network:" 
+               if [ $lflag -ne $TRUE ] ; then
+                        echo -e
+                        echo -e ${net_name}
+                        echo -e "NODE-A"
+                        echo -e "IP Address : "$IP_ADDR_OPTA
+                        echo -e "MAC Address: "$MAC_ADDR_OPTA
+                        echo -e "Prefix Length: "$PREFIX_LENGTHA
+                        echo -e
+                        echo -e "NODE-B"
+                        echo -e "IP Address : "$IP_ADDR_OPTB
+                        echo -e "MAC Address: "$MAC_ADDR_OPTB
+                        echo -e "Prefix Length: "$PREFIX_LENGTHB
+                        echo -e
+                        echo -e "Gateway IP Address: "$GW_ADDR_OPT
+                        echo -e "Cluster IP Address: "$CLU_ADDR_OPT
+              else
+                        local prefix_length
+                        [[ "$PREFIX_LENGTHA" != "" ]] && prefix_length="$PREFIX_LENGTHA"
+                        [[ "$PREFIX_LENGTHB" != "" ]] && prefix_length="$PREFIX_LENGTHB"
+						local pref=$(prefix_to_hex_format_v6 $prefix_length)
+                        local network_id=""
+                        if [ "$CLU_ADDR_OPT" != "" ] ; then
+                             network_id="$(compute_network_v6 $CLU_ADDR_OPT $pref)"
+                        elif [ "$IP_ADDR_PSA" != "" ] ; then
+					        network_id="$(compute_network_v6 $IP_ADDR_OPTA $pref)"
+						else
+							network_id="$(compute_network_v6 $IP_ADDR_OPTB $pref)"
+						fi
+
+                        echo -e
+						echo -e ${net_name} "  " ${network_id,,}/$prefix_length																	   
+
+                        [[ "$IP_ADDR_OPTA" != "" ]] && printf  "NODE A (%s):        %-15s (%-17s)\n" "$A_STATUS" "$IP_ADDR_OPTA" "$MAC_ADDR_OPTA"
+                        [[ "$IP_ADDR_OPTA" == "" ]] && echo -e "NODE A ($A_STATUS):"
+                        [[ "$IP_ADDR_OPTB" != "" ]] && printf  "NODE B (%s):        %-15s (%-17s)\n" "$B_STATUS" "$IP_ADDR_OPTB" "$MAC_ADDR_OPTB"
+                        [[ "$IP_ADDR_OPTB" == "" ]] && echo -e "NODE B ($B_STATUS):"
+
+                        echo -e "CLUSTER:           $CLU_ADDR_OPT"
+                        if is_dscp_supported ; then
+                            echo -e "Gateway            Destination            DSCP"
+                        else
+                            echo -e "Gateway            Destination"
+                        fi
+
+                        local route
+                        local gateway
+                        local destination_id
+                        local destination_subnet_mask
+                        local destination_cidr
+                        if [ "$GW_ADDR_OPT_W_ROUTES" == "" ] ; then
+                            default_gateway=$(echo "$GW_ADDR_W_ROUTES_v6" | $CMD_AWK -F'-' '{ print $1 }')
+                            if is_dscp_supported ; then                                
+								 dscp=$((16#$(ip6tables -t mangle --list | $CMD_AWK '/DSCP/{print $4"   " $7}' | grep anywhere | $CMD_AWK '{print $2}'|  $CMD_AWK -F "x" '{print $2}')))
+                                 printf "%-15s    %-18s     %-18s\n" "$default_gateway" "0::0/0" "$dscp"
+                            else
+                                 printf "%-15s    0::0/0 (default)\n" "$default_gateway"
+                            fi
+                        else
+                             for route in "${routes[@]}" ; do
+                                 gateway=$(echo "$route" | $CMD_AWK -F'-' '{ print $1 }')
+                                 destination_id=$(echo "$route" | $CMD_AWK -F'-' '{ print $2 }')
+                                 network_id="$destination_id"
+                                 if is_dscp_supported ; then
+                                     dscp=$((16#$(ip6tables -t mangle --list | $CMD_AWK '/DSCP/{print $4"   " $7}' | grep -E "$network_id[[:space:]]+" | $CMD_AWK '{print $2}'|  $CMD_AWK -F "x" '{print $2}')))
+                                      printf "%-15s    %-18s     %-18s\n" "$gateway" "$destination_id" "$dscp"
+                                 else
+                                      printf "%-15s    %-18s\n" "$gateway" "$destination_id"
+                                 fi
+                            done
+                      fi
+              fi
+              (( loopcount=loopcount+1 ))
+        done
+        $CMD_RM -f $tmp_file
+}
+#----------------------------------------------------------------------------------------
+function netls(){
+if is_vAPG && isDualStack ; then
+   local v4om=$($CMD_LDE_CONFIG mip show |$CMD_GREP -w "public" |wc -l )
+   local v6om=$($CMD_LDE_CONFIG mip show |$CMD_GREP -w "public_v6" |wc -l )
+   if [ $v4om -eq 1 ] && [ $VERSION_4 == $TRUE ]; then
+       netls_v4
+   fi
+   if [ $v6om -eq 1 ] && [ $VERSION_6 == $TRUE ]; then
+       netls_v6
+   fi
+else
+   if [ $VERSION_4 == $TRUE ]; then
+       netls_v4
+   fi
+   if [ $VERSION_6 == $TRUE ]; then
+       netls_v6
+   fi
+fi
+if [ $(get_shelf_architecture_attr) -eq 3 ]; then
+         opt_network_netls
+fi
+}
+function netls_v4(){	
+	local NETWORK='public'
+	local Node_Architecture=$(immlist -a apgShelfArchitecture axeFunctionsId=1 | $CMD_CUT -d "=" -f2)
+	
+	# Get Interface for Public 
+	INTERFACE=$($CMD_CLUSTERCONF ip --display | $CMD_GREP -w $NETWORK | $CMD_HEAD -1 | $CMD_AWK '{print $4}')
+	
+	$CMD_IFCONFIG $INTERFACE | grep -w inet &> /dev/null
+	if [ $? -ne 0 ] ; then
+		console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+	fi
+
+	# check if the peer node is up
+	ping_peer
+	local node_id=$(</etc/cluster/nodes/this/id)
+	[ $node_id -eq 1 ]&& {	
+		# Get Network configuration of current node
+		IP_ADDRA=$($CMD_IFCONFIG $INTERFACE | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+		SUBNET_ADDRA=$($CMD_IFCONFIG $INTERFACE | $CMD_GREP -w inet | $CMD_AWK '{print $4}' | $CMD_CUT -d ":" -f2)
+		MAC_ADDRA=$($CMD_IFCONFIG $INTERFACE | $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+		GW_ADDR=$($CMD_ROUTE |$CMD_GREP -w $INTERFACE | $CMD_GREP UG | $CMD_AWK '{ print $2 }' )
+		GW_ADDR_W_ROUTES=$($CMD_ROUTE |$CMD_GREP -w $INTERFACE | $CMD_GREP UG | $CMD_AWK '{ print $2"-"$1"-"$3 }' )
+	
+		# Get Cluster address and Gateway address from cluster.conf
+		CLU_ADDR=$($CMD_IFCONFIG $INTERFACE:1 | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+	
+		# get network configuration of peer
+		[ $PEER_NODE_UP -eq $TRUE ]&& {
+			IP_ADDRB=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $INTERFACE 2>/dev/null | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2 )
+			SUBNET_ADDRB=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $INTERFACE 2>/dev/null | $CMD_GREP -w inet | $CMD_AWK '{print $4}' | $CMD_CUT -d ":" -f2 )
+			MAC_ADDRB=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $INTERFACE 2>/dev/null | $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+			[ -z $CLU_ADDR ] && CLU_ADDR=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $INTERFACE:1 2>/dev/null | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+		}
+	}
+
+	[ $node_id -eq 2 ]&& {
+		# Get Network configuration of current node
+		IP_ADDRB=$($CMD_IFCONFIG $INTERFACE | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+		SUBNET_ADDRB=$($CMD_IFCONFIG $INTERFACE | $CMD_GREP -w inet | $CMD_AWK '{print $4}' | $CMD_CUT -d ":" -f2)
+		MAC_ADDRB=$($CMD_IFCONFIG $INTERFACE | $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+		GW_ADDR=$($CMD_ROUTE |$CMD_GREP -w $INTERFACE | $CMD_GREP UG | $CMD_AWK '{ print $2 }' )
+		GW_ADDR_W_ROUTES=$($CMD_ROUTE |$CMD_GREP -w $INTERFACE | $CMD_GREP UG | $CMD_AWK '{ print $2"-"$1"-"$3 }' )
+
+		# Get Cluster address and Gateway address from cluster.conf
+		CLU_ADDR=$($CMD_IFCONFIG $INTERFACE:1 | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+
+		# get network configuration of peer
+		[ $PEER_NODE_UP -eq $TRUE ]&& {
+			IP_ADDRA=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $INTERFACE 2>/dev/null | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2 )	
+			SUBNET_ADDRA=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $INTERFACE 2>/dev/null | $CMD_GREP -w inet | $CMD_AWK '{print $4}' | $CMD_CUT -d ":" -f2 )
+			MAC_ADDRA=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $INTERFACE 2>/dev/null | $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+			[ -z $CLU_ADDR ] && CLU_ADDR=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $INTERFACE:1 2>/dev/null | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+		}
+	}
+ 
+	if [ -z $CLU_ADDR ]; then
+		console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+	fi
+	
+	local public_id=$(echo "$INTERFACE" | awk -F'.' '{ print $2 }')
+	[[ "$public_id" == "" ]] && public_id="untagged"
+	
+	local routes=($GW_ADDR_W_ROUTES)
+	local gateway
+	local destination_id
+	local destination_subnet_mask
+	local routes=($GW_ADDR_W_ROUTES)
+
+	local rdata=''
+	local cdata=''
+	local RGTWY=''
+	local CGTWY=''
+	RM_INTERACE="public_gw"
+	if [ $Node_Architecture -eq 3 ];then
+		RM_INTERACE="_gw"
+		rdata=$( $CMD_ROUTE |$CMD_GREP UG |$CMD_GREP -v "default"|$CMD_AWK 'BEGIN { ORS = "\n" }{print $2}'|sort )
+		cdata=$( $CMD_CLUSTERCONF route --display |$CMD_GREP $RM_INTERACE  | $CMD_AWK 'BEGIN { ORS = "\n" }{if ($6!~"[::]") print $6} '|sort  )
+	else
+		rdata=$( $CMD_ROUTE |$CMD_GREP -w $INTERFACE | $CMD_GREP UG |$CMD_GREP -v "default"|$CMD_AWK 'BEGIN { ORS = "\n" }{print $2}'|sort )
+		cdata=$( $CMD_CLUSTERCONF route --display |$CMD_GREP $RM_INTERACE |$CMD_AWK 'BEGIN { ORS = "\n" }{print $6}'|sort  )
+	fi
+	RGTWY=${rdata[@]};
+	CGTWY=${cdata[@]};
+	if [ "$RGTWY" != "$CGTWY" ] ; then
+		console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+	fi
+	
+    if [ $Node_Architecture -eq 3 ];then
+      local INTERFACE1=$($CMD_CLUSTERCONF ip -D | $CMD_GREP -vwE "public|public_v6|ipn[a-b]|internal|data_network|default|present"|$CMD_GREP "ip 1"|$CMD_AWK 'BEGIN { ORS = "\n"}{if ($6!~"[::]")print $4}'|sort)
+      for int in $INTERFACE1; do
+        INTERFACE_IP=$($CMD_IFCONFIG $int | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+         if [ -z "$INTERFACE_IP" ]; then
+          console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+         fi
+      done
+   
+      # check if optional network is removed and reboot is needed
+      local OPTIONAL_NICS=(eth7 eth8 eth9 eth10)
+      local OPTIONAL_NICS_COUNT=${#OPTIONAL_NICS[@]}
+      local PROCFS_ROUTE='/proc/net/route'
+      local INDEX=0
+      local CLUSTER_IPADDRESS
+
+      while [ $INDEX -lt $OPTIONAL_NICS_COUNT ]
+      do
+        ROUTE_PRESENT=$( grep -q "^${OPTIONAL_NICS[$INDEX]}[[:space:]].*" $PROCFS_ROUTE 2>/dev/null; echo $?)
+        if [ $ROUTE_PRESENT -eq $FALSE ]; then
+          ping_peer
+				
+          if [ $PEER_NODE_UP -eq $TRUE ]; then				
+            ROUTE_PRESENT=$(${CMD_SSH} $RHOST grep -q "^${OPTIONAL_NICS[$INDEX]}[[:space:]].*" $PROCFS_ROUTE 2>/dev/null; echo $?)
+            if [ $ROUTE_PRESENT -eq $TRUE ]; then 
+             console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+            fi
+          fi
+          ((INDEX++))
+          continue			  	
+        fi
+			
+        # cust[1..4] is hardcoded intentionally. This will be revisited again once we fix netdef.
+        local STATIC_NETWORK_NAME="cust"$(expr $INDEX + 1)
+
+        # check if this network is already defined in cluster.conf
+        if [[ $( $CMD_CLUSTERCONF network --display | grep -q "$STATIC_NETWORK_NAME" 2>/dev/null; echo $?) -ne 0 ]]; then
+          console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+        fi
+
+       CLUSTER_IPADDRESS=$($CMD_IFCONFIG ${OPTIONAL_NICS[$INDEX]}:1 | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+        if [ -z "$CLUSTER_IPADDRESS" ]; then
+          # check if the peer node is up
+          ping_peer
+
+          if [ $PEER_NODE_UP -eq $TRUE ]; then
+            CLUSTER_IPADDRESS=$(${CMD_SSH} $RHOST $CMD_IFCONFIG ${OPTIONAL_NICS[$INDEX]}:1 2>/dev/null | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+            [ -z "$CLUSTER_IPADDRESS" ] && console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+          else
+            console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+          fi
+        fi
+       ((INDEX++))
+      done
+     fi
+
+     # check if vlan network is just added and reboot is needed
+     local VLANS_INFO=$( $CMD_VLANLS | awk '{IGNORECASE=1}{if ($1 != "Public" && ($2 != "executed") && ($2 ~ "^[0-9]+$")) print $2 "  "}' | tr -d '\n') 
+     if [ ! -z "$VLANS_INFO" ]; then
+        VLANINFO_ARRAY=( $VLANS_INFO )
+        local physical_interface=$(echo $INTERFACE | ${CMD_AWK} -F'.' '{ print $1 }')
+        local INDEX=0
+        local VLAN_MIP_ADDRESS=''
+        while [ $INDEX -lt ${#VLANINFO_ARRAY[@]} ]
+        do
+          VLAN_ADAPTER=$physical_interface.${VLANINFO_ARRAY[$INDEX]}
+          if $CMD_IFCONFIG $VLAN_ADAPTER | $CMD_GREP -qw inet; then
+            VLANINFO_TAGS="$VLANINFO_TAGS  ${VLANINFO_ARRAY[$INDEX]}"
+            VLAN_MIP_ADDRESS=$($CMD_IFCONFIG $VLAN_ADAPTER:1 | $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+            if [ -z "$VLAN_MIP_ADDRESS" ]; then 
+              ping_peer
+
+              if [ $PEER_NODE_UP -eq $TRUE ]; then
+                VLAN_MIP_ADDRESS=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $VLAN_ADAPTER:1 2>/dev/null| $CMD_GREP -w inet | $CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+              fi 
+            fi
+            [ -z "$VLAN_MIP_ADDRESS" ] && console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+          fi
+          ((INDEX++))
+        done
+     fi
+
+     # check for reboot needed temporary file created by netdef as the last check
+     local filename='/tmp/netdef_reboot_needed'
+     if [ -f $filename ]; then
+       console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+     else
+       ping_peer
+       if [ $PEER_NODE_UP -eq $TRUE ]; then
+         if ${CMD_SSH} $RHOST test -f  $filename &>/dev/null; then 
+           console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+         fi
+       fi
+     fi
+
+     if [ $lflag -ne $TRUE ] ; then 
+		echo -e "Public Network:"
+		echo -e "NODE-A"
+		echo -e "IP Address : "$IP_ADDRA
+		echo -e "MAC Address: "$MAC_ADDRA
+		echo -e "Subnet Mask: "$SUBNET_ADDRA
+		echo -e
+		echo -e "NODE-B"
+		echo -e "IP Address : "$IP_ADDRB
+		echo -e "MAC Address: "$MAC_ADDRB
+		echo -e "Subnet Mask: "$SUBNET_ADDRB
+		echo -e
+		echo -e "Gateway IP Address: "$GW_ADDR
+		echo -e "Cluster IP Address: "$CLU_ADDR
+		
+		
+		STATIC_ROUTES_LIST=$($CMD_ROUTE |$CMD_GREP -w $INTERFACE | $CMD_GREP UG |$CMD_GREP -v  default | $CMD_GREP -vP "[[:space:]]+eth[0-9]+\.[0-9]+[[:space:]]"| $CMD_AWK '{ print $2"-"$1"-"$3 }' )
+		
+		local STATIC_ROUTES=($STATIC_ROUTES_LIST)
+		if [ "$STATIC_ROUTES" != "" ] ; then
+		    echo -e
+			echo -e "Static Routes: "
+			for routes in "${STATIC_ROUTES[@]}" ; do
+				gateway=$(echo "$routes" | $CMD_AWK -F'-' '{ print $1 }')
+				destination_id=$(echo "$routes" | $CMD_AWK -F'-' '{ print $2 }')
+				destination_subnet_mask=$(echo "$routes" | $CMD_AWK -F'-' '{ print $3 }')
+				echo -e "Gateway IP Address: " $gateway
+				echo -e "Destination Network: "$destination_id
+				echo -e "Subnet Mask: " $destination_subnet_mask
+				echo -e
+			done
+		fi
+	else
+		local subnet_mask
+		[[ "$SUBNET_ADDRA" != "" ]] && subnet_mask="$SUBNET_ADDRA"
+		[[ "$SUBNET_ADDRB" != "" ]] && subnet_mask="$SUBNET_ADDRB"
+		local network_id=""
+		if [ "$CLU_ADDR" != "" ] ; then
+			network_id="$(compute_network $CLU_ADDR $subnet_mask)"
+		elif [ "$IP_ADDRA" != "" ] ; then
+			network_id="$(compute_network $IP_ADDRA $subnet_mask)"
+		else
+			network_id="$(compute_network $IP_ADDRB $subnet_mask)"
+		fi
+		echo -e "Public Network:    $network_id"
+		echo -e "VLAN Id:           $public_id"
+
+		[[ "$IP_ADDRA" != "" ]] && printf  "NODE A (%s):        %-15s (%-17s)\n" "$A_STATUS" "$IP_ADDRA" "$MAC_ADDRA"
+		[[ "$IP_ADDRA" == "" ]] && echo -e "NODE A ($A_STATUS):"
+		[[ "$IP_ADDRB" != "" ]] && printf  "NODE B (%s):        %-15s (%-17s)\n" "$B_STATUS" "$IP_ADDRB" "$MAC_ADDRB"
+		[[ "$IP_ADDRB" == "" ]] && echo -e "NODE B ($B_STATUS):"
+
+		echo -e "CLUSTER:           $CLU_ADDR"
+		if is_dscp_supported && [ "$public_id" != "untagged" ]; then
+			echo -e "Gateway            Destination            DSCP"
+		else
+			echo -e "Gateway            Destination"
+		fi
+		local route
+		local destination_cidr
+		for route in "${routes[@]}" ; do
+			gateway=$(echo "$route" | $CMD_AWK -F'-' '{ print $1 }')
+			destination_id=$(echo "$route" | $CMD_AWK -F'-' '{ print $2 }')
+			if [ "$destination_id" == "default" ] ; then
+				if is_dscp_supported && [ "$public_id" != "untagged" ]; then
+					dscp=$((16#$(iptables -t mangle --list | $CMD_AWK '/DSCP/{print $5"   " $8}' | $CMD_AWK '/anywhere/{print $2}' | $CMD_AWK -F "x" '{print $2}')))
+					printf "%-15s    %-18s     %-18s\n" "$gateway" "0.0.0.0/0(default)" "$dscp"
+				else
+					printf "%-15s    0.0.0.0/0 (default)\n" "$gateway"
+				fi
+			else
+				destination_subnet_mask=$(echo "$route" | $CMD_AWK -F'-' '{ print $3 }')
+				destination_cidr=$(subnet_mask_to_CIDR "$destination_subnet_mask")
+				network_id="$destination_id/$destination_cidr"
+ 				if is_dscp_supported ; then
+					[ "$destination_cidr" -eq 32 ] && network_id="$destination_id"
+					dscp=$((16#$(iptables -t mangle --list | $CMD_AWK '/DSCP/{print $5"   " $8}' | grep -E "$network_id[[:space:]]+" |  $CMD_AWK -F "x" '{print $2}')))
+					printf "%-15s    %-18s     %-18s\n" "$gateway" "$destination_id/$destination_cidr" "$dscp"
+				else
+					printf "%-15s    %-18s\n" "$gateway" "$destination_id/$destination_cidr"
+				fi
+			fi
+		done
+	fi
+	
+	## check shelf architecture for virtualization
+	if [ $(get_shelf_architecture_attr) -ne 3 ]; then
+		  ps_netls
+          vlan_netls
+    fi
+	return $exit_sucs	
+}
+function netls_v6(){	
+        local NETWORK_v6='public_v6'
+        local SCOPE='Scope:Global'
+        local Node_Architecture=$(immlist -a apgShelfArchitecture axeFunctionsId=1 | $CMD_CUT -d "=" -f2)
+	
+        # Get Interface for Public_v6 
+        INTERFACE_v6=$($CMD_CLUSTERCONF ip --display | $CMD_GREP -w $NETWORK_v6 | $CMD_HEAD -1 | $CMD_AWK '{print $4}')
+	
+        $CMD_IFCONFIG $INTERFACE_v6 | grep -w inet6 |grep $SCOPE &> /dev/null
+        if [ $? -ne 0 ] ; then
+             console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+        fi
+
+        # check if the peer node is up
+        ping_peer
+        local node_id=$(</etc/cluster/nodes/this/id)
+        [ $node_id -eq 1 ]&& {	
+            # Get Network configuration of current node
+            IP_ADDRA_v6=$($CMD_LDE_CONFIG ip show |$CMD_GREP  -A 7 "node: "$node_id|$CMD_GREP -B 2 "public_v6" | $CMD_GREP  "ip-address"| $CMD_AWK  '{print $3}' )
+	    EXP_IP_ADDRA_v6=$(expand_ipv6_address $IP_ADDRA_v6)
+            # Get Cluster address and Gateway address from cluster.conf
+            CLU_ADDR_v6=$($CMD_LDE_CONFIG  mip show |$CMD_GREP  "mip-name: nbi_v6" -A 4| $CMD_GREP "ip-address"| $CMD_AWK  '{print $3}')
+            #Fetching ip address from ifconfig of current node
+	    IFNG_IP_ADDRA_v6=$($CMD_IP addr show dev $INTERFACE_v6 | $CMD_GREP -w inet6 | $CMD_GREP -w "scope.*global" | $CMD_GREP -v "deprecated" |$CMD_AWK '{print $2}' | $CMD_CUT -d / -f1)	   
+	    EXP_IFNG_IP_ADDRA_v6=$(expand_ipv6_address $IFNG_IP_ADDRA_v6)
+	    [ "$EXP_IP_ADDRA_v6" == "$EXP_IFNG_IP_ADDRA_v6" ] && PREFIX_LENGTHA=$($CMD_IP addr show dev $INTERFACE_v6 | $CMD_GREP -w inet6 | $CMD_GREP -w "scope.*global" | $CMD_GREP -v "deprecated" |$CMD_AWK '{print $2}' | $CMD_CUT -d / -f2)
+            MAC_ADDRA_v6=$($CMD_IFCONFIG $INTERFACE_v6 | $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+            GW_ADDR_v6=$($CMD_LDE_CONFIG  route show |$CMD_GREP "network             : default_v6\|network             : 0::0/0" -A 2  | $CMD_GREP "gateway" | $CMD_AWK '{ print $3 }' )
+            GW_ADDR_W_ROUTES_v6=$($CMD_IP -6 route|$CMD_GREP "via"|$CMD_GREP -w $INTERFACE_v6 | $CMD_AWK '{ print $3"-"$1 }' )
+	
+            # get network configuration of peer
+            [ $PEER_NODE_UP -eq $TRUE ]&& {
+				IP_ADDRB_v6=$($CMD_LDE_CONFIG ip show |$CMD_GREP  -A 7 "node: 2"|$CMD_GREP -B 2 "public_v6" | $CMD_GREP  "ip-address"| $CMD_AWK  '{print $3}')
+		EXP_IP_ADDRB_v6=$(expand_ipv6_address $IP_ADDRB_v6)
+                [ -z $CLU_ADDR_v6 ] && CLU_ADDR_v6=$($CMD_LDE_CONFIG  mip show |$CMD_GREP  "mip-name: nbi_v6" -A 4| $CMD_GREP "ip-address"| $CMD_AWK  '{print $3}')
+		##Fetching ip address from ifconfig of peer node
+		IFNG_IP_ADDRB_v6=$(${CMD_SSH} $RHOST $CMD_IP addr show dev $INTERFACE_v6 | $CMD_GREP -w inet6 | $CMD_GREP -w "scope.*global" | $CMD_GREP -v "deprecated" |$CMD_AWK '{print $2}' | $CMD_CUT -d / -f1)
+            	EXP_IFNG_IP_ADDRB_v6=$(expand_ipv6_address $IFNG_IP_ADDRB_v6)
+                [ "$EXP_IP_ADDRB_v6" == "$EXP_IFNG_IP_ADDRB_v6" ] && PREFIX_LENGTHB=$(${CMD_SSH} $RHOST $CMD_IP addr show dev $INTERFACE_v6 | $CMD_GREP -w inet6 | $CMD_GREP -w "scope.*global" | $CMD_GREP -v "deprecated" |$CMD_AWK '{print $2}' | $CMD_CUT -d / -f2)
+		MAC_ADDRB_v6=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $INTERFACE_v6 2>/dev/null | $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+		}
+	}
+
+           [ $node_id -eq 2 ]&& {
+                # Get Network configuration of current node
+                IP_ADDRB_v6=$($CMD_LDE_CONFIG ip show |$CMD_GREP  -A 7 "node: "$node_id|$CMD_GREP -B 2 "public_v6" | $CMD_GREP  "ip-address"| $CMD_AWK  '{print $3}')
+                EXP_IP_ADDRB_v6=$(expand_ipv6_address $IP_ADDRB_v6)
+		# Get Cluster address and Gateway address from cluster.conf
+                CLU_ADDR_v6=$($CMD_LDE_CONFIG  mip show |$CMD_GREP  "mip-name: nbi_v6" -A 4| $CMD_GREP "ip-address"| $CMD_AWK  '{print $3}')
+		#Fetching ip address from ifconfig of current node
+		IFNG_IP_ADDRB_v6=$($CMD_IP addr show dev $INTERFACE_v6 | $CMD_GREP -w inet6 | $CMD_GREP -w "scope.*global" | $CMD_GREP -v "deprecated" |$CMD_AWK '{print $2}' | $CMD_CUT -d / -f1)
+                EXP_IFNG_IP_ADDRB_v6=$(expand_ipv6_address $IFNG_IP_ADDRB_v6)
+                [ "$EXP_IP_ADDRB_v6" == "$EXP_IFNG_IP_ADDRB_v6" ] && PREFIX_LENGTHB=$($CMD_IP addr show dev $INTERFACE_v6 | $CMD_GREP -w inet6 | $CMD_GREP -w "scope.*global" | $CMD_GREP -v "deprecated" |$CMD_AWK '{print $2}' | $CMD_CUT -d / -f2)
+                MAC_ADDRB_v6=$($CMD_IFCONFIG $INTERFACE_v6 | $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+                GW_ADDR_v6=$($CMD_LDE_CONFIG  route show |$CMD_GREP "network             : default_v6\|network             : 0::0/0" -A 2  | $CMD_GREP "gateway"| $CMD_AWK '{ print $3 }' )
+                GW_ADDR_W_ROUTES_v6=$($CMD_IP -6 route|$CMD_GREP "via"|$CMD_GREP -w $INTERFACE_v6 | $CMD_AWK '{ print $3"-"$1 }' )
+
+               # get network configuration of peer
+               [ $PEER_NODE_UP -eq $TRUE ]&& {
+                   # Get Network configuration of current node
+                   IP_ADDRA_v6=$($CMD_LDE_CONFIG ip show |$CMD_GREP  -A 7 "node: 1"|$CMD_GREP -B 2 "public_v6" | $CMD_GREP  "ip-address"| $CMD_AWK  '{print $3}')
+                   EXP_IP_ADDRA_v6=$(expand_ipv6_address $IP_ADDRA_v6)
+		   # Get Cluster address and Gateway address from cluster.conf
+                   [ -z $CLU_ADDR_v6 ] &&   CLU_ADDR_v6=$($CMD_LDE_CONFIG  mip show |$CMD_GREP  "mip-name: nbi_v6" -A 4| $CMD_GREP "ip-address"| $CMD_AWK  '{print $3}')
+                    ##Fetching ip address from ifconfig of peer node
+                    IFNG_IP_ADDRA_v6=$(${CMD_SSH} $RHOST $CMD_IP addr show dev $INTERFACE_v6 | $CMD_GREP -w inet6 | $CMD_GREP -w "scope.*global" | $CMD_GREP -v "deprecated" |$CMD_AWK '{print $2}' | $CMD_CUT -d / -f1)
+                    EXP_IFNG_IP_ADDRA_v6=$(expand_ipv6_address $IFNG_IP_ADDRA_v6)
+                    [ "$EXP_IP_ADDRA_v6" == "$EXP_IFNG_IP_ADDRA_v6" ] && PREFIX_LENGTHA=$(${CMD_SSH} $RHOST $CMD_IP addr show dev $INTERFACE_v6 | $CMD_GREP -w inet6 | $CMD_GREP -w "scope.*global" | $CMD_GREP -v "deprecated" |$CMD_AWK '{print $2}' | $CMD_CUT -d / -f2)
+
+		    MAC_ADDRA_v6=$(${CMD_SSH} $RHOST $CMD_IFCONFIG $INTERFACE_v6 2>/dev/null | $CMD_GREP  HWaddr | $CMD_AWK '{print $5}')
+		       }
+	}
+ 
+        if [ -z $CLU_ADDR_v6 ]; then
+              console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+        fi
+	
+        local public_id=$(echo "$INTERFACE_v6" | awk -F'.' '{ print $2 }')
+        [[ "$public_id" == "" ]] && public_id="untagged"
+	
+        local routes=($GW_ADDR_W_ROUTES_v6)
+        local gateway
+        local destination_id
+        local destination_subnet_mask
+        local routes=($GW_ADDR_W_ROUTES_v6)
+
+        local rdata=''
+        local cdata=''
+        RM_INTERACE="public_gw"
+        if [ $Node_Architecture -eq 3 ];then
+             RM_INTERACE="_gw"
+             rdata=$($CMD_IP -6 route|$CMD_GREP "via"|$CMD_GREP -v "default" |$CMD_AWK  'BEGIN { ORS = "\n" }{print $3}'|sort)
+			 rdata_exp=$(expand_ipv6_address ${rdata,,})																					 
+             cdata=$( $CMD_CLUSTERCONF route --display |$CMD_GREP $RM_INTERACE |$CMD_AWK 'BEGIN { ORS = "\n" }{if ($6~"[::]") print $6}'|sort  )
+			 cdata_exp=$(expand_ipv6_address ${cdata,,})																					 
+        fi
+        #checking if routes present in Cluster conf are present in IP -6 route
+        local iproute
+        local clugateway
+        if [ -n "${cdata_exp[@]}" ];  then
+
+        for clugateway in "${cdata_exp[@]}" ; do
+            local route_present=$FALSE
+            for iproute in "${rdata_exp[@]}" ; do
+                if [ "$clugateway" == "$iproute" ]; then
+                    route_present=$TRUE
+                    break
+                else
+                    continue
+                fi
+            done
+            [ $route_present -eq $FALSE ] && console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+        done
+        fi
+	
+        if [ $Node_Architecture -eq 3 ];then
+             local INTERFACE1_v6=$($CMD_CLUSTERCONF ip -D | $CMD_GREP -vwE "public|public_v6|ipn[a-b]|internal|data_network|default|present"|$CMD_GREP "ip 1"|$CMD_AWK 'BEGIN { ORS = "\n"}{if ($6!~"[.]")print $4}'|sort)
+        for int in $INTERFACE1; do
+              INTERFACE_IP_v6=$($CMD_IFCONFIG $int | $CMD_GREP -w inet6 | $CMD_GREP -w $SCOPE |$CMD_AWK '{print $2}' | $CMD_CUT -d ":" -f2)
+			   if [ -z "$INTERFACE_IP_v6" ]; then
+			      console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+	          fi
+        done
+   
+      # check if optional network is removed and reboot is needed
+      local OPTIONAL_NICS=(eth7 eth8 eth9 eth10)
+      local OPTIONAL_NICS_COUNT=${#OPTIONAL_NICS[@]}
+      local PROCFS_ROUTE='/proc/net/route'
+      local INDEX=0
+      local CLUSTER_IPADDRESS_v6
+
+      while [ $INDEX -lt $OPTIONAL_NICS_COUNT ]
+      do
+         ROUTE_PRESENT=$( grep -q "^${OPTIONAL_NICS[$INDEX]}[[:space:]].*" $PROCFS_ROUTE 2>/dev/null; echo $?)
+         if [ $ROUTE_PRESENT -eq $FALSE ]; then
+            ping_peer
+				
+            if [ $PEER_NODE_UP -eq $TRUE ]; then				
+                ROUTE_PRESENT=$(${CMD_SSH} $RHOST grep -q "^${OPTIONAL_NICS[$INDEX]}[[:space:]].*" $PROCFS_ROUTE 2>/dev/null; echo $?)
+                if [ $ROUTE_PRESENT -eq $TRUE ]; then 
+                     console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+                fi
+            fi
+          ((INDEX++))
+          continue			  	
+          fi
+			
+        # cust[1..4] is hardcoded intentionally. This will be revisited again once we fix netdef.
+        local STATIC_NETWORK_NAME="cust"$(expr $INDEX + 1)
+
+        # check if this network is already defined in cluster.conf
+        if [[ $( $CMD_CLUSTERCONF network --display | grep -q "$STATIC_NETWORK_NAME" 2>/dev/null; echo $?) -ne 0 ]]; then
+           console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+        fi
+
+        CLUSTER_IPADDRESS_v6=$($CMD_LDE_CONFIG  mip show |$CMD_GREP  "mip-name: nbi_v6" -A 4| $CMD_GREP "ip-address"| $CMD_AWK  '{print $3}')		
+      
+         if [ -z "$CLUSTER_IPADDRESS_v6" ] ; then
+            # check if the peer node is up
+            ping_peer
+
+            if [ $PEER_NODE_UP -eq $TRUE ]; then
+			   CLUSTER_IPADDRESS_v6=$(${CMD_SSH} $RHOST $CMD_LDE_CONFIG  mip show 2>/dev/null|$CMD_GREP  "mip-name: nbi_v6"  -A 4| $CMD_GREP "ip-address"| $CMD_AWK  '{print $3}')
+             [ -z "$CLUSTER_IPADDRESS_v6" ] && console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+			else
+                 console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+            fi
+        fi
+       ((INDEX++))
+      done
+     fi
+
+	 
+     # check for reboot needed temporary file created by netdef as the last check
+     local filename='/tmp/netdef_reboot_needed'
+     if [ -f $filename ]; then
+       console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+     else
+       ping_peer
+       if [ $PEER_NODE_UP -eq $TRUE ]; then
+         if ${CMD_SSH} $RHOST test -f  $filename &>/dev/null; then 
+           console_abort "Network configuration ongoing. Reboot needed." $exit_fail
+         fi
+       fi
+     fi
+
+     if [ $lflag -ne $TRUE ] ; then
+				if [ $VERSION_4 == $TRUE ]; then
+				echo -e
+                fi				  
+	         	echo -e "Public Network:"
+                echo -e "NODE-A"
+                echo -e "IP Address : "$IP_ADDRA_v6
+                echo -e "MAC Address: "$MAC_ADDRA_v6
+                echo -e "Prefix Length: "$PREFIX_LENGTHA
+                echo -e
+                echo -e "NODE-B"
+                echo -e "IP Address : "$IP_ADDRB_v6
+                echo -e "MAC Address: "$MAC_ADDRB_v6
+                echo -e "Prefix Length: "$PREFIX_LENGTHB
+                echo -e
+                echo -e "Gateway IP Address: "$GW_ADDR_v6
+                echo -e "Cluster IP Address: "$CLU_ADDR_v6
+  	 else
+                
+                [[ "$PREFIX_LENGTHA" != "" ]] && PREFIX_LENGTH="$PREFIX_LENGTHA"
+                [[ "$PREFIX_LENGTHB" != "" ]] && PREFIX_LENGTH="$PREFIX_LENGTHB"
+				local pref=$(prefix_to_hex_format_v6 $PREFIX_LENGTH)
+                local network_id=""
+                if [ "$CLU_ADDR_v6" != "" ] ; then
+                       network_id="$(compute_network_v6 $CLU_ADDR_v6 $pref)"
+                elif [ "$IP_ADDRA_v6" != "" ] ; then
+			           network_id="$(compute_network $IP_ADDRA_v6 $pref)"
+		        else
+			           network_id="$(compute_network $IP_ADDRB_v6 $pref)"
+		        fi
+
+                if [ $VERSION_4 == $TRUE ]; then
+				echo -e
+                fi
+
+                echo -e "Public Network:    $network_id"/"$PREFIX_LENGTH"
+                
+                echo -e "VLAN Id:           $public_id"
+
+                [[ "$IP_ADDRA_v6" != "" ]] && printf  "NODE A (%s):        %-15s (%-17s)\n" "$A_STATUS" "$IP_ADDRA_v6" "$MAC_ADDRA_v6"
+                [[ "$IP_ADDRA_v6" == "" ]] && echo -e "NODE A ($A_STATUS):"
+                [[ "$IP_ADDRB_v6" != "" ]] && printf  "NODE B (%s):        %-15s (%-17s)\n" "$B_STATUS" "$IP_ADDRB_v6" "$MAC_ADDRB_v6"
+                [[ "$IP_ADDRB_v6" == "" ]] && echo -e "NODE B ($B_STATUS):"
+
+                echo -e "CLUSTER:           $CLU_ADDR_v6"
+                if is_dscp_supported && [ "$public_id" == "untagged" ]; then
+                        echo -e "Gateway            Destination            DSCP"
+                else
+                        echo -e "Gateway            Destination"
+                fi
+                local route
+                for route in "${routes[@]}" ; do
+                        gateway=$(echo "$route" | $CMD_AWK -F'-' '{ print $1 }')
+                        destination_id=$(echo "$route" | $CMD_AWK -F'-' '{ print $2 }')
+                        if ( [ "$destination_id" == "::/0" ] || [ "$destination_id" == "default" ] ); then
+                                if is_dscp_supported && [ "$public_id" == "untagged" ]; then
+								 dscp=$((16#$(ip6tables -t mangle --list | $CMD_AWK '/DSCP/{print $4"   " $7}' | grep anywhere | $CMD_AWK '{print $2}'|  $CMD_AWK -F "x" '{print $2}')))
+                                        printf "%-15s    %-18s     %-18s\n" "$gateway" "0::0/0(default)" "$dscp"
+                                else
+                                        printf "%-15s    0::0/0(default)\n" "$gateway"
+                                fi
+                        else    
+						        network_id="$destination_id"
+                                if is_dscp_supported ; then
+                                       [ "$PREFIX_LENGTH" -eq 128 ] && network_id="$destination_id"
+                                      dscp=$((16#$(ip6tables -t mangle --list | $CMD_AWK '/DSCP/{print $4"   " $7}' | grep -E "$network_id[[:space:]]+" | $CMD_AWK '{print $2}'|  $CMD_AWK -F "x" '{print $2}')))
+                                        printf "%-15s    %-18s     %-18s\n" "$gateway" "$destination_id" "$dscp"
+                                else
+                                        printf "%-15s    %-18s\n" "$gateway" "$destination_id"
+                                fi
+                        fi
+                done
+        fi
+	    
+        return $exit_sucs	
+}
+
+##############################################################################################
+# function compute_network($ip_address,$subnet_mask);                                        #
+#                                                                                            #
+# Given an IP address and a subnet mask returns the subnet id in CIDR format                 #
+# Example: given 192.168.23.45 and 255.255.255.252 returns 192.168.23.44/30                  #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $ip_address valid IP address                                                             #
+# - $subnet_mask valid CIDR subnet_mask                                                      #
+#                                                                                            #
+# Return value:                                                                              #
+# Subnet id in CIDR format                                                                   #
+#                                                                                            #
+# Return codes:                                                                              #
+# - SUCCESS (0)                                                                              #
+# - FAILURE (1) in case $subnet_mask is not a valid CIDR subnet mask                         #
+##############################################################################################
+function compute_network() {
+	local rCode=$exit_fail
+	
+	local ip_address="$1"
+	local subnet_mask="$2"
+	
+	local cidr_subnet_mask=$(subnet_mask_to_CIDR "$subnet_mask")
+	if [ "$cidr_subnet_mask" != "" ] ; then
+		local ip_address_component=(${ip_address//./ })
+		local subnet_mask_component=(${subnet_mask//./ })
+		
+		local subnet_id_A=`echo $((${ip_address_component[0]} & ${subnet_mask_component[0]}))`
+		local subnet_id_B=`echo $((${ip_address_component[1]} & ${subnet_mask_component[1]}))`
+		local subnet_id_C=`echo $((${ip_address_component[2]} & ${subnet_mask_component[2]}))`
+		local subnet_id_D=`echo $((${ip_address_component[3]} & ${subnet_mask_component[3]}))`
+		
+		echo "$subnet_id_A.$subnet_id_B.$subnet_id_C.$subnet_id_D/$cidr_subnet_mask"
+		rCode=$exit_sucs
+	fi
+	
+	return $rCode
+}
+
+##############################################################################################
+# function subnet_mask_to_CIDR($subnet_mask);                                                #
+#                                                                                            #
+# Convert a subnet mask in CIDR notation                                                     #
+# Example: 255.255.224.0 in 19                                                               #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $subnet_mask subnet mask to convert                                                      #
+#                                                                                            #
+# Return value:                                                                              #
+# CIDR number corresponding to $subnet_mask                                                  #
+#                                                                                            #
+# Return codes:                                                                              #
+# - SUCCESS (0)                                                                              #
+# - FAILURE (1) in case $subnet_mask is not a valid CIDR subnet mask                         #
+##############################################################################################
+function subnet_mask_to_CIDR() {
+	local rCode=$exit_sucs
+	
+	local subnet_mask="$1"
+	local error=$FALSE
+	
+	local dec
+	local nbits=0
+	IFS=$'.'
+	for dec in $subnet_mask ; do
+		case $dec in
+		255)
+			let nbits+=8
+			;;
+		254)
+			let nbits+=7
+			break
+			;;
+		252)
+			let nbits+=6
+			break
+			;;
+		248)
+			let nbits+=5
+			break
+			;;
+		240)
+			let nbits+=4
+			break
+			;;
+		224)
+			let nbits+=3
+			break
+			;;
+		192)
+			let nbits+=2
+			break
+			;;
+		128)
+			let nbits+=1
+			break
+			;;
+		0)
+			;;
+		*)
+			error=$TRUE
+			;;
+	        esac
+	done
+	unset IFS
+	
+	[[ $error -eq $TRUE ]] && rCode=$exit_fail
+	[[ $error -eq $FALSE ]] && echo "$nbits"
+	
+	return $rCode
+}
+##############################################################################################
+# function compute_network_v6($ip_address,$subnet_mask);                                     #
+#                                                                                            #
+# Given an IP address and a subnet mask returns the network id                               #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $ip_address valid IP address                                                             #
+# - $prefix_length valid CIDR subnet_mask                                                    #
+#                                                                                            #
+# Return value:                                                                              #
+# Subnet id                                                                                  #
+#                                                                                            #
+# Return codes:                                                                              #
+# - SUCCESS (0)                                                                              #
+# - FAILURE (1) in case $subnet_mask is not a valid CIDR subnet mask                         #
+##############################################################################################
+function compute_network_v6() {
+  local rCode=$exit_fail
+
+  local ip_address=$(expand_ipv6_address $1)
+  local subnet_mask=$(expand_ipv6_address $2)
+
+  local ip_address_component=(${ip_address//:/ })
+  local subnet_mask_component=(${subnet_mask//:/ })
+
+  local num_ip6_parts=8 #each 16 bits
+  hex_str=
+  for ((i = 0; i < ${num_ip6_parts}; i++))
+  do
+    mask_val=$((0x${ip_address_component[${i}]} & 0x${subnet_mask_component[${i}]}))
+    if [ $i -eq 0 ]; then
+      hex_str="$(echo "obase=16; ${mask_val}" | bc)"
+    else
+      hex_str="${hex_str}:$(echo "obase=16; ${mask_val}" | bc)"
+    fi
+  done
+  hex_str=$(get_ipv6_shortest_form $hex_str)
+  echo $hex_str
+  rCode=$exit_sucs
+  return $rCode
+}
+
+##############################################################################################
+# function prefix_to_hex_format_v6($cidr);                                                    #
+#                                                                                            #
+# Convert from CIDR notation in a subnet mask                                                #
+# Example: 64 in ffff:ffff:ffff:ffff::                                                       #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $prefix_length prefix value to convert                                                   #
+#                                                                                            #
+# Return value:                                                                              #
+# Subnet mask corresponding to $prefix_length                                                #
+#                                                                                            #
+##############################################################################################
+function prefix_to_hex_format_v6() {
+  val=0
+  max_prefix_len=128
+  ip6_part_len=16
+  nibble_bits=4
+  prefix_len=$1
+  nibble_max=$(((1<<${nibble_bits}) - 1))
+  l_prefix_len=$((${prefix_len} + ${nibble_max}))
+  num_ip6_parts=$((${max_prefix_len} >> ${nibble_bits}))
+  for ((i=0;i<${num_ip6_parts};i++)) ; do
+    lval=0
+    base_idx=$((${i} * ${ip6_part_len}))
+    for ((j=0;j<${ip6_part_len};j++)) ; do
+      idx=$((${base_idx} + ${j}))
+      if [ $idx -lt $prefix_len ] ; then
+        lval=$((${lval} | (1 << ${j})))
+      else
+        lval=$((${lval} << 1))
+      fi
+    done
+    hex_str=$(echo "obase=16; ${lval}" | bc)
+if [ $i -eq 0 ]; then
+      val="$hex_str"
+    else
+      val="${val}:${hex_str}"
+    fi
+  done
+  echo $val
+  return $rCode
+}
+
+function getActiveNodeId() {
+	local nodeA_HAState=""
+	local nodeB_HAState=""
+	if which immlist &> /dev/null ; then
+		if [ -f $is_swm_2_0 ]; then
+			nodeA_HAState=$(immlist "safCSIComp=safComp=apos.haagent\\,safSu=SC-1\\,safSg=2N\\,safApp=ERIC-apg.nbi.aggregation.service,safCsi=apos.haagent,safSi=apg.nbi.aggregation.service-2N-1,safApp=ERIC-apg.nbi.aggregation.service" 2> /dev/null | grep -w "saAmfCSICompHAState" | awk '{ print $3 }')
+			nodeB_HAState=$(immlist "safCSIComp=safComp=apos.haagent\\,safSu=SC-2\\,safSg=2N\\,safApp=ERIC-apg.nbi.aggregation.service,safCsi=apos.haagent,safSi=apg.nbi.aggregation.service-2N-1,safApp=ERIC-apg.nbi.aggregation.service" 2> /dev/null | grep -w "saAmfCSICompHAState" | awk '{ print $3 }')
+		else
+			nodeA_HAState=$(immlist "safCSIComp=safComp=Agent\\,safSu=1\\,safSg=2N\\,safApp=ERIC-APG,safCsi=AGENT,safSi=AGENT,safApp=ERIC-APG" 2> /dev/null | grep -w "saAmfCSICompHAState" | awk '{ print $3 }')
+			nodeB_HAState=$(immlist "safCSIComp=safComp=Agent\\,safSu=2\\,safSg=2N\\,safApp=ERIC-APG,safCsi=AGENT,safSi=AGENT,safApp=ERIC-APG" 2> /dev/null | grep -w "saAmfCSICompHAState" | awk '{ print $3 }')
+		fi
+
+	fi
+	
+	if [ "$nodeA_HAState" == "1" ] ; then
+		ACTIVE_NODE_ID=1
+		A_STATUS='A'
+	elif [ "$nodeB_HAState" == "1" ] ; then
+		ACTIVE_NODE_ID=2
+		B_STATUS='A'
+	else
+		local current_node_id=$(</etc/cluster/nodes/this/id)
+		ACTIVE_NODE_ID=$current_node_id
+	fi
+}
+
+# _____________________ _____________________
+#|    _ _   _  .  _    |    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |   | ) ) (_| | | )   |
+#|_____________________|_____________________|
+# Here begins the "main" function...
+if [ ! -x $LDE_CONFIG ]; then
+console_abort "lde-config file missing." $exit_fail
+fi
+
+log "START: <$0>"
+
+# parse command line
+parse_args $*
+
+# retrieve the ID of the active node
+getActiveNodeId
+
+# lauch command
+netls
+
+log "END: <$0>"
+
+# exit with success return code
+exit $exit_sucs

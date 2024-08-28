@@ -1,0 +1,49 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       localuser_wrapper
+# Description:
+#       A script to wrap the invocation of localuser* commands.
+# Note:
+#       None.
+##
+# Usage:
+#       None.
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Tue Jul 06 2015 - Stefano Volpe (estevol)
+#       First version.
+##
+
+# Setting  global variables
+#############################
+root_user="root"
+admin="tsadmin"
+
+# Exit codes
+###########################
+exit_privilege=3
+
+# Check the privilage of the user
+privilege_check(){
+cur_user=`id -u -n`
+        if [ "$cur_user" != "$admin" ] && [ "$cur_user" != "$root_user" ];then
+                echo "ERROR: Not enough privileges to use this command"
+                echo ""
+                exit $exit_privilege
+        fi
+}
+privilege_check
+
+cmd=$0
+cmd=${cmd##*/}
+
+/usr/bin/sudo /opt/ap/apos/bin/localuser/$cmd "$@"
+

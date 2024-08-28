@@ -1,0 +1,7 @@
+Usage:  usermgmt user delete [--help] <--uname=username>
+
+Delete a user account using the values specified.
+ 
+<--uname=>              Specify the user to remove.
+
+<--help>                This help.

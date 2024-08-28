@@ -1,0 +1,606 @@
+-- =============================================================================
+--
+-- %CCaseFile:	GEN-RSTP-MIB.mib %
+-- %CCaseRev:	/main/R1A/2 %
+-- %CCaseDocNo:	8/196 03-CRA 119 1365 Ux %
+-- Author:	esetwik
+--
+-- =============================================================================
+--
+-- Copyright (C) 2009-2010 by Ericsson AB
+-- S-126 25  STOCKHOLM
+-- SWEDEN, tel int + 46 8 719 0000
+--
+-- This Program may be used and/or copied only with the written permission
+-- from Ericsson AB, or in accordance with the terms and
+-- conditions stipulated in the agreement/contract under which the program
+-- has been supplied.
+--
+-- All rights reserved.
+--
+-- =============================================================================
+--
+-- REVISION HISTORY
+--
+-- Rev        Date         Name        What
+-- ========   ==========   ========    ========
+-- PA1        2009-09-16   esetwik     Gen RSTP MIB initial revision.
+-- PA2        2009-09-22   esetwik     Uppdated according to review.
+-- A          2010-02-12   qsangov     Firm Revision
+-- PB1        2010-08-27   qsangov     New objects added for enabling dynamic path 
+--                                     cost calculation (genRstpDynamicPathCostCalculation) 
+--                                     and setting of path cost on l2gp ports 
+--                                     (genRstpPortL2GpNonZeroPathCost)
+-- B          2010-09-14   qsangov     Firm Revision after review
+-- =============================================================================
+
+GEN-RSTP-MIB	DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY,
+    NOTIFICATION-TYPE,
+    OBJECT-TYPE,
+    Counter64,
+    Integer32,
+    enterprises
+	FROM SNMPv2-SMI
+
+    OBJECT-GROUP,	
+    NOTIFICATION-GROUP,
+    MODULE-COMPLIANCE
+        FROM SNMPv2-CONF
+    
+--    RowStatus
+--        FROM SNMPv2-TC
+
+    InterfaceIndex
+        FROM IF-MIB
+
+    TruthValue
+        FROM SNMPv2-TC
+
+    BridgeId
+        FROM BRIDGE-MIB;
+
+-- ********************************************************************
+   genRstp MODULE-IDENTITY
+        LAST-UPDATED 
+   		"201009100000Z"
+        ORGANIZATION
+		"Ericsson AB "
+	CONTACT-INFO
+		"E-mail: ingvar.froroth@ericsson.com"
+	DESCRIPTION
+		"This MIB module defines objects for managing the
+		 additional RSTP functionality"
+ 
+	-- Revision history.
+
+	REVISION    "201009100000Z"
+	DESCRIPTION "See revision history above"  
+ 
+        ::= { enterprises ericsson(193) component(177) generic(2) transport(1) 6 }
+
+
+-- ============================================================================
+-- Definitions of objects
+-- ============================================================================
+
+--ericsson		OBJECT IDENTIFIER ::= {enterprises 193}
+--component		OBJECT IDENTIFIER ::= {ericsson 177}
+--generic		OBJECT IDENTIFIER ::= {component 2}
+--transport		OBJECT IDENTIFIER ::= {generic 1}
+--genRstp		OBJECT IDENTIFIER ::= {transport 6}
+
+-- -------------------------------------------------------------
+
+genRstpNotifications         OBJECT IDENTIFIER ::= { genRstp 0 }
+genRstpNotificationObjects   OBJECT IDENTIFIER ::= { genRstp 1 }
+genRstpObjects               OBJECT IDENTIFIER ::= { genRstp 2 }
+
+genRstpConformace	     OBJECT IDENTIFIER ::= { genRstp 3 }
+genRstpGroups	             OBJECT IDENTIFIER ::= { genRstpConformace 1 }
+genRstpCompliance	     OBJECT IDENTIFIER ::= { genRstpConformace 2 }
+
+-- ============================================================================
+-- Textual conventions
+-- ============================================================================
+
+
+-- ----------------------------------------------------------------------------
+-- genRstpTrapNotifications OBJECT IDENTIFIER ::= { genRstp 0 }
+-- ----------------------------------------------------------------------------
+
+portIndex OBJECT-TYPE
+    SYNTAX        InterfaceIndex
+    MAX-ACCESS    accessible-for-notify
+    STATUS        current
+    DESCRIPTION 
+        "If-Index of the port on which BPDU guard functionality is triggered."
+
+    ::= { genRstpNotificationObjects 1 }        
+
+-- ----------------------------------------------------------------------------
+-- genRstpTrapObjects     	OBJECT IDENTIFIER ::= { genRstp 1 }
+-- ----------------------------------------------------------------------------
+
+genRstpBpduGuardTriggered NOTIFICATION-TYPE
+    OBJECTS   { portIndex }
+    STATUS    current
+    DESCRIPTION 
+        "This notification is sent each time when the BPDU Guard function 
+         is triggered by the reception of a BPDU"
+         
+    ::= { genRstpNotifications 1 }
+
+-- ----------------------------------------------------------------------------
+-- genRstpObjects          OBJECT IDENTIFIER ::= { genRstp 2 }
+-- ----------------------------------------------------------------------------
+
+
+genRstpTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF GenRstpEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table contains information for additional RSTP functionality."
+    ::= { genRstpObjects 1 }
+
+genRstpEntry OBJECT-TYPE
+    SYNTAX      GenRstpEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry containing additional RSTP information applicable to a 
+         particuler port/IfIndex."
+    INDEX { genRstpIfIndex }
+    ::= { genRstpTable 1 }
+
+GenRstpEntry ::= SEQUENCE {
+    genRstpIfIndex                          InterfaceIndex,
+    genRstpBpduGuardTime                    Integer32,
+    genRstpBpduGuardControl                 INTEGER,
+    genRstpBpduGuardStatus                  INTEGER,
+    genRstpBpduFilterControl                INTEGER,
+    genRstpBpduReceived                     Counter64,
+    genRstpBpduGenerated                    Counter64,
+    genRstpBpduGuardEvents                  Counter64,
+    genRstpBpduFilterGuardDiscardRx         Counter64,
+    genRstpBpduFilterDiscardsTx             Counter64,
+    genRstpPortRole                         INTEGER,
+    genRstpPortOperVersion                  INTEGER,
+--    genRstpRowStatus                      RowStatus
+    genRstpLoopGuardControl                 INTEGER,
+    genRstpLoopGuardEffectiveStatus         INTEGER,
+    genRstpPortEnableBPDURx		    TruthValue,
+    genRstpPortEnableBPDUTx		    TruthValue,
+    genRstpPortPseudoRootId		    BridgeId,
+    genRstpPortIsL2Gp			    TruthValue
+    }
+
+genRstpIfIndex OBJECT-TYPE
+    SYNTAX      InterfaceIndex
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Index for the genRstp Table. A unique value, greater than zero, for
+          each interface. Refer IF-MIB (RFC 2863) for details."
+    ::= { genRstpEntry 1 }
+
+genRstpBpduGuardTime OBJECT-TYPE
+    SYNTAX      Integer32 (0..65535)
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+	" Object to set the time (0-65535 s) a port shall be Disabled following
+          an unexpected reception of an RSTP BPDU. 
+          Setting this object to 0, a reception of a BPDU will Disable the port
+          permanently, or until an Management Station enables it again by 
+          operating on the ifMauStatus object for the port.
+          Operator must set this object before enabling the Bpdu Guard 
+          (genRstpBpduGuardControl) on this port."
+    DEFVAL      { 60 }
+    ::= { genRstpEntry 2 }
+
+genRstpBpduGuardControl OBJECT-TYPE
+    SYNTAX	INTEGER {
+                    enable(1),
+                    disable(2)
+                }
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+	"Object to enable or disable BPDU Guard functionality for this Port.
+         In case the Management Station decides to Disable/enable a port, it is
+         expected that it first disables this BPDUGuard on the port, prior
+         to Disabling the port, in order to avoid conflicts."
+    DEFVAL      { disable }
+    ::= { genRstpEntry 3 }
+
+genRstpBpduGuardStatus OBJECT-TYPE
+    SYNTAX	INTEGER {
+                    active(1),
+                    inactive(2)
+                }
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"The current status of BPDU Guard for this Port.
+    
+         active: The BPDU Guard function is currently active, i.e. a BPDU has been 
+                 received on this port, which triggered the said function to disable 
+                 the port. The genRstpBpduGuardTime has not yet elapsed since.
+                 
+         inactive: The BPDU Guard function is currently inactive.  
+         
+         This object will be inactive if genRstpBpduGuardControl is set to 'disable'."
+
+    ::= { genRstpEntry 4 }
+
+genRstpBpduFilterControl OBJECT-TYPE
+    SYNTAX	INTEGER {
+                    enable(1),
+                    disable(2)
+                }
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+	"Object to enable or disable BPDU Filter functionality of this Port."
+    DEFVAL      { disable }
+    ::= { genRstpEntry 5 }
+
+genRstpBpduReceived OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+          "The number of BPDUs received on the port. This counter is 
+           incremented regardless of whether or not BPDU Filter is enabled
+           on the port."
+    ::= { genRstpEntry 6 }
+
+genRstpBpduGenerated OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+          "The number of BPDUs generated by the local RSTP instance. This 
+           counter is incremented regardless of whether or not BPDU Filter
+           is enabled on the port." 
+    ::= { genRstpEntry 7 }
+
+genRstpBpduGuardEvents OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+           "The number of BPDUs received on the port that caused the BPDU
+            Guard function to take action (Disable port)." 
+    ::= { genRstpEntry 8 }
+
+genRstpBpduFilterGuardDiscardRx OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+           "The number of BPDUs received on the port that caused the BPDU
+            Filter and/or BPDU Guard function to discard the BPDU."
+    ::= { genRstpEntry 9 }
+
+genRstpBpduFilterDiscardsTx OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+           "The number of BPDUs generated by the local RSTP instance that 
+            caused the BPDU Filter function to discard the BPDU."
+    ::= { genRstpEntry 10 }
+
+genRstpPortRole OBJECT-TYPE
+   SYNTAX      INTEGER {
+                  disabledPort(0),
+                  alternatePort(1),
+                  backupPort(2),
+                  rootPort(3),
+                  designatedPort(4)
+               }
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "This indicates the current Port Role assumed by this Port."
+   ::= { genRstpEntry 11 }
+   
+genRstpPortOperVersion OBJECT-TYPE
+    SYNTAX      INTEGER{
+                   stpCompatible(0),
+                   rstp(2)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This indicates whether the Port is operationally in the Rstp
+         mode or the Stp-compatible mode i.e., whether the Port is
+         transmitting RST BPDUs or Config/TCN BPDUs."
+    ::= { genRstpEntry 12 }
+    
+genRstpLoopGuardControl OBJECT-TYPE
+    SYNTAX   INTEGER {
+                 enable(1),
+                 disable(2)
+        } 
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "Object to enable/disable RSTP Loop Guard functionality for this port."
+    DEFVAL      { disable }
+    ::= { genRstpEntry 13 }
+
+genRstpLoopGuardEffectiveStatus OBJECT-TYPE
+     SYNTAX  INTEGER {
+                     active(1),
+                     inactive(2)
+             }
+     MAX-ACCESS      read-only
+     STATUS          current
+     DESCRIPTION
+         "Current status of RSTP Loop Guard for this port.
+         
+         active:   This port has lost three successive BPDU's and continues to 
+                   remain in current state and role.If in between 'genRstpLoopGuardControl'
+                   is made 'disable', then port remains in present state until it receives
+                   BPDU's on this port or the port is made administratively down.
+                    
+         inactive: RSTP Loop Guard functionality is currently not effective on this port."
+     ::= { genRstpEntry 14 }
+
+genRstpPortEnableBPDURx OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS read-write
+    STATUS      current
+    DESCRIPTION
+    "In an RSTP / MSTP bridge, the value of enableBPDURx parameter. If FALSE, 
+    the BPDUs received on the port are ignored. "
+    DEFVAL {true}
+    ::= { genRstpEntry 15}
+
+genRstpPortEnableBPDUTx OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS read-write
+    STATUS      current
+    DESCRIPTION
+    "In an RSTP / MSTP bridge, the value of enableBPDUTx parameter. 
+    If FALSE, no BPDUs are transmitted by this port. 
+    When a port is configured as a Layer Two Gateway port this MIB object should be set to FALSE."
+    DEFVAL {true}
+    ::= { genRstpEntry 16}
+
+genRstpPortPseudoRootId OBJECT-TYPE
+    SYNTAX      BridgeId
+    MAX-ACCESS read-write
+    STATUS      current
+    DESCRIPTION
+    "In an RSTP / MSTP bridge, the pseudoRootId parameter value. 
+    By default, it is set to the BridgeIdentifier. 
+    The pseudoRootId is used by Layer Two Gateway Port as the RootId in generated BPDUs."
+    ::= { genRstpEntry 17}
+
+genRstpPortIsL2Gp OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS read-write
+    STATUS      current
+    DESCRIPTION
+    "In an MSTP Bridge, the isL2gp parameter value. If set to TRUE, 
+    the port functions as a Layer Two Gateway Port. 
+    The genRstpPortEnableBPDUTx is set to FALSE when genRstpPortIsL2Gp is set to TRUE."
+    DEFVAL { false }
+    ::= { genRstpEntry 18}
+
+-- genRstpRowStatus OBJECT-TYPE
+--    SYNTAX	RowStatus
+--    MAX-ACCESS	read-write
+--    STATUS	current
+--    DESCRIPTION
+--	"The status of this conceptual row. Used when a row in the
+--	table is created or deleted."
+--    ::= { genRstpEntry 1 }
+-- Number of ROWs are fixed.
+
+
+-- ----------------------------------------------------------------------------
+-- SCALAR OBJECTS
+-- ----------------------------------------------------------------------------
+
+genRstpSwitchWDTime OBJECT-TYPE
+    SYNTAX      Integer32 (0..60)
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+    "Object to set the timeout value (0..60) of the switch
+     watchdog. Setting this object to ZERO will disable the switch watchdog.
+     0= watchdog disabled,
+     1= invalid setting,
+     2-60= valid settings for corresponding number of seconds."
+    DEFVAL      { 3 }
+    ::= { genRstpObjects 2 }
+
+genRstpPortL2GpNonZeroPathCost  OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+    "In an RSTP/MSTP bridge, the L2GpNonZeroPathCost parameter value. If set
+     to TRUE, the bridge functions as a Layer 2 Gateway port with Ericsson
+     enhancement which allows setting non-zero path cost to L2G port"
+    DEFVAL { false }
+    ::= { genRstpObjects 3 }
+
+genRstpDynamicPathCostCalculation OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    enable(1),
+                    disable(2)
+                }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+    "This object defines if dynamic path cost calculation is enabled or not.
+    If set to enable, a physical port's path cost is calculated dynamically 
+    from port speed, else the link speed at the time of port creation is 
+    used for calculating the path cost. 
+
+    This object has no effect on the port if the user has administratively 
+    configured a pathcost for the port using the object dot1dStpPortAdminPathCost. 
+    By default dynamic pathcost calculation is set to disable." 
+    DEFVAL      { disable }
+    ::= { genRstpObjects 4 }
+
+
+-- ----------------------------------------------------------------------------
+-- genRstpGroups  	     OBJECT IDENTIFIER ::= { genRstpConformace 1 }
+-- ----------------------------------------------------------------------------
+
+genRstpNotificationGroup NOTIFICATION-GROUP
+    NOTIFICATIONS {
+            genRstpBpduGuardTriggered
+       }
+    STATUS	current
+    DESCRIPTION
+	"See corresponding notification description."
+    ::= { genRstpGroups 1 }
+
+genRstpNotificationObjectGroup OBJECT-GROUP
+    OBJECTS {
+          portIndex
+       }
+    STATUS	current
+    DESCRIPTION
+	"See corresponding object description."
+    ::= { genRstpGroups 2 }
+
+genRstpObjectGroup1 OBJECT-GROUP
+    OBJECTS {
+          genRstpBpduReceived,
+          genRstpBpduGenerated,
+          genRstpPortRole,
+          genRstpPortOperVersion
+--        genRstpRowStatus
+          }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding object description."
+    ::= { genRstpGroups 3 }
+
+genRstpObjectGroup2 OBJECT-GROUP
+    OBJECTS {
+          genRstpBpduGuardTime,
+          genRstpBpduGuardControl,
+          genRstpBpduGuardStatus,
+          genRstpBpduGuardEvents,
+          genRstpBpduFilterGuardDiscardRx
+          }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding object description."
+    ::= { genRstpGroups 4 }
+
+genRstpObjectGroup3 OBJECT-GROUP
+    OBJECTS {
+          genRstpBpduFilterControl,
+          genRstpBpduFilterDiscardsTx,
+          genRstpBpduFilterGuardDiscardRx
+          }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding object description."
+    ::= { genRstpGroups 5 }
+
+genRstpObjectGroup4 OBJECT-GROUP
+    OBJECTS {
+          genRstpSwitchWDTime
+          }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding object description."
+    ::= { genRstpGroups 6 }
+
+genRstpObjectGroup5 OBJECT-GROUP
+    OBJECTS {
+          genRstpLoopGuardControl,
+          genRstpLoopGuardEffectiveStatus
+          }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding object description."
+    ::= { genRstpGroups 7 }
+
+genRstpObjectGroup6 OBJECT-GROUP
+    OBJECTS {
+          genRstpPortEnableBPDURx,
+          genRstpPortEnableBPDUTx,
+          genRstpPortPseudoRootId,
+          genRstpPortIsL2Gp,
+          genRstpPortL2GpNonZeroPathCost 
+          }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding object description."
+    ::= { genRstpGroups 8 }
+
+genRstpObjectGroup7 OBJECT-GROUP
+     OBJECTS {
+          genRstpDynamicPathCostCalculation
+          }
+     STATUS      current
+     DESCRIPTION
+          "See corresponding object description"
+     ::= { genRstpGroups 9 } 
+
+-- ----------------------------------------------------------------------------
+-- genRstpCompliance    OBJECT IDENTIFIER ::= { genRstpConformace 2 }
+-- ----------------------------------------------------------------------------
+
+genCompliance MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+	"The compliance statement for SNMP entities supported
+	 by the switch"
+    MODULE -- this module
+
+    GROUP genRstpNotificationGroup
+    DESCRIPTION 
+        "Implementation of this group is optional"
+
+    GROUP genRstpNotificationObjectGroup
+    DESCRIPTION 
+        "Implementation of this group is optional"
+
+    GROUP genRstpObjectGroup1
+    DESCRIPTION 
+        "Implementation of this group is optional"
+
+    GROUP genRstpObjectGroup2
+    DESCRIPTION 
+        "Implementation of this group is optional"
+    
+    GROUP genRstpObjectGroup3
+    DESCRIPTION 
+        "Implementation of this group is optional"
+    
+    GROUP genRstpObjectGroup4
+    DESCRIPTION 
+        "Implementation of this group is optional"
+    
+    GROUP genRstpObjectGroup5
+    DESCRIPTION 
+        "Implementation of this group is optional"
+    
+    GROUP genRstpObjectGroup6
+    DESCRIPTION 
+        "Implementation of this group is optional"
+    
+    GROUP genRstpObjectGroup7
+    DESCRIPTION 
+        "Implementation of this group is optional"
+
+    ::= { genRstpCompliance 1 }
+
+END

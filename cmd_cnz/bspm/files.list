@@ -1,0 +1,30 @@
+# Directories
+555:cmd
+555:cmd/get
+555:cmd/set
+555:lib
+777:lib/common
+555:lib/common/man
+
+# Files
+555:bspmngr
+555:cmd/get/mac
+555:cmd/get/rtfdflag
+
+555:cmd/set/bootdev
+555:cmd/set/reboot
+555:cmd/set/baudrate
+555:cmd/set/clearrtfd
+
+666:lib/common/baudrate.dat
+444:lib/common/bspmngr_common.sh
+666:lib/common/slot_by_name.dat
+666:lib/common/bootdev.dat
+
+444:lib/common/man/set_reboot.man
+444:lib/common/man/bspmngr.man
+444:lib/common/man/set_bootdev.man
+444:lib/common/man/get_mac.man
+444:lib/common/man/set_baudrate.man
+444:lib/common/man/set_clearrtfd.man
+444:lib/common/man/get_rtfdflag.man

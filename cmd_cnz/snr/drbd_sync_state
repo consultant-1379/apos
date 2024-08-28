@@ -1,0 +1,128 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       drbd_sync_state
+# Description:
+#       This script is to check the DRBD status
+##
+# Usage:
+#       drbd_sync_state [ -v]
+##
+# Output:
+#      Synchronization is In Progress : 30% completed - if synchronization is in progress
+#      Synchronization completed - if synchronization completed
+##
+# Changelog:
+# - Mon May 21 2012 - Uppada Pratap (xpraupp)
+#       First version.
+##
+
+set -u
+
+#Global Parameters
+proc_drbd=/proc/drbd
+verbose=0
+
+exit_success=0
+exit_failure=1
+
+function usage(){
+	echo -e "Usage: drbd_sync_state [ -v]"
+	exit $exit_failure
+}
+
+# function to log to system log
+function log(){
+	/bin/logger -t "$0" "$*"
+}
+
+
+#Function to know the  percentage of data is sync'ed
+function sync_rate(){
+	sync_rate=`cat $proc_drbd | awk '/sync/{print $3}'`
+       	if [ -z "$sync_rate" ];then
+		echo -e "Synchronization is In Progress."
+      	else
+      		echo -e "Synchronization is In Progress :$sync_rate completed"
+	fi
+	
+	return $exit_success	
+}
+
+#function to know the disk state
+function disks_status(){
+	disk1_status=`awk '/ds/{print $4}' $proc_drbd | cut -d"/" -f1 | cut -d":" -f2`
+	disk2_status=`awk '/ds/{print $4}' $proc_drbd | cut -d"/" -f2`
+	if [ $verbose -eq 1 ]; then
+		echo -e "Primary disk status   : $disk1_status"
+		echo -e "Secondary disk status : $disk2_status"
+	fi
+
+	if [ $disk1_status == $disk2_status ];then
+		echo -e "Synchronization completed"
+	else
+		sync_rate
+	fi	
+	
+	return $exit_success
+}
+
+#function to know the connection state
+function conn_status(){
+        conn_status=`cat $proc_drbd  | awk '/cs/{print $2}' | cut -d ":" -f2`
+        if [ $verbose -eq 1 ]; then
+        	echo -e "DRBD connect status : $conn_status"
+	fi
+	
+	return $exit_success
+}
+
+#function to print Roles of a Resource 
+function prnt_role(){
+	prnt_role=`cat $proc_drbd | grep ro: | cut -d "/" -f1 | cut -d ":" -f4`
+	if [ $verbose -eq 1 ]; then
+		echo -e "Resource role : $prnt_role"
+	fi
+
+	return $exit_success
+}
+
+##############
+# Main Program
+##############
+
+log "START:<$0>"
+
+count=`echo $#`
+
+if [ $count -gt 1 ];then
+	echo "ERROR: Invalid usage."
+	usage
+fi
+
+if [ $count -gt 0 ];then
+	if [ "$1" == "-v" ];then
+        	 verbose=1
+	else
+		echo "ERROR :Invalid Option  $1"
+		usage
+	fi
+fi
+
+#1. Check connection Status
+conn_status
+
+#2. Check Role 
+prnt_role
+
+#3. Check Disk status
+disks_status
+
+log "END:<$0>"
+exit $exit_success
+
+

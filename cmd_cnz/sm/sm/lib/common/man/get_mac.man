@@ -1,0 +1,46 @@
+Usage:  shelfmngr get mac [--verbose] [--help] --eth=<interface>|--base <board>
+
+Retrieves the MAC address(es) of the specified interface (or the "base" address)
+of the specified board(s).
+
+--eth=<interface>       specifies the ethernet interface whose MAC must be
+                        reported. It can assume one of the following values:
+			        eth0, 0 (only valid for apub boards)
+				eth1, 1 (only valid for apub boards)
+				eth2, 2 (only valid for apub boards)
+				eth3, 3
+				eth4, 4
+				all (only valid for apub boards)
+				
+--base                  tell the program to query the board "base" MAC address.
+
+<board>                 represents the board(s) the command will operate on. It
+                        can assume one of the following values:		
+		                all-slots
+		                all-boards
+		                <board_name>
+		                <slot_number>
+				
+<board_name>            can assume one of the following values (the supported
+                        logical names are found in lib/common/slot_by_name.dat
+                        under the shelfmngr root directory):
+	                        sc_a, sca
+		                sc_b, scb
+		                cpub_a, cpa
+		                cpub_b, cpb
+		                maub, mau
+		                apub_a, apa
+		                apub_b, apb
+		                ged_sasf_a, dda
+		                ged_sasf_b ddb
+		                ged_dvd dvd
+		                gea, gea
+
+<slot_number>           must be an unsigned integer.
+
+notes:          please note that eth0, eth1 and eth2 MAC addresses are obtained
+                via calculations since they are not directly available via an
+		snmp query.
+		
+		EGEM2 (SCXB-based) magazine only supports --base addresses.
+

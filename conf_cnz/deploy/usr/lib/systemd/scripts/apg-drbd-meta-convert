@@ -1,0 +1,143 @@
+#!/bin/bash
+
+# We use the drbd low level command 'drbdmeta' to perform conversion between
+# the v08 and v09 version of drbd metadata
+#
+# [relevant] Syntax for 'drbdmeta' is as follows:
+##
+## USAGE: drbdmeta [--force] DEVICE FORMAT [FORMAT ARGS...] COMMAND [CMD ARGS...]
+##
+## FORMATS:
+##  v08 device index
+##  v09 device index
+##
+## COMMANDS:
+##  get-gi --node-id {val}
+##  create-md [--peer-max-bio-size {val}] [--al-stripes {val}] [--al-stripe-size-kB {val}] {max_peers}
+##
+#  'DEVICE' is the minor number of the drbd device, but is not important since we are not communicating
+#  with the kernel for these use cases, so we use '99'.
+#  'device' and 'index' can be retrieved using "drbdadm sh-md-dev" and "drbdadm sh-md-idx"
+#  'node-id' is the node-id of the peer and can be retrieved as (($(cat /etc/cluster/nodes/this/id)&1))
+#  (Do not use ../nodes/peer/id since 'peer' does not exist e.g. during ISO installation)
+#
+# The drbdmeta tool fails to propagate the 'bitmap UUID' if the peer node is not 'node-id=0'. Therefore
+# we need to use 'get-gi' and 'set-gi' to propagate the bitmap UUID.
+# The 'get-gi' output looks like this (bitmap UUID is the second hex value):
+# "BAEFA5197C9A424F:3A4D82024B05C1C2:5A521259DBEECBD6:EE19B9E7A181E4BE:1:1:1:0:0:0:0:0:0:0"
+# The 'set-gi' command can set any individual portion of the above using :::<portion to set:[:::..]
+# e.g. setting the bitmap UUID would be ":<bitmap UUID>:::" (trailing colons can be supressed)
+#
+DRBDMETA=$(type -P drbdmeta)
+DEV=99
+
+# This script needs to work for SLES-11, SLES-12 SP0 and SLES-12 SP2 since we copy it to older
+# systems when downgrading. On older systems a DRBD v9 capable version of drbdmeta needs to be
+# located in /usr/lib/lde/drbdmeta_v9.
+
+if [ -f /usr/lib/lde/drbdmeta_v9 ]; then
+        DRBDMETA="/usr/lib/lde/drbdmeta_v9"
+fi
+
+if ! $DRBDMETA --help | grep -q v09; then
+        logger -s "ERROR: No V9 capable drbdmeta found"
+        exit 1
+fi
+
+convert_to_v08() {
+        local resource=$1
+        local device=$(drbdadm sh-md-dev $resource)
+        local index=$(drbdadm sh-md-idx $resource)
+        local peer_id=$(($(</etc/cluster/nodes/this/id)&1))
+
+        # Check if v08 metadata already exists
+        v08_get_gi_cmd="$DRBDMETA $DEV v08 $device $index get-gi"
+        if ! $v08_get_gi_cmd &>/dev/null; then
+                logger -s "No valid v08 DRBD metadata found, checking presense of v09 metadata"
+                # If we can successfully read v09 metadata, we are dealing with a downgrade.
+                v09_get_gi_cmd="$DRBDMETA $DEV v09 $device $index get-gi --node-id=$peer_id"
+                local gi=$($v09_get_gi_cmd)
+                if [ "$?" == "0" ];then
+                        # Need to create v08 metadata (will downgrade v09 -> v08)
+                        logger -s "Converting metadata v09 -> v08 to match DRBD version"
+                        v08_write_md_cmd="$DRBDMETA --force $DEV v08 $device $index create-md"
+                        if ! $v08_write_md_cmd; then
+                                logger -s "Failed to apply DRBD metadata v08"
+                                exit 1
+                        fi
+                else
+                        logger -s "No valid DRBD metadata found"
+                        exit 1
+                fi
+                # Now propagate the bitmap UUID
+                local bm_uuid=$(echo $gi|cut -d: -f2)
+                v08_set_gi_cmd="$DRBDMETA --force $DEV v08 $device $index set-gi :$bm_uuid::"
+                if ! $v08_set_gi_cmd; then
+                        # not fatal (sync > full sync), just log
+                        logger -s "Failed to write DRBD bitmap UUID"
+                fi
+        fi
+}
+
+convert_to_v09() {
+        local resource=$1
+        local device=$(drbdadm sh-md-dev $resource)
+        local index=$(drbdadm sh-md-idx $resource)
+        local peer_id=$(($(</etc/cluster/nodes/this/id)&1))
+
+        # Check if v09 metadata already exists
+        v09_get_gi_cmd="$DRBDMETA $DEV v09 $device $index get-gi --node-id=$peer_id"
+        if ! $v09_get_gi_cmd &>/dev/null; then
+                logger -s "No valid v09 DRBD metadata found, checking presense of v8 metadata"
+                # If we can successfully read v08 metadata, we are dealing with an upgrade.
+                v08_get_gi_cmd="$DRBDMETA $DEV v08 $device $index get-gi"
+                local gi=$($v08_get_gi_cmd)
+                if [ "$?" == "0" ];then
+                        # Need to create v09 metadata (will upgrade v08 -> v09)
+                        logger -s "Converting metadata v08 -> v09 to match DRBD version"
+                        v09_write_md_cmd="$DRBDMETA --force $DEV v09 $device $index create-md 1"
+                        if ! $v09_write_md_cmd; then
+                                logger -s "Failed to apply DRBD metadata v09"
+                                exit 1
+                        fi
+                else
+                        logger -s "ERROR: No valid DRBD metadata found"
+                        exit 1
+                fi
+                # Now propagate the bitmap UUID
+                local bm_uuid=$(echo $gi|cut -d: -f2)
+                v09_set_gi_cmd="$DRBDMETA --force $DEV v09 $device $index set-gi --node-id=$peer_id :$bm_uuid::"
+                if ! $v09_set_gi_cmd; then
+                        # not fatal (sync > full sync), just log
+                        logger -s "WARNING: Failed to write DRBD bitmap UUID"
+                        logger -s "WARNING: May cause full DRBD resync"
+                fi
+        fi
+}
+
+
+version=$1
+resource=$2
+kernel_release=$(uname -r)
+kernel_major=${kernel_release/\.*/}
+
+if [ -n "$resource" -a "$version" == "v08" ]; then
+        cmd="convert_to_v08"
+elif [ -n "$resource" -a "$version" == "v09" ]; then
+        cmd="convert_to_v09"
+else
+        echo "Usage: $0 <drbd metadata version> <resource>. Supported versions: v08 v09"
+        echo or
+        echo "       $0 install-patch"
+        exit 0
+fi
+
+if [ "$version" == "v08" -a $kernel_major -ge 4 ]; then
+        logger -s "WARNING: Attempting to convert DRBD meta to v08 on kernel $kernel_release"
+fi
+if [ "$version" == "v09" -a $kernel_major -lt 4 ]; then
+        logger -s "WARNING: Attempting to convert DRBD meta to v09 on kernel $kernel_release"
+fi
+
+$cmd $resource
+

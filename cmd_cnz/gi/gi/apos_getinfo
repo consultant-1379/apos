@@ -1,0 +1,101 @@
+#!/bin/bash 
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2016 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       apos_getinfo
+# Description:
+#	A framework composed by a set of APIs providing all meaningful information related to the cloud environment
+#	and allow the applications of the upper-layers (i.e. non-APOS apps) to avoid implementing vendor-specific solutions.
+#
+##
+# Usage:
+#       call: apos_getinfo --help
+##
+# Changelog:
+# - Tue Jan 23 2018 - Rajashekar Narla (xcsrajn)
+# Usage modified to include meta
+# - Thu Nov 03 2016 - Antonio Buonocunto (eanbuon)
+# First version
+
+VENDOR=""
+SUPPORTED_VENDOR_LIST=""
+
+#source of common_functions
+. "/opt/ap/apos/bin/gi/lib/common/common_functions"
+
+function usage(){
+  cat <<- EOF
+Usage:
+        apos_getinfo --help
+        apos_getinfo <command>.[item]
+
+        <command> must be one of the following:
+                 [ uuid | netinfo | properties | metadata ]
+
+EOF
+}
+
+function get_vendor(){
+  VENDOR="$($APOS_CONF_PATH/apos_hwtype.sh --verbose | $CMD_GREP "system-manufacturer" | $CMD_AWK -F"=" '{print $2}' | $CMD_SED -e 's@^[[:space:]]*@@g' -e 's@^"@@g' -e 's@"$@@g')"
+  if [ -z "$VENDOR" ];then
+    apos_abort "Error while fetching vendor" 
+  fi
+}
+
+function getinfo_init(){
+  if is_SIMULATED; then
+    apos_log "Get simulated values"
+    VENDOR="simulated"
+  else
+    get_vendor
+    SUPPORTED_VENDOR_LIST="$($CMD_LS -1 $GETINFO_API_PATH)"
+    if [ -z "$SUPPORTED_VENDOR_LIST" ];then
+      apos_abort "Error while fetching supported vendor list" 
+    fi
+    local IS_VENDOR_SUPPORTED="$FALSE"
+    for SUPPORTED_VENDOR_ITEM in $SUPPORTED_VENDOR_LIST;do
+      if [[ "$VENDOR" =~ .*$SUPPORTED_VENDOR_ITEM.* ]];then
+        VENDOR="$SUPPORTED_VENDOR_ITEM"
+        IS_VENDOR_SUPPORTED="$TRUE"
+      fi
+    done
+    if [ "$IS_VENDOR_SUPPORTED" = "$FALSE" ];then
+      apos_abort "Vendor $VENDOR not supported"
+    fi
+  fi
+}
+
+function handle_subcommand(){
+  local GETINFO_SUBCOMMAND="$1"
+  local GETINFO_SUBCOMMAND_OPTION=""
+  local IS_SUBCOMMAND_SUPPORTED="$FALSE"
+  if [ -z "$GETINFO_SUBCOMMAND" ];then
+    usage
+    apos_abort "Invalid usage"
+  fi
+  #Extract optional value
+  GETINFO_SUBCOMMAND_OPTION="$(echo $GETINFO_SUBCOMMAND | awk -F'.' '{print $2}')"
+  GETINFO_SUBCOMMAND="$(echo $GETINFO_SUBCOMMAND | cut -f1 -d".")"
+  GETINFO_SUBCOMMAND="$GETINFO_SUBCOMMAND.sh"
+  SUPPORTED_SUBCOMMAND_LIST="$($CMD_LS -1 $GETINFO_API_PATH/$VENDOR)"
+  for SUPPORTED_SUBCOMMAND_ITEM in $SUPPORTED_SUBCOMMAND_LIST;do
+    if [ "$SUPPORTED_SUBCOMMAND_ITEM" = "$GETINFO_SUBCOMMAND" ];then
+      IS_SUBCOMMAND_SUPPORTED="$TRUE"
+    fi
+  done
+  if [ "$IS_SUBCOMMAND_SUPPORTED" = "$FALSE" ];then
+    apos_abort "Subcommand $GETINFO_SUBCOMMAND not supported"
+  else
+    $GETINFO_API_PATH/$VENDOR/$GETINFO_SUBCOMMAND $GETINFO_SUBCOMMAND_OPTION
+  fi
+}
+
+# Main
+
+getinfo_init
+
+handle_subcommand $1
+

@@ -1,0 +1,35 @@
+# sd_folder.list
+# This file lists all the directories provided by APOS on APG43L.
+# Lines beginning with a '#' char will be ignored.
+# The <subsystem> placeholder is used to map the various subsystems' name.
+# NOTE: Only for the subsystem independent folder there is the possibility to specify also the permission to apply 
+#
+
+# <subsystem>-independent folders
+# folder:permission
+/media:775
+/var/run/ap
+/var/log/SC-2-1
+/var/log/SC-2-2
+/var/log/core
+/home/nohome
+/cluster/sw_package/APG
+/var/log/lde-backup
+
+#WA to avoid the racoon service failure
+/run/racoon:600
+
+# commands & daemons folder
+/opt/ap/<subsystem>/bin
+
+# documentation folder
+/opt/ap/<subsystem>/doc
+
+# 32-bit libraries folder
+/opt/ap/<subsystem>/lib
+
+# 64-bit libraries folder
+/opt/ap/<subsystem>/lib64
+
+# configuration folder (for performance-critic applications)
+/cluster/etc/ap/<subsystem>

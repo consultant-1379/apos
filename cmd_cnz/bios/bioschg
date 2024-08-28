@@ -1,0 +1,956 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       bioschg
+# Description:
+
+##
+# Usage:
+#	bioschg
+#	bioschg -a
+#	bioschg -d
+##
+
+# Changelog:
+# - Mon 11 Jan 2021 - Gnaneswara Seshu (ZBHEGNA)
+#       Introduced board-upgrade in case of GEP7
+# - Thu 26 Nov 2020 - Gnaneswara Seshu (ZBHEGNA)
+#	Introduced -a, -d options to add and delete iomem parameter
+# - Thu 08 Nov 2018 - Raghavendra Koduri (XKODRAG)
+#	BIOS IMAGE UNPACKING MODIFIED FOR GEP7
+# - Wed 29 Nov 2017 - Swetha Rambathini (XSWERAM)
+#	PACKAGE_DIR is modified
+# - Fri 11 Nov 2016 - Swapnika Baradi (XSWAPBA)
+#       Fix for TR HU79440(Adding ETX character at confirmation)
+# - Thu 03 Nov 2016 - Suryanarayana Pammi (XPAMSUR)
+#       Updating to work in SMX environment
+# - Mon 08 Feb 2016 - Vesuvius team
+#	Updating to introduce SLES12 adaptation
+# - Thu 28 Nov 2014 - Madhu Muthyala (XMADMUT)
+#	Updated to inhibit psdef command in virtualized architecture
+# 	A script to update the BIOS automatically from COM-CLI in APG43L
+# - Mon Feb 11 2013 - Krishna Chaitanya (xchakri)
+#	First version
+##
+
+##
+# GENERAL-PURPOSE VARIABLES
+TRUE=$(true; echo $?)
+FALSE=$(false; echo $?)
+APPNAME=$(basename $0)
+##
+
+# LOAD APOS COMMON FUNCTION
+APOS_COMMON="${AP_HOME:-/opt/ap}/apos/conf/apos_common.sh"
+source $APOS_COMMON
+
+##
+# COMMAND-SPECIFIC VARIABLES
+CLUSTERCONF="/opt/ap/apos/bin/clusterconf/clusterconf"
+CMD_BIOS_UPGRADE=/usr/sbin/bios-upgrade
+CMD_BOARD_UPGRRADE=/usr/sbin/board-upgrade
+BIOS_DIR=/tmp/BIOSupdate
+BIOS_DIR_INTERMEDIATE=/tmp/BIOSintermediate
+FOLDER_PERM=777
+PACKAGE_DIR='/cluster/sw_package/APG/BIOSupdate'
+GEP_TYPE=''
+ROJ=''
+CMD_GREP=/usr/bin/grep
+CMD_UNZIP=/usr/bin/unzip
+CMD_SED=/usr/bin/sed
+CMD_AWK=/usr/bin/awk
+CMD_FIND=/usr/bin/find
+CMD_TAR=/bin/tar
+CMD_MKDIR=/usr/bin/mkdir
+CMD_ERIIPMI=/usr/sbin/eri-ipmitool
+CMD_DMIDECODE=/usr/sbin/dmidecode
+CMD_IMMLIST=/usr/bin/immlist
+CMD_LDECONFIG=/usr/sbin/lde-config
+TMP_XML=/tmp/apos/tmp.xml
+BIOS_VERSION=''
+F_INFO=''
+NEW_BIOS_VERSION=''
+CMD_PRCSTATE=/usr/bin/prcstate
+NODE_STATE=''
+CMD_CUT=/usr/bin/cut
+CMD_RM=/bin/rm
+CMD_SSH=/usr/bin/ssh
+ACTIVE=1
+RHOST=''
+RHOST=$(</etc/cluster/nodes/peer/hostname)
+HW_TYPE=$(/opt/ap/apos/conf/apos_hwtype.sh)
+GEP5_7_FOUND=$FALSE
+SET_IOMEM=$FALSE
+UNSET_IOMEM=$FALSE
+exit_sucs=0
+exit_fail=1
+ap_node_num=''
+ap_shelf_id=''
+ip_master_swb=''
+ap_node_num=''
+peerAPUBSlot=''
+NC_SESSION_OPEN_FAILED=3
+DMXC_IP_A=
+DMXC_IP_B=
+DMXC_PORT="831"
+TENANT=
+SHELF_ID=
+MY_SHELF_ADDR=
+EXISTING_PARAMS=
+IOMEM_PARAM='iomem=relaxed'
+immlist=/usr/bin/immlist
+immfind=/usr/bin/immfind
+ncget='/opt/ap/acs/bin/ncget'
+ncaction='/opt/ap/acs/bin/ncaction'
+nceditconfig='/opt/ap/acs/bin/nceditconfig'
+ironsidecmd='/opt/ap/acs/bin/ironsidecmd'
+exit_virtual_arch_string="Illegal command in this system configuration"
+exit_virtual_arch=44
+##
+
+#===============================================================================================
+function log(){
+	/bin/logger -t "$APPNAME" -p user.info "$@"
+}
+
+#===============================================================================================
+function log_error(){
+	/bin/logger -t "$APPNAME" -p user.crit "$@"
+	echo -e "$@" >&2
+}
+
+#===============================================================================================
+function abort(){
+	log_error "$@"
+	exit $FALSE
+}
+
+#===============================================================================================
+function usage(){
+cat <<HEREDOC
+
+Usage: 
+	$APPNAME 
+	$APPNAME -a 
+	$APPNAME -d
+Options:
+	-a Add iomem parameter
+	-d Delete iomem parameter
+
+HEREDOC
+}
+
+#===============================================================================================
+
+function confirm(){
+
+        CMD=""
+        local rCode
+        while [ "$CMD" != "y" ] && [ "$CMD" != "n" ]; do
+                echo -en  "Do you want to execute the BIOS change[y=yes, n=no]?\003:"
+       	        #echo -e "$SCRIPT_OPTS"
+                #echo -n "[y=yes, n=no]?:"
+                read CMD
+        done
+
+        if [ "$CMD" == "y" ]; then
+                rCode=0
+        else
+                rCode=1
+        fi
+
+        return $rCode
+}
+
+#===============================================================================================
+function launchCommand(){
+        if [[ $SET_IOMEM == $FALSE && $UNSET_IOMEM == $FALSE ]];then
+	        if ! confirm; then
+        	       abort "Command aborted by user"
+        	fi
+	fi
+        return $TRUE
+}
+
+
+#===============================================================================================
+##Unzip the contents of the BIOS package
+function unzip_contents(){
+	
+	local CMD=''
+        
+	echo -n "Extracting new BIOS Image..."
+	[ ! -d ${PACKAGE_DIR} ] && abort "$PACKAGE_DIR does not exist"
+	
+	IMAGE_FILE=`${CMD_FIND} ${PACKAGE_DIR} -name '*.zip' -exec ls -1 {} \;`
+	[ -z "$IMAGE_FILE" ] && abort "Package doesn't exist under $PACKAGE_DIR"
+		
+	CMD="${CMD_UNZIP} -o ${PACKAGE_DIR}/*.zip -d "${BIOS_DIR}""
+	local returnCode=$(${CMD_SSH} $RHOST ''"$CMD"' &> /dev/null;echo $?')
+	if [ $returnCode == "0" ]; then
+		echo -e "OK"
+	else
+		echo -e "FAILED"
+		abort "Failed while extracting the package"
+	fi
+
+}
+
+#===============================================================================================
+##Unzip the contents of the BIOS package
+function unzip_contents_gep7(){
+
+	local CMD1="${CMD_MKDIR} "${BIOS_DIR_INTERMEDIATE}""
+	local CMD2="${CMD_UNZIP} -o ${PACKAGE_DIR}/*.zip -d "${BIOS_DIR}""
+        local CMD3="${CMD_TAR} -xvzf ${BIOS_DIR}/*.tar.gz -C "${BIOS_DIR_INTERMEDIATE}""
+
+	echo -n "Extracting new BIOS Image..."
+	[ ! -d ${PACKAGE_DIR} ] && abort "$PACKAGE_DIR does not exist"
+
+
+	IMAGE_FILE=`${CMD_FIND} ${PACKAGE_DIR} -name *.zip -exec ls -1 {} \;`
+	[ -z "$IMAGE_FILE" ] && abort "Package doesn't exist under $PACKAGE_DIR"
+
+
+	local rCode1=$(${CMD_SSH} $RHOST ''$CMD1' &> /dev/null;echo $?')
+
+ 	local returnCode=$(${CMD_SSH} $RHOST ''"$CMD2"' &> /dev/null;echo $?')
+	if [ $returnCode != "0" ]; then
+		echo -e "FAILED"
+		abort "Failed while extracting the inner package"
+	fi
+
+	returnCode=$(${CMD_SSH} $RHOST ''$CMD3' &> /dev/null;echo $?')
+	if [ $returnCode == "0" ]; then
+                echo -e "OK"
+	else
+		echo -e "FAILED"
+		abort "Failed while extracting the package"
+	fi
+}
+
+
+function fetch_dmxc_ip(){
+        [ -z $DMXC_IP_A ] && DMXC_IP_A=$($CLUSTERCONF network -D | grep bgci_a | awk  '{print $4}' |  awk -F. '{print $1"."$2"."$3".1"}')
+        [ -z $DMXC_IP_B ] && DMXC_IP_B=$($CLUSTERCONF network -D | grep bgci_b | awk  '{print $4}' |  awk -F. '{print $1"."$2"."$3".1"}')
+
+        if [ -z $DMXC_IP_A ] || [ -z $DMXC_IP_B ]; then
+                abort 'Failed to fetch DMXC addresses'
+        fi
+}
+
+#===============================================================================================
+function fetch_new_bios_revision(){
+
+	local VER=''
+	if [ "$GEP5_7_FOUND" -eq $TRUE ]; then
+		if [ $HW_TYPE ==  "GEP7" ];then
+			NEW_BIOS_VERSION=$(${CMD_SSH} $RHOST "ls -1r ${BIOS_DIR_INTERMEDIATE}/*.bin" 2> /dev/null | $CMD_AWK -F"${BIOS_DIR_INTERMEDIATE}/" '{print $2}'| $CMD_AWK '{print $NR}')
+
+		else
+        		NEW_BIOS_VERSION=$(${CMD_SSH} $RHOST "ls -1r ${BIOS_DIR}/*.bin" 2> /dev/null | $CMD_AWK -F"${BIOS_DIR}/" '{print $2}'| $CMD_AWK '{print $NR}')
+		fi
+    
+	else
+	     NEW_BIOS_VERSION=$(${CMD_SSH} $RHOST "ls -1r ${BIOS_DIR}/*.ROM" 2> /dev/null | $CMD_AWK -F"${BIOS_DIR}/" '{print $2}'| $CMD_AWK '{print $NR}')
+	fi
+	
+	[[ $NEW_BIOS_VERSION =~ R[0-9]+[A-Z][0-9]* ]] && 
+		VER=$( echo $BASH_REMATCH)
+
+		
+	if [ -z "$NEW_BIOS_VERSION" ]; then
+		abort "Failed while fetching new BIOS revision"
+	else
+		echo -e  "The new BIOS Revision File is: ${NEW_BIOS_VERSION} "
+	fi
+	
+	echo -e  "The new BIOS Version is: ${VER} "
+}
+
+
+#===============================================================================================
+# Check the bios version on the node
+function get_bios_version(){
+
+	local ERROR_CODE=$FALSE
+	BIOS_VERSION=$(${CMD_SSH} $RHOST ${CMD_DMIDECODE} -t 1 | ${CMD_GREP} "Version:" | ${CMD_AWK} '{print $2}')
+	ERROR_CODE=$?
+	 
+	if [ $ERROR_CODE -ne $TRUE ]; then
+		abort "Failed while fetching the BIOS version on the Node"
+	else
+		echo "Current BIOS version: " ${BIOS_VERSION}
+		log "The BIOS version on the node is: ${BIOS_VERSION}"
+	fi
+}
+
+#===============================================================================================
+
+
+#===============================================================================================
+function save_old_bios_image(){
+
+	# save the old bios image
+	local ERROR_CODE=$FALSE
+	local FILENAME
+
+    if [ "$GEP5_7_FOUND" -eq $TRUE ]; then
+        FILENAME=${BIOS_DIR}/19003-cxc-${BIOS_VERSION}.bin
+    
+	else
+	    FILENAME=${BIOS_DIR}/19003-cxc-${BIOS_VERSION}.ROM
+	fi
+	
+	
+	
+	echo  -n "Dumping of current BIOS image..."
+	
+	local returnCode=$(${CMD_SSH} $RHOST ''${CMD_BIOS_UPGRADE}' -d '$FILENAME' &> /dev/null;echo $?') 
+    if [ $returnCode == "1" ]; then
+		echo -e  "FAILED"
+		abort "Failed while saving the old bios image!!"
+	else
+		echo -e "OK"
+		log "Saved the old BIOS image as $FILENAME under ${BIOS_DIR}"
+	fi
+}	
+
+#===============================================================================================
+# check GEP5 and GEP7 architecture
+function check_GEP5_7HW() {
+
+        #Check GEP5 and GEP7 hardware version
+
+        local CMD_HWTYPE='/opt/ap/apos/conf/apos_hwtype.sh'
+        local NODE_ID=$(</etc/cluster/nodes/this/id)
+
+        [ -z $NODE_ID ] && apos_abort "NODE_ID received null,exiting..."
+
+        HW_TYPE=$($CMD_HWTYPE)
+        if [[ "$HW_TYPE" == "GEP5" || "$HW_TYPE" == "GEP7" ]]; then
+            GEP5_7_FOUND=$TRUE
+        fi
+}
+
+#===============================================================================================
+# fetch target-node ap_node_num
+function fetch_ap_node_num(){
+
+	log "Fetching the AP node number..."	
+	ap_node_num="$($immlist -a apNodeNumber axeFunctionsId=1  | awk -F'=' '{print $2}')"
+	
+	if [ $ap_node_num -eq 0 ]; then
+		
+		log "Failed to fetch the AP node number"
+		abort "AP node number not exist" 
+	else
+		if [ "$ap_node_num" == "1"  ]; then
+			log "AP  number NODE NUMBER= $ap_node_num "
+			return $exit_sucs
+		fi
+		if [ "$ap_node_num" == "2"  ]; then
+			log "AP number NODE NUMBER= $ap_node_num "
+			return $exit_sucs
+		fi
+		if [ "$ap_node_num" == "0"  ]; then
+		
+			abort "Invalid AP number NODE NUMBER= $ap_node_num " 
+		fi	
+	fi		
+	
+	return $exit_sucs
+}
+
+#===============================================================================================
+# fetch target-node shelf_id
+function fetch_shelf_id(){
+	fetch_ap_node_num
+	log "Fetching the AP Shelf Id..."	
+		case "$ap_node_num" in
+			1)
+				ap_shelf_id="$($immlist -a apBladesDn apgId=AP1,logicalMgmtId=1,AxeEquipmentequipmentMId=1 | awk -F'=' '{print $4}'| awk -F',' '{print $1}')"			
+				log "AP node Shelf Id = $ap_shelf_id"
+				
+			;;
+			2)
+				ap_shelf_id="$($immlist -a apBladesDn apgId=AP2,logicalMgmtId=1,AxeEquipmentequipmentMId=1 | awk -F'=' '{print $4}'| awk -F',' '{print $1}')"			
+				log "AP node Shelf Id = $ap_shelf_id"
+			;;
+			*)
+				abort "Unexpected NODE NUMBER= $ap_node_num "
+			;;
+		esac
+			
+	if [ -z $ap_shelf_id ]; then
+		abort "Failed to fetch Shelf Id for the NODE NUMBER= $ap_node_num "
+	fi
+	log "AP Shelf Id is................................... $ap_shelf_id"	
+	return $exit_sucs
+}
+
+
+#===============================================================================================
+# get master switch board
+function GET_MASTER(){
+
+        #OID_SWITCH is common for both SCX and SMX
+	local OID_SWITCH="1.3.6.1.4.1.193.177.2.2.1.2.1.8.0"  
+        local OID_SCB=".1.3.6.1.4.1.193.154.2.1.2.1.1.1.12."
+        local ipSCA=''
+        local ipSCB=''
+        local snmpresA=''
+        local snmpresB=''
+		local SNMP_CMD=''
+		local OID=''
+		local separator=''
+
+        local apgShelfArchitecture=$1
+		local sw_board_slot_0=''
+		local sw_board_slot_25=''
+		if [ $apgShelfArchitecture == "0" ]; then
+		   OID=$OID_SCB
+		   sw_board_slot_0="0"
+		   sw_board_slot_25="25"
+		   separator=": "
+		   active_value="1"
+		fi
+		
+		if [ $apgShelfArchitecture == "1" ]||[ $apgShelfArchitecture == "4" ]; then
+		   OID=$OID_SWITCH
+		   separator="0"
+	           active_value="3"
+		fi
+		
+		fetch_shelf_id
+
+        ipSCA=$($immlist -a ipAddressEthA otherBladeId=0,shelfId=$ap_shelf_id,hardwareMgmtId=1,AxeEquipmentequipmentMId=1 | awk -F'=' '{print $2}')
+        log "IP switch board 0 = $ipSCA"		
+        ipSCB=$($immlist -a ipAddressEthA otherBladeId=25,shelfId=$ap_shelf_id,hardwareMgmtId=1,AxeEquipmentequipmentMId=1 | awk -F'=' '{print $2}')
+	log "IP switch board 25 = $ipSCB"	
+   
+        snmpresA=$(snmpget -c NETMAN -v 2c ${ipSCA} ${OID}${sw_board_slot_0} | awk -F'=' '{print $2}' | awk -F''${separator}'' '{print $2}')
+        result=$(echo ${snmpresA})
+	    
+	    if [ $result == $active_value ]; then
+		 	 ip_master_swb="$ipSCA" 
+	    else
+             snmpresB=$(snmpget -c NETMAN -v 2c ${ipSCB} ${OID}${sw_board_slot_25} |  awk -F'=' '{print $2}' | awk -F''${separator}'' '{print $2}')
+			 result=$(echo ${snmpresB})
+			 if [ $result == $active_value ]; then
+			    ip_master_swb="$ipSCB"           
+			 else
+				abort "Failed while upgrading the BIOS revision. No master SW_boards to set yellow LED via SNMP!!"    
+			 fi       			 
+	    fi 
+       
+	    log "The switch board with IP ${ip_master_swb} is master"
+
+} 
+
+#===============================================================================================
+# fetch peer node slot
+function get_peer_apub_slot() {
+        LOCAL_ETH3_IP=$(ip -f inet addr show eth3 | head  -2 | awk '{print $2}'|awk -F'/' '{print $1}' | tail -n -1)
+        for BLADE in $($immfind | grep '^apBladeId='| grep "shelfId=$ap_shelf_id"); do
+                FBN=$($immlist -a functionalBoardName $BLADE | awk -F'=' '{print $2}')
+                if [ "$FBN" == "300" ]; then
+                        if [ $($immlist -a ipAddressEthA $BLADE | awk -F'=' '{print $2}') != "$LOCAL_ETH3_IP" ]; then
+                                peerAPUBSlot=$( echo  "$BLADE"| awk -F',' '{print $1}'| awk -F'=' '{print $2}')
+                  	return $exit_sucs
+			fi
+		fi
+	done
+        echo -e "return"
+	return $exit_fail
+}
+
+function clean_xml()
+{
+        $CMD_RM -rf $TMP_XML
+}
+
+function convert_shelf_address()
+{
+        plug0=$(echo $ap_shelf_id | awk -F. '{print $1}')
+        plug1=$(echo $ap_shelf_id | awk -F. '{print $2}')
+        plug3=$(echo $ap_shelf_id | awk -F. '{print $4}')
+
+
+
+        log "MAGAZINE %x%x%x\n" $plug3 $plug1 $plug0
+
+        tmp=$(printf "%x%x%x" $plug3 $plug1 $plug0)
+
+        MY_SHELF_ADDR=$(printf '%d' "0x$tmp")
+
+        return $TRUE
+}
+
+function fetch_bsp_shelf_id(){
+
+        [ ! -z $SHELF_ID  ] && return $TRUE
+
+        #Get shelf list
+        local query="SHLF--------"
+
+        $ironsidecmd -a $DMXC_IP_A -p $DMXC_PORT -s "$query" -o $TMP_XML > /dev/null
+		
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -ne $TRUE ]; then
+            if [ $EXIT_CODE -eq $NC_SESSION_OPEN_FAILED ]; then
+               clean_xml > /dev/null
+               $ironsidecmd -a $DMXC_IP_B -p $DMXC_PORT -s "$query" -o $TMP_XML > /dev/null
+               EXIT_CODE=$?
+               if [ $EXIT_CODE -ne $TRUE ]; then
+                  abort "Failed to get shelf list from BSP"
+               fi
+            else
+               abort "Failed to get shelf list from BSP"
+            fi
+        fi
+		while IFS=":", read f1 f2
+		do
+			if [ $f2 -eq $MY_SHELF_ADDR ]; then
+				SHELF_ID=$f1
+				break
+			fi	
+		done < $TMP_XML
+        #printf "My ShelfId = %d\n\n" $SHELF_ID
+
+        clean_xml > /dev/null
+        return $TRUE
+}
+
+
+function fetch_status_led_data()
+{
+        printf -v query "SLD:%02d%02dGET_" $SHELF_ID $peerAPUBSlot
+	
+	$ironsidecmd -a $DMXC_IP_A -p $DMXC_PORT -s "$query" -o $TMP_XML > /dev/null
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -ne $TRUE ]; then
+                if [ $EXIT_CODE -eq $NC_SESSION_OPEN_FAILED ]; then
+                        clean_xml > /dev/null
+                        $ironsidecmd -a $DMXC_IP_B -p $DMXC_PORT -s "$query" -o $TMP_XML  > /dev/null
+                        EXIT_CODE=$?
+                        if [ $EXIT_CODE -ne $TRUE ]; then
+                                clean_xml
+                                abort "Failed to fetch status led details"
+                        fi
+                else
+                        clean_xml
+                        abort "Failed to Fetch status led details"
+                fi
+      fi
+
+		local status=(`cat $TMP_XML`)
+		
+		if [ "$status" == "on" ]; then
+		STATUS="ON_"
+		elif  [ "$status" == "off" ]; then
+		STATUS="OFF"
+		elif  [ "$status" == "fastBlink" ]; then
+		STATUS="FAST_BLINK"
+		fi
+        
+        printf "status=%s\n" $STATUS
+}
+
+#-----------------------------------------------------------------------------
+# LED setting via snmp
+function set_yellowLED(){
+      
+      local SNMP_CMD=''
+      local LED_STATUS="$1"
+
+      # Identify the kind of architecture ( SCX-SCB-SMX )	  
+      local apgShelfArchitecture=$($immlist -a apgShelfArchitecture axeFunctionsId=1 | awk -F'=' '{print$2}')
+
+	  fetch_shelf_id
+      
+      get_peer_apub_slot
+	  
+      
+	  
+      # BSP architecture
+      if [ $apgShelfArchitecture == "2" ]; then
+		if [ $GEP5_7_FOUND -eq $TRUE ]; then
+                      set_yellowLEDBSP $LED_STATUS
+                fi
+		return $TRUE 
+      fi
+
+     GET_MASTER "$apgShelfArchitecture"
+	  
+      # SCX and SMX boards
+      if [ $apgShelfArchitecture == "1" ]||[ $apgShelfArchitecture == "4" ]; then
+	  
+	  	  snmpBladeLedTypeRequest=$(snmpget -c NETMAN -v 2c ${ip_master_swb} .1.3.6.1.4.1.193.177.2.2.1.3.1.1.1.42.${peerAPUBSlot} | awk -F'=' '{print $2}' | awk -F': ' '{print $2}')
+          result=$(echo ${snmpBladeLedTypeRequest})
+	    
+	      if [ $result != "1" ]; then
+		 	 abort "Failed while upgrading the BIOS revision. Blade Led Type not supported to set yellow LED via SNMP!!"	 
+	      fi 
+		  
+          SNMP_CMD="snmpset -c NETMAN -v 2c $ip_master_swb .1.3.6.1.4.1.193.177.2.2.1.3.1.1.1.33.$peerAPUBSlot i $LED_STATUS"
+
+       	  log "Snmp query in order to set yellow LED = \"$SNMP_CMD\""
+          echo $($SNMP_CMD) &>/dev/null;
+      fi
+
+      # SCB boards
+      if [ $apgShelfArchitecture == "0" ]; then
+	  	  
+		  snmpBladeLedTypeRequest=$(snmpget -c NETMAN -v 2c ${ip_master_swb} .1.3.6.1.4.1.193.154.2.1.2.1.1.1.26.${peerAPUBSlot} | awk -F'=' '{print $2}' | awk -F': ' '{print $2}')
+          result=$(echo ${snmpBladeLedTypeRequest})
+	    
+	      if [ $result != "1" ]; then
+		 	 abort "Failed while upgrading the BIOS revision. Blade Led Type not supported to set yellow LED via SNMP!!"	 
+	      fi 
+		  
+          SNMP_CMD="snmpset -c NETMAN -v 2c $ip_master_swb .1.3.6.1.4.1.193.154.2.1.2.1.1.1.25.$peerAPUBSlot i $LED_STATUS"
+
+          log "Snmp query in order to set yellow LED = \"$SNMP_CMD\""
+          echo $($SNMP_CMD) &>/dev/null;
+      fi
+
+}
+
+function set_bsp_status_led()
+{
+	local LED_STATUS="$1"
+
+	local status=NOT_AVAILABLE
+	if [ $LED_STATUS -eq 0 ]; then
+		status=fastBlink
+		statustoset=OFF  
+	elif [ $LED_STATUS -eq 1 ]; then
+		status=on
+		statustoset=ON_  
+	elif [ $LED_STATUS -eq 3 ]; then
+		status=fastBlink
+		statustoset=OFF
+	else
+	     log "STATUS value is not correct"
+	     return $FALSE	
+	fi
+
+	if [ "$STATUS" == $status ]; then
+                log "Status LED is already set to $STATUS"
+                return $TRUE
+        fi
+	
+         printf -v query "SLD:%02d%02d%s_" $SHELF_ID $peerAPUBSlot $statustoset 
+                $ironsidecmd -a $DMXC_IP_A -p $DMXC_PORT -s "$query" -o $TMP_XML> /dev/null
+                EXIT_CODE=$?
+                if [ $EXIT_CODE -ne $TRUE ]; then
+                        if [ $EXIT_CODE -eq $NC_SESSION_OPEN_FAILED  ]; then
+                                clean_xml
+                                $ironsidecmd -a $DMXC_IP_B -p $DMXC_PORT -s "$query" -o $TMP_XML > /dev/null
+                                EXIT_CODE=$?
+                                if [ $EXIT_CODE -ne $TRUE ]; then
+                                   abort "Failed to set status led details"
+                                fi
+                       else
+                               abort "Failed to set status led details"
+                       fi
+                fi
+
+}
+
+
+#-----------------------------------------------------------------------------
+# LED setting via netconf for BSP
+function set_yellowLEDBSP(){
+
+	local LED_STATUS="$1"
+
+	#fetch IP addresses of DMXC
+	fetch_dmxc_ip
+
+	#convert shelf address
+	convert_shelf_address
+	
+	#fetch shelf id
+	fetch_bsp_shelf_id
+
+	#Fetch current status LED details
+      fetch_status_led_data
+
+	#Fetch status LED to fast blink
+        set_bsp_status_led $LED_STATUS
+
+}
+
+#===============================================================================================
+function upgrade_bios(){
+
+        #Upgrade the BIOS
+
+	local FILENAME
+	local returnCode
+
+        if [ "$GEP5_7_FOUND" -eq $TRUE ]; then
+        	log "The current hardware version is GEP5 or GEP7. Manage the setting of Yellow LED"
+		if [ $HW_TYPE == "GEP7" ];then
+			FILENAME=$(${CMD_SSH} $RHOST "ls -1r ${BIOS_DIR}/*.tar.gz")
+		else
+			FILENAME=$(${CMD_SSH} $RHOST "ls -1r ${BIOS_DIR}/*.bin" | $CMD_GREP -i ${NEW_BIOS_VERSION})
+		fi
+        else
+		FILENAME=$(${CMD_SSH} $RHOST "ls -1r ${BIOS_DIR}/*.ROM" | $CMD_GREP -i ${NEW_BIOS_VERSION})
+	fi
+
+        echo -n "Updating of BIOS UPG image with ${NEW_BIOS_VERSION}..."
+
+	if [ $HW_TYPE == "GEP7" ];then
+		returnCode=$(${CMD_SSH} $RHOST ''${CMD_BOARD_UPGRRADE}' upgrade '$FILENAME' &>/dev/null;echo $?')
+	else
+        	returnCode=$(${CMD_SSH} $RHOST ''${CMD_BIOS_UPGRADE}' -u '$FILENAME' -f 1 &>/dev/null;echo $?')
+
+	fi
+
+        if [ $returnCode == "1" ]; then
+                echo -e "FAILED"
+                if [ $GEP5_7_FOUND -eq $TRUE ]; then
+                      set_yellowLED "1"
+                fi
+		abort "Failed while upgrading the BIOS revision!!"
+        else
+                echo -e "OK"
+                log "Upgradation of BIOS Revision successful!!"
+        fi
+}
+
+#===============================================================================================
+check_iomem_param(){
+
+	$CMD_SSH $RHOST $CMD_GREP -q $IOMEM_PARAM /proc/cmdline
+	if [ $? -ne 0 ];then
+		abort "\n IOMEM parameter is not set \n"
+	fi
+
+}
+#===============================================================================================
+#check if any kernel-cmdline parameters exists
+#If exists store the parameters in EXISTING_PARAMS
+#===============================================================================================
+function check_and_get_parameters(){
+	local kernel_count
+	local patch_count
+	kernel_count=$($CMD_LDECONFIG tuning show --kernel-cmdline --target all|$CMD_GREP -c kernel-cmdline)
+	if [ $kernel_count -gt 1 ];then
+		KERNEL_PARAMS=$TRUE
+		EXISTING_PARAMS=$($CMD_LDECONFIG tuning show --kernel-cmdline --target all|tail -n 1 |cut -d: -f2 )
+		if [ "$EXISTING_PARAMS" == "$IOMEM_PARAM" ];then
+			IOMEM_EXISTS=$TRUE
+		fi
+		patch_count=$(echo "$EXISTING_PARAMS" | wc -w)
+		if [ $patch_count -gt 1 ];then
+			KERNEL_PATHES=$TRUE
+		fi
+		echo "$EXISTING_PARAMS" |$CMD_GREP -q $IOMEM_PARAM
+		if [ $? -eq 0 ];then
+			IOMEM_EXISTS=$TRUE
+		fi
+	fi
+}
+#===============================================================================================
+function delete_iomem_parameter(){
+	
+	local ret_code=0
+	
+	check_and_get_parameters
+	
+	if [ $IOMEM_EXISTS ];then
+		if [ $KERNEL_PATHES ];then
+			local new_patches=$(echo $EXISTING_PARAMS |sed s/$IOMEM_PARAM// )
+			$CMD_LDECONFIG tuning change --kernel-cmdline "$new_patches" --target all &> /dev/null
+			ret_code=$?
+		else
+			$CMD_LDECONFIG tuning delete --kernel-cmdline --target all &> /dev/null
+			ret_code=$?
+		fi	
+		if [ $ret_code -ne 0 ];then
+			abort "\n Failed to delete iomem parameter \n"
+                else
+                	echo -e '\n iomem deleted. Reboot needed to complete the configuration \n'
+		fi
+	else
+		$CMD_GREP -q $IOMEM_PARAM /proc/cmdline &> /dev/null
+		if [ $? -ne 0 ];then
+			echo -e '\n iomem already deleted \n'
+		else
+			echo -e '\n iomem deleted. Reboot needed to complete the configuration \n'
+		fi
+	fi
+	exit $TRUE
+}
+#===============================================================================================
+function add_iomem_parameter(){
+
+	local ret_code=0
+
+	check_and_get_parameters
+
+	if [ $KERNEL_PARAMS ];then
+		if [ ! $IOMEM_EXISTS ];then
+			$CMD_LDECONFIG tuning change --kernel-cmdline "$EXISTING_PARAMS $IOMEM_PARAM" --target all &> /dev/null
+			ret_code=$?
+		else
+			$CMD_SSH $RHOST $CMD_GREP -q $IOMEM_PARAM /proc/cmdline
+			if [ $? -eq 0 ];then
+                        	echo -e '\n iomem already added \n'
+				exit $TRUE
+			fi
+                fi
+	else
+		$CMD_LDECONFIG tuning add --kernel-cmdline $IOMEM_PARAM --target all &> /dev/null
+		ret_code=$?
+		
+	fi
+	if [ $ret_code -ne 0 ];then
+		abort "\n Failed to add iomem parameter \n"
+	else
+		echo -e '\n iomem added. Reboot needed to complete the configuration \n'
+	fi
+	exit $TRUE
+} 
+#===============================================================================================
+
+#===============================================================================================
+function cleanup(){
+	
+	# To cleanup the BIOS directory.
+	DIR=`$CMD_SSH $RHOST ls -d ${BIOS_DIR}`
+	[ ! -z "$DIR" ] && $($CMD_SSH $RHOST $CMD_RM -rf ${BIOS_DIR})
+
+        # To cleanup the temporary BIOS directory.
+	if [ $HW_TYPE == 'GEP7' ];then
+        	DIR=`$CMD_SSH $RHOST ls -d ${BIOS_DIR_INTERMEDIATE}`
+        	[ ! -z "$DIR" ] && $($CMD_SSH $RHOST $CMD_RM -rf ${BIOS_DIR_INTERMEDIATE})
+	fi
+}
+	
+#===============================================================================================
+function parse_args(){
+
+	 # check if the command is invoked with-out any paramter.
+	[ $# -gt 1 ] && {
+		echo "Incorrect usage!!"
+		usage
+		exit 2
+	}
+	if [ $# -eq 1 ];then
+		if [[ $HW_TYPE == 'GEP2' || $HW_TYPE == 'GEP5' ]];then
+                	case "$1" in
+                            '-a')
+				SET_IOMEM=$TRUE
+                                ;;
+			    '-d')
+				UNSET_IOMEM=$TRUE
+				;;
+			      * )
+				echo "Incorrect usage!!"
+				usage
+				exit 2
+				;;
+			esac
+		else
+			if [ "$1" == '-a' -o "$1" == '-d' ];then
+				echo -e "\nInvalid option for current hardware configuration"
+				exit 2
+			fi
+			usage
+			exit 2
+		fi
+		 
+	fi
+}
+
+
+#===============================================================================================
+function invoke(){
+	
+	if [ $SET_IOMEM == $TRUE ];then
+		add_iomem_parameter
+	fi
+	if [ $UNSET_IOMEM == $TRUE ];then
+		delete_iomem_parameter
+	fi
+	# check hardware version
+	check_GEP5_7HW
+
+	#check for iomem param
+	if [[ "$HW_TYPE" == "GEP2" || "$HW_TYPE" == "GEP5" ]]; then
+		check_iomem_param
+	fi
+
+	# fetch bios version
+	get_bios_version
+
+	# extract the contents.
+        if [[ "$HW_TYPE" == "GEP7" ]]; then
+		unzip_contents_gep7
+        else
+		unzip_contents
+        fi
+	
+	# Fetch the new revision
+	fetch_new_bios_revision
+	
+	#check if the image is already loaded
+	#check_if_latest_bios_present
+
+	# store old bios image before upgade
+	save_old_bios_image
+
+	# upgrade bios
+	upgrade_bios
+
+	# verify if bios is upgraded to the latest version
+	#check_if_bios_upgraded
+
+}
+
+#===============================================================================================
+# The function checks if the /tmp/BIOSupdate folder existence. 
+#----------------------------------------------------------------------------------------
+function sanity_check(){
+	if [ ! -d ${BIOS_DIR} ]; then
+		${CMD_SSH} $RHOST mkdir -m ${FOLDER_PERM} -p ${BIOS_DIR} || abort "Failed while creating the ${BIOS_DIR} directory"
+	fi
+}
+	
+#                                              __    __   _______   _   __    _
+#                                             |  \  /  | |  ___  | | | |  \  | |
+#                                             |   \/   | | |___| | | | |   \ | |
+#                                             | |\  /| | |  ___  | | | | |\ \| |
+#                                             | | \/ | | | |   | | | | | | \   |
+#                                             |_|    |_| |_|   |_| |_| |_|  \__|
+#
+
+## New function for virtualization
+if [ $(get_shelf_architecture_attr) -eq 3 ]; then
+	echo -e "$exit_virtual_arch_string"
+	echo -e
+	exit $exit_virtual_arch
+fi
+
+# sanity check to see if things are in place
+sanity_check
+
+parse_args $*
+
+launchCommand
+
+invoke
+
+cleanup
+
+exit $TRUE

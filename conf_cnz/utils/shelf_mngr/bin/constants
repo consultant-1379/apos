@@ -1,0 +1,13 @@
+#!/bin/bash
+
+## This script is just an "include" script for the others, defining common constants. 
+
+mibspath='/cluster/home/util/mibs'
+
+intRegExp='SNMPv2.*INTEGER: (.*)'
+strRegExp='SNMPv2.*STRING: (.*)'
+
+intGrep='SNMPv2.*INTEGER'
+strGrep='SNMPv2.*STRING'
+
+boardTypes=( SCB APUB CPUB MAUB GEA DVD Disk )

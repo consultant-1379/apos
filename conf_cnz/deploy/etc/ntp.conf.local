@@ -1,0 +1,2 @@
+restrict 192.168.169.0 mask 255.255.255.0 nomodify notrap nopeer
+restrict 192.168.170.0 mask 255.255.255.0 nomodify notrap nopeer

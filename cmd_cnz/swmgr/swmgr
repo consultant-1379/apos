@@ -1,0 +1,1147 @@
+#!/bin/bash 
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       swmgr
+# Description:
+#   A script to 
+##
+# Usage:
+#       call: swmgr --help
+##
+# Changelog:
+#   - Mon 23 Apr 2018 - Malangsha Shaik (XMALSHA)
+#     added --apply-patch option
+#   - Mon 12 Mar 2018 - Roshini Chilukoti (ZCHIROS)
+#				TR_HW58932	
+#   - Wed 31 Jan 2018 - Roshini Chilukoti (ZCHIROS)
+#                           	TR_HW42284
+#   - Thu 23 Mar 2017 - Mallikarjuna Rao Dogiparthi (XMALRAO)
+#				Enhance actions functionality to accept console parameters
+#				Add additional validations for config file
+#   - Fri 17 Feb 2017 - Mallikarjuna Rao Dogiparthi (XMALRAO)
+#			  Fix the issues observed in FT
+#	- Thu 09 Feb 2017 - Rajashekar Narla (xcsrajn)
+#			 Corrected errors found during review and desk check, added new options.
+#	- Wed 18 Jan 2017 - Mallikarjuna Rao (xmalrao)
+#			 Add more functionality for actions
+# - Thu 8 Dec 2016 - GVL Sowjanya (xsowgvl) 
+#			 Draft Version
+##
+
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+
+#shell commands
+CMD_AWK='/usr/bin/awk'
+CMD_CAT='/bin/cat'
+CMD_CP='/usr/bin/cp'
+CMD_CUT='/usr/bin/cut'
+CMD_ECHO='/bin/echo'
+CMD_FILE='/usr/bin/file'
+CMD_FIND='/usr/bin/find'
+CMD_GETOPT='/usr/bin/getopt'
+CMD_GREP='/usr/bin/grep'
+CMD_HEAD='/usr/bin/head'
+CMD_IMMLIST='/usr/bin/immlist'
+CMD_LS='/bin/ls'
+CMD_MKDIR='/bin/mkdir'
+CMD_PYTHON='python -O'
+CMD_RM='/bin/rm'
+CMD_SED='/usr/bin/sed'
+CMD_SH2CKSUM='/usr/bin/sha256sum'
+CMD_TAR='/bin/tar'
+CMD_UNZIP='/usr/bin/unzip'
+CMD_WC='/usr/bin/wc'
+CMD_XMLLINT='/usr/bin/xmllint'
+CMD_ZIPINFO='/usr/bin/zipinfo'
+
+#command options
+OPT_ACTIVATE=$FALSE
+OPT_ERASE=$FALSE
+OPT_FORCE=$FALSE
+OPT_IMPORT=$FALSE
+OPT_LIST=$FALSE
+OPT_LIST_TASKS=$FALSE
+OPT_STATUS=$FALSE
+OPT_TASK=$FALSE
+OPT_APPLY_PATCH=$FALSE
+OPT_INTERNAL_CLEANUP=$FALSE
+
+#internal paths
+USR_PATH='/etc/passwd'
+INT_PATH="/data/ext/swmgr"
+SCRIPT_FLDR='PYTH'
+SCRIPT_PATH=''
+LOG_DIR=$INT_PATH
+PKG_PATH="/data/opt/ap/internal_root/sw_package/CP"
+
+#Error messages
+incorrect_pkg_name='Incorrect package name'
+invalid_pkg_format='Invalid package format'
+invalid_config_file='Invalid config.xml'
+missing_contents='Missing package contents'
+pkg_imported='Package already imported'
+integrity_failed='Package integrity failed'
+unresonable_value='Unreasonable value'
+invalid_task='Invalid task name'
+action_ongoing='Another action ongoing'
+pkg_not_deleted='Package not deleted!'
+check_status_msg='Check the status using swmgr status command.'
+
+#exit codes set
+exit_sucs=0
+exit_fail=1
+exit_usge=2
+exit_cmnd_abrt=3
+
+#others
+ACTION_LIST=(import activate) #Add new actions here to display the status
+MANDATORY_LIST=(config.xml packageChsum.sha LOG/ PYTH/) #list of mandatory files and directories in package file
+MANDATORY_CONFIG_TAGS=(packageInfo activate import)
+USER_NAME='apgswmgr'
+SCRIPT_NAME='swmgr'
+LOG_FILE="$SCRIPT_NAME.log"
+TGZ_OPTION='-zxvf'
+CONFIG_FILE='config.xml'
+CKSUM_FILE='packageChsum.sha'
+PKG_LOG_DIR='LOG'
+PACKAGE_NAME=''
+TASK_NAME=''
+FULL_OPT_LIST=''
+SCRIPT_TO_INVOKE=''
+PYTHON_SCRIPT=''
+PKG_FORMAT=''
+IMPORT_FLAG=$FALSE
+is_swm_2_0="/cluster/storage/system/config/apos/swm_version"
+##############################################################################################
+#                                LOGGING FUNCTIONS                                  		 		 #
+##############################################################################################
+
+##############################################################################################
+# function INFO($msg);                                                                       #
+#                                                                                            #
+# Adds a timestamped entry to the log file.                                                  #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to add to the log                                                           #
+##############################################################################################
+function INFO() {
+  echo "[$(date --utc +'%Y-%m-%d %H:%M:%S')] $@" >>$LOG_DIR/$LOG_FILE
+}
+
+
+##############################################################################################
+# function TRACE_ENTER($msg);                                                                #
+#                                                                                            #
+# Adds a message to the log file followed by "() >>"                                         #
+# Note: it is useful to log the entry point of a function e.g. TRACE_ENTER $FUNCNAME         #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to print                                                                    #
+##############################################################################################
+function TRACE_ENTER(){
+  INFO "$1() >>"
+}
+
+##############################################################################################
+# function TRACE_LEAVE($msg);                                                                #
+#                                                                                            #
+# Adds a message to the log file followed by "() <<"                                         #
+# Note: it is useful to log the end point of a function e.g. TRACE_LEAVE $FUNCNAME           #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to print                                                                    #
+##############################################################################################
+function TRACE_LEAVE(){
+  INFO "$1() <<"
+}
+
+##############################################################################################
+# function log($msg);                                                                        #
+#                                                                                            #
+# Adds a message to the log file										                     										 #
+# Note: it is useful to log the additionol information which is not displayed                #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to print                                                                    #
+##############################################################################################
+function log(){
+  INFO "$1"
+}
+
+##############################################################################################
+#                                MESSAGE AND EXIT FUNCTIONS                                  #
+##############################################################################################
+
+##############################################################################################
+# function console_print($msg);                                                              #
+#                                                                                            #
+# Prints a message.                                                                          #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to print                                                                    #
+##############################################################################################
+function console_print() {
+  echo -e "$1"
+}
+
+
+##############################################################################################
+# function console_abort($msg,$exit_code);                                                   #
+#                                                                                            #
+# Prints an error message and exits.                                                         #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to print                                                                    #
+# - $exit_code numeric exit code to use                                                      #
+##############################################################################################
+function console_abort() {
+  if [ $OPT_APPLY_PATCH -eq $TRUE ]; then
+    if [ $OPT_ERASE -eq $FALSE ]; then
+      OPT_FORCE=$TRUE
+      OPT_INTERNAL_CLEANUP=$TRUE
+      erase 1>/dev/null # suppress stdout
+    fi
+    echo "NOT OK" >&2 # out to stderr
+    echo -e >&2 # out to stderr
+    log "ERROR: $*"
+  else  
+    console_print "$1"
+    echo -e
+  fi  
+  exit $2
+}
+
+##############################################################################################
+#                                COMMAND RELATED FUNCTIONS                                   #
+##############################################################################################
+
+##############################################################################################
+# function usage();                                                                          #
+#                                                                                            #
+# Prints the command usage.                                                                  #
+##############################################################################################
+function usage(){
+    $CMD_CAT << HEREDOC
+Usage:
+	$SCRIPT_NAME -a|--activate <package_name> --task <task_name>
+	$SCRIPT_NAME -e|--erase <package_name> [-f|--force]
+	$SCRIPT_NAME -i|--import <package_file>
+	$SCRIPT_NAME -l|--list [package_name]|[package_name --task-list]
+	$SCRIPT_NAME -s|--status [package_name] 
+HEREDOC
+exit $exit_usge
+}
+
+#####################################################################################################
+# function parse_args($args...);                                                                    #
+#                                                                                                   #
+# Parses the command line arguments and fill the global variables.                                  #
+#                                                                                                   #
+# Arguments:                                                                                        #
+# - $args... command line arguments                                                                 #
+#####################################################################################################
+
+function parse_args(){
+	TRACE_ENTER $FUNCNAME
+  local rCode=$FALSE
+
+  # check if the command is invoked with-out any parameter.
+  [ $# -eq 0 ] && {
+    $CMD_ECHO -e "Incorrect Usage!"
+    usage
+  }
+	
+	local PARAMETERS=$*
+	SCRIPT_OPTS="$SCRIPT_NAME $*"
+	local rCode
+	local OPTIONS='a e i l s f'
+	local LONG_OPTIONS='activate erase import list status task task-list force help'
+	
+	$CMD_GETOPT --quiet --quiet-output --longoptions="$LONG_OPTIONS" --options="$OPTIONS" -- "$@"
+	rCode=$?
+	[ $rCode -ne $TRUE ] && {
+		$CMD_ECHO -e "Incorrect Usage!"
+		usage
+	}	
+	
+	local ARGS="$@"
+	eval set -- "$ARGS"
+	# Make sure to handle the cases for all the options listed in OPTIONS
+	# and LONG_OPTIONS and to fill up the right script-wide variables.
+	local parameters=($@)
+	local num_parameters=${#parameters[@]}
+	while [ $# -gt 0 ]; do		
+		case "$1" in
+			--activate|-a)
+			  [[ $OPT_ACTIVATE -eq $TRUE ]] && usage 
+				OPT_ACTIVATE=$TRUE
+				FULL_OPT_LIST="${FULL_OPT_LIST}activate "
+				[[ $2 =~ ^-.*$ || $2 == "" ]] && usage
+				PACKAGE_NAME=$2
+				shift
+			;;
+		  --erase|-e)
+				[[ $OPT_ERASE -eq $TRUE ]] && usage
+				OPT_ERASE=$TRUE
+				FULL_OPT_LIST="${FULL_OPT_LIST}erase "
+				[[ $2 =~ ^-.*$ ]] && usage
+				PACKAGE_NAME=$2
+				shift
+			;;
+			--import|-i)			
+				[[ $OPT_IMPORT -eq $TRUE ]] && usage
+				OPT_IMPORT=$TRUE
+				FULL_OPT_LIST="${FULL_OPT_LIST}import "
+				[[ $2 =~ ^-.*$ ]] && usage
+				PACKAGE_NAME=$2
+				shift
+			;;
+			--list|-l)
+				[[ $OPT_LIST -eq $TRUE ]] && usage
+				OPT_LIST=$TRUE
+				FULL_OPT_LIST="${FULL_OPT_LIST}list "
+				if [[ $num_parameters -gt 1 ]];then
+				  [[ $2 =~ ^-.*$ ]] && usage
+				  PACKAGE_NAME=$2
+				fi
+			  shift
+			;;
+		--status|-s)
+				[[ "$OPT_STATUS" -eq "$TRUE" ]] && usage
+				OPT_STATUS=$TRUE
+				#FULL_OPT_LIST="${FULL_OPT_LIST}task"
+				if [[ $num_parameters -gt 2 ]];then
+					usage
+				elif [[ $num_parameters -eq 2 ]];then
+					[[ $2 =~ ^-.*$ ]] && usage
+				PACKAGE_NAME=$2
+				fi
+				shift
+			;;
+			--task)
+				[[ "$OPT_TASK" -eq "$TRUE" ]] && usage
+				OPT_TASK=$TRUE
+				#FULL_OPT_LIST="${FULL_OPT_LIST}task"
+				[[ $2 =~ ^-.*$ || $2 == "" ]] && usage
+				TASK_NAME=$2
+			shift
+			;;
+			--task-list)
+				[[ "$OPT_LIST_TASKS" -eq "$TRUE" ]] && usage
+				OPT_LIST_TASKS=$TRUE
+			;;
+			--force|-f)
+				[[ "$OPT_FORCE" -eq "$TRUE" ]] && usage
+				OPT_FORCE=$TRUE
+			;;
+			--help)
+				usage
+			;;
+			*)
+				$CMD_ECHO -e "Incorrect Usage!"
+				usage
+			;;
+
+		esac		
+		shift
+	done
+
+	#Check if the package is ready to import
+	if [ $OPT_IMPORT -eq $TRUE ]; then
+		$CMD_ECHO -e "Package is ready to import..."
+	fi
+
+	#Check if -f option is provided without erase action
+	if [ $OPT_FORCE -eq $TRUE ] && [ $OPT_ERASE -eq $FALSE ]; then
+		$CMD_ECHO -e "Incorrect Usage!"
+		usage
+	fi
+
+	#check if activate is provided without task
+	if [ $OPT_ACTIVATE -eq $TRUE ] && [ $OPT_TASK -eq $FALSE ]; then
+		$CMD_ECHO -e "Incorrect Usage!"
+		usage
+	fi
+	
+	#check if task is provided without activate
+	if [ $OPT_ACTIVATE -eq $FALSE ] && [ $OPT_TASK -eq $TRUE ]; then
+		$CMD_ECHO -e "Incorrect Usage!"
+		usage
+	fi
+
+	#check if task-list is provided without packgename and task name
+	if [ $OPT_LIST -eq $FALSE ] || [ -z "$PACKAGE_NAME" ] && [ $OPT_LIST_TASKS -eq $TRUE ]; then
+		$CMD_ECHO -e "Incorrect Usage!"
+		usage
+	fi
+
+	#Check if command is invoked without any task	
+	if [ $OPT_ACTIVATE -eq $FALSE ] && [ $OPT_ERASE -eq $FALSE ] && [ $OPT_IMPORT -eq $FALSE ] && [ $OPT_LIST -eq $FALSE ] && [ $OPT_STATUS -eq $FALSE ]; then
+		$CMD_ECHO -e "Incorrect Usage!"
+		usage
+	fi
+
+	#Check if package name is not provided with -e, -a and -i options
+	if [ $OPT_ACTIVATE -eq $TRUE ] || [ $OPT_ERASE -eq $TRUE ] || [ $OPT_IMPORT -eq $TRUE ] && [ -z "$PACKAGE_NAME" ]; then
+		$CMD_ECHO -e "Incorrect Usage!"
+		usage
+	fi
+
+	# Check if multiple options has been provided as input at a time
+	local var2
+	var2=$($CMD_ECHO $FULL_OPT_LIST | $CMD_WC -w)
+	[[ $var2 -gt 1 ]] && { 
+	$CMD_ECHO "Incorrect Usage!" 
+	usage 
+	}
+
+	TRACE_LEAVE $FUNCNAME
+}
+
+##############################################################################################
+# function print_logs();                                                                     #
+#                                                                                            #
+# prints the log content                                                                     #
+#                                                                                            #
+##############################################################################################
+function print_logs(){
+	$CMD_ECHO "$1:"
+	for task in "${ACTION_LIST[@]}"
+	do
+		$CMD_ECHO "$task status"
+		$CMD_ECHO "---------------"
+	if [ -f $INT_PATH/$1/$PKG_LOG_DIR/$task.log ]; then
+	    $CMD_CAT $INT_PATH/$1/$PKG_LOG_DIR/$task.log 2>/dev/null
+	else
+	    $CMD_ECHO "$task is not yet performed"
+	fi
+		$CMD_ECHO
+    echo
+	done
+}
+
+##############################################################################################
+# function status_dispaly();                                                                 #
+#                                                                                            #
+# Display the status of action or package                                                    #
+#                                                                                            #
+##############################################################################################
+function status_display(){
+	TRACE_ENTER "$PACKAGE_NAME-$FUNCNAME"
+
+	#Display the status of all Packages
+	if [ "$PACKAGE_NAME" == "" ]; then
+		local pkg_list=($($CMD_LS $INT_PATH))
+		for dir in "${pkg_list[@]}"
+		do
+			if [ ! -f $INT_PATH/$dir ]; then
+				PACKAGE_NAME="$dir"
+				print_logs "$dir"
+			fi
+		done
+
+	#Display the status of the given package	
+	else
+		print_logs "$PACKAGE_NAME"
+	fi
+
+	TRACE_LEAVE "$PACKAGE_NAME-$FUNCNAME"
+}
+
+##############################################################################################
+# function list();					                                                         				 #
+#                                                                                            #
+# List all the package contents                           		                               #
+#                                                                                            #
+##############################################################################################
+function list(){
+  TRACE_ENTER "$PACKAGE_NAME-$FUNCNAME"
+
+	#List all the packages
+	if [ "$PACKAGE_NAME" == "" ]; then
+		local pkg_list=($($CMD_LS $INT_PATH))
+		for dir in "${pkg_list[@]}"
+		do
+			[[ -d $INT_PATH/$dir ]] && $CMD_ECHO $dir
+		done
+
+	#list all the contents inside a package	
+	elif [ $OPT_LIST_TASKS -eq $FALSE ]; then
+		if [ -d $INT_PATH/$PACKAGE_NAME ]; then
+			pushd $INT_PATH &>/dev/null
+		  $CMD_FIND $PACKAGE_NAME | sort | $CMD_SED -e 's/[^-][^\/]*\//--/g;s/--/ |-/' 
+		else
+			console_abort "$incorrect_pkg_name" "$exit_fail"
+		fi
+
+	#List all the tasks under activate section of config file
+	else
+		$CMD_GREP "task name=" $INT_PATH/$PACKAGE_NAME/$CONFIG_FILE|$CMD_CUT -d"\"" -f2
+	fi
+
+	popd &>/dev/null
+
+  TRACE_LEAVE "$PACKAGE_NAME-$FUNCNAME"
+}
+
+##############################################################################################
+# function get_file_format();                                                                #
+#                                                                                            #
+# verify the format of the package provided                                                  #
+#                                                                                            #
+# Returns:                                                                                   #
+# - tgz or zip or NULL based on package file format                                          #
+# Exits:                                                                                     #
+#                                                                                            #
+##############################################################################################
+
+function get_file_format(){
+  TRACE_ENTER $FUNCNAME
+
+	local PKG="$PKG_PATH/$PACKAGE_NAME"
+	local rVal=''
+
+	# 1.verify whether file is in tgz format
+	$CMD_FILE $PKG|$CMD_GREP compress |$CMD_GREP gzip &>/dev/null
+	if [ $? -eq 0 ];then
+		rVal='tgz'
+	else
+		# 2.veriy whether file is in zip format
+		$CMD_FILE $PKG|$CMD_GREP archive |$CMD_GREP -i zip &>/dev/null
+		if [ $? -eq 0 ];then
+			rVal='zip'
+		else 
+		$CMD_FILE $PKG|$CMD_GREP OOXML |$CMD_GREP -i zip &>/dev/null
+			if [ $? -eq 0 ];then
+				rval='zip'
+			else
+				#Package is not in either tgz or zip format
+				console_abort "$invalid_pkg_format" "$exit_fail" 
+			fi
+		fi
+	fi
+
+	TRACE_LEAVE $FUNCNAME
+	$CMD_ECHO "$rVal"
+}
+
+##############################################################################################
+# function integrity_check();                                                                #
+#                                                                                            #
+# verify the integrity of package by validating the checksums                                #
+#                                                                                            #
+##############################################################################################
+function integrity_check(){
+  TRACE_ENTER $FUNCNAME
+	pushd $INT_PATH/$PACKAGE_NAME &>/dev/null
+
+	local num2=2
+	local num1=1
+	local cksum_list=($($CMD_FIND -type f -exec sha256sum {} + | $CMD_SED 's/\.\///g'))
+	local list_count=${#cksum_list[@]}
+	local file_count=$($CMD_CAT $CKSUM_FILE 2>/dev/null | $CMD_WC -l)
+	local file_count=$(($file_count+$num1))
+
+	# 1. verify the number of files in the package match with the number of files provided in packageChsum file
+	if [ $file_count -ne $(($list_count/$num2)) ]; then
+			pushd $INT_PATH &>/dev/null
+			$CMD_RM -rf $PACKAGE_NAME
+			popd &>/dev/null
+			log "Files count is not matching"
+			console_abort "$integrity_failed<mismatch with number of files>" "$exit_fail" 
+	fi
+
+	# 2.verify the checksum of each file against the packageChsum file provided
+	for ((i=0; i<list_count; ))
+	do
+		cksum=${cksum_list[$i]}
+		filename=${cksum_list[$(($i+$num1))]}
+
+		$CMD_CAT $CKSUM_FILE 2>/dev/null | $CMD_GREP -w $cksum | $CMD_GREP -w $filename &>/dev/null
+		if [ $? -ne 0 ];then
+			#no need to match the checksum of packageChsum.sha
+			#Enter into if condition only in case the file is other than packageChsum.sha
+			if [ $filename != $CKSUM_FILE ]; then
+				pushd $INT_PATH &>/dev/null
+				$CMD_RM -rf $PACKAGE_NAME
+				popd &>/dev/null
+				log "invalid checksum for $filename"
+				console_abort  "$integrity_failed<$filename>" "$exit_fail" 
+			fi
+		fi
+
+		i=$(($i+$num2))
+	done
+
+	popd &>/dev/null
+
+	TRACE_LEAVE $FUNCNAME
+}
+
+##############################################################################################
+# function remove_package();                                                                 #
+#                                                                                            #
+# Removes the extracted package in case of invalid config file                               #
+#                                                                                            #
+##############################################################################################
+function remove_package(){
+	pushd $INT_PATH &>/dev/null
+	$CMD_RM -rf $PACKAGE_NAME
+	popd &>/dev/null
+	log "$2 script is not avilable in the package"
+  console_abort "$1 <$2>" "$exit_fail"
+}
+
+##############################################################################################
+# function verify_config_file();                                                             #
+#                                                                                            #
+# verify the contents of configuration file                                                  #
+#                                                                                            #
+##############################################################################################
+function verify_config_file(){
+  TRACE_ENTER $FUNCNAME
+	pushd $INT_PATH/$PACKAGE_NAME &>/dev/null
+
+	#1. validate the config file
+	#check whether file format is proper or not
+	$CMD_XMLLINT --format $CONFIG_FILE &>/dev/null || remove_package "$invalid_config_file" "format error"
+
+	#check the mandatory tags in config file
+	for tag in "${MANDATORY_CONFIG_TAGS[@]}"
+	  do
+	    count=$($CMD_CAT $CONFIG_FILE 2>/dev/null | $CMD_GREP -w "<$tag" | $CMD_WC -l)
+	    [ $count -ne 1 ] && remove_package "$invalid_config_file" "mandatory tag <$tag> missed or provided multiple times"
+	  done
+	
+	#check the mandatory child tags(name and version) under packageInfo tag
+	count=$($CMD_SED -n '/<packageInfo>/,/<\/packageInfo>/p' $CONFIG_FILE | $CMD_GREP "<name>" |$CMD_WC -l)
+	[ $count -ne 1 ] && remove_package "$invalid_config_file" "mandatory tag <name> missed or provided multiple times" 
+	count=$($CMD_SED -n '/<packageInfo>/,/<\/packageInfo>/p' $CONFIG_FILE | $CMD_GREP "<version>" | $CMD_WC -l) 
+	[ $count -ne 1 ] && remove_package "$invalid_config_file" "mandatory tag <version> missed or provided multiple times"
+
+	#check whether atleast one task is avilable under activate
+	count=$($CMD_SED -n '/<activate>/,/<\/activate>/p' $CONFIG_FILE | $CMD_GREP "<task"| $CMD_WC -l)
+	[ $count -eq 0 ] && remove_package "$invalid_config_file" "mandatory tag <task> missed under activate"
+	 
+	#2. verify the availability of scripts other than tasks
+	action_list=$($CMD_CAT $CONFIG_FILE 2>/dev/null | $CMD_GREP ExecutableFileName | $CMD_GREP -v "task name" | $CMD_AWK -F '"' '{print $2}' | $CMD_AWK '{print $1}')
+	action_list=(${action_list//\n/ })
+	for action in "${action_list[@]}"
+	do
+		$CMD_CAT $CKSUM_FILE 2>/dev/null | $CMD_GREP -F "$action" &>/dev/null
+		[ $? -ne 0 ] && remove_package "$missing_contents" "$action"
+	done
+
+	#3. verify the avilability of tasks under activate
+	task_list=$($CMD_CAT $CONFIG_FILE 2>/dev/null | $CMD_GREP ExecutableFileName | $CMD_GREP "task name" | $CMD_AWK -F '"' '{print $4}' | $CMD_AWK '{print $1}')
+	task_list=(${task_list//\n/ })
+	for task in "${task_list[@]}"
+	do
+		$CMD_CAT $CKSUM_FILE 2>/dev/null | $CMD_GREP -F "$task" &>/dev/null
+		[ $? -ne 0 ] && remove_package "$missing_contents" "$task"
+	done
+
+	popd &>/dev/null
+	TRACE_LEAVE $FUNCNAME
+}
+
+##############################################################################################
+# function extract();                                                                        #
+#                                                                                            #
+# Verify whether mandatory files are present is the package                                  #
+#                                                                                            #
+##############################################################################################
+function extract(){
+  TRACE_ENTER $FUNCNAME
+	local pkg_file="$PACKAGE_NAME"
+	pushd $INT_PATH &>/dev/null
+	console_print "Extracting package $PACKAGE_NAME ..."
+	#Get the name of the package
+	if [ "$PKG_FORMAT" == "tgz" ]; then
+		$CMD_MKDIR .$pkg_file
+		$CMD_TAR -C $INT_PATH/.$PACKAGE_NAME --extract --file=$PKG_PATH/$pkg_file $CONFIG_FILE &>/dev/null
+		PACKAGE_NAME=$($CMD_CAT .$PACKAGE_NAME/$CONFIG_FILE | $CMD_GREP "<name>" | $CMD_HEAD -1 | $CMD_CUT -d '>' -f 2 | $CMD_CUT -d '<' -f 1)
+		$CMD_RM -rf .$pkg_file
+	else
+		#package is in zip fomat
+		PACKAGE_NAME=$($CMD_UNZIP -p $PKG_PATH/$pkg_file $CONFIG_FILE | $CMD_GREP "<name>" | $CMD_HEAD -1 | $CMD_CUT -d '>' -f 2 | $CMD_CUT -d '<' -f 1)
+	fi
+
+	#check if there is already a package extracted with the name
+	if [ "$PACKAGE_NAME" == '' ]; then
+			console_abort "$invalid_config_file<missing package name>" "$exit_fail" 
+	else
+		if [ -d $PACKAGE_NAME ]; then
+			console_abort "$pkg_imported" "$exit_fail"
+		else
+			$CMD_MKDIR $PACKAGE_NAME
+		fi
+	fi
+
+	#extract the contents of the package file
+	if [ "$PKG_FORMAT" == "tgz" ]; then
+		$CMD_TAR $TGZ_OPTION $PKG_PATH/$pkg_file -C $INT_PATH/$PACKAGE_NAME &>/dev/null
+	else
+		$CMD_UNZIP $PKG_PATH/$pkg_file -d $INT_PATH/$PACKAGE_NAME &>/dev/null
+	fi
+
+	popd &>/dev/null
+	TRACE_LEAVE $FUNCNAME
+}
+
+##############################################################################################
+# function verify_mandatory_files();                                                         #
+#                                                                                            #
+# Verify whether mandatory files are present is the package                                  #
+#                                                                                            #
+##############################################################################################
+function verify_mandatory_files(){
+  TRACE_ENTER $FUNCNAME
+	local root_elements=''
+
+	if [ "$PKG_FORMAT" == "tgz" ]; then
+		root_elements=$($CMD_TAR --exclude='*/*' -tf $PKG_PATH/$PACKAGE_NAME)
+	else
+		#package is in zip format
+		root_elements=$($CMD_ZIPINFO $PKG_PATH/$PACKAGE_NAME | $CMD_GREP -v "/." | $CMD_AWK '{print $9}')
+	fi
+
+	#verify the existence of mandatory files
+	for element in "${MANDATORY_LIST[@]}"
+	do
+		$CMD_ECHO $root_elements | $CMD_GREP -w $element &>/dev/null
+		[[ $? -ne 0 ]] && console_abort "$missing_contents <$element>" "$exit_fail"
+	done
+
+	TRACE_LEAVE $FUNCNAME
+}
+
+##############################################################################################
+# function get_script_name();                                                                #
+#                                                                                            #
+# Get the script name to launch from config file             																 #        
+#																																														 #							
+#Arguments:																																									 #		
+#    Name of the action invoked (import or erase ot activate)																 #
+#                                                                                            #
+# Returns:                                                                                   #
+# 	- Name of the script in config.xml 							                                         #
+# Exits:                                                                                     #
+#                                                                                            #
+##############################################################################################
+function get_script_name(){
+	local action_name=$1
+	local config_file="$INT_PATH/$PACKAGE_NAME/$CONFIG_FILE"
+	local script_name=''
+	local rVal=''
+
+	if [ $action_name == "activate" ]; then
+		script_name=$($CMD_CAT $config_file 2>/dev/null | $CMD_GREP -i "task name" | $CMD_GREP -i "\"$TASK_NAME\"" | $CMD_AWK -F '"' '{print $4}')
+	else
+		script_name=$($CMD_CAT $config_file 2>/dev/null | $CMD_GREP -i ExecutableFileName | $CMD_GREP -i $action_name | $CMD_AWK -F '"' '{print $2}') 
+	fi
+
+	if [ -n "$script_name" ]; then
+	 	#rVal="$INT_PATH/$PACKAGE_NAME/$SCRIPT_FLDR/$script_name"
+	 	rVal="$script_name"
+	fi
+	
+	$CMD_ECHO "$rVal"
+}
+
+
+##############################################################################################
+# function import();                                      				                     			 #
+#                                                                                            #
+# Import the package							                                             							 #
+#                                                                                            #
+##############################################################################################
+function import(){
+  TRACE_ENTER "$PACKAGE_NAME-$FUNCNAME"
+
+	# 1.verify the length and name of package as per man page
+	local file_pattern='^[\w-]+[\.]?[A-Za-z0-9]+$'
+	local len=$($CMD_ECHO -n "$PACKAGE_NAME"|$CMD_WC -c)
+	console_print "Verifying package $PACKAGE_NAME ..."
+	
+	if [ $len -lt 5 -o $len -gt 32 ]; then 
+		 console_abort "Unreasonable value<package name exceeds 32 charecters>" "$exit_fail"
+	fi
+
+	local found=$($CMD_ECHO $PACKAGE_NAME|$CMD_GREP -vcP $file_pattern)
+	[[ $found -ne 0 ]] && console_abort "Unreasonable value<package name contains invalid charecters>" "$exit_fail"
+
+	# 2.verify whether package file exist in sw_package\CP path
+	[[ ! -f "$PKG_PATH/$PACKAGE_NAME" ]] &&	console_abort "$incorrect_pkg_name" "$exit_fail"
+
+	console_print "Importing $PACKAGE_NAME ..."
+
+	# 3.verify and get the file format
+	PKG_FORMAT=$(get_file_format)
+
+	# 4.verify the existence of mandatory files
+	verify_mandatory_files
+
+	# 5.Extract the package to internal directory
+	extract
+
+	# 6.verify the checksums of each file in the package against packageChsum file
+	integrity_check
+
+	# 7. verify configuration file
+	verify_config_file
+
+    local rCode=0
+	# 8.launch import script
+	PYTHON_SCRIPT=$(get_script_name "import")
+	if [ -n "$PYTHON_SCRIPT" ]; then
+		pushd $INT_PATH/$PACKAGE_NAME/PYTH > /dev/null
+    	console_print "Executing $PYTHON_SCRIPT ..."
+		$CMD_PYTHON $PYTHON_SCRIPT
+        rCode=$?
+		wait	
+		popd > /dev/null
+	fi
+
+	console_print "$check_status_msg"
+  TRACE_LEAVE "$PACKAGE_NAME-$FUNCNAME"
+  return $rCode
+}
+
+##############################################################################################
+# function confirmation();                                                                   #
+#                                                                                            #
+# prompt for confirmation before removing the package(s)                                     #
+#                                                                                            #
+# Returns:                                                                                   #
+# - 0 indicates yes																																				   #
+# - 1 indiactes no																																					 #
+##############################################################################################
+function confirmation(){
+	CMD=''
+  local rCode=0
+
+	[[ $OPT_FORCE -eq $TRUE ]] &&	return $rCode
+
+  while [ "$CMD" != "y" ] && [ "$CMD" != "n" ]; do
+    $CMD_ECHO -e "Are you sure you want to delete $PACKAGE_NAME package:"
+    $CMD_ECHO -en "[y=yes, n=no]?: "
+    read CMD
+  done
+
+  if [ "$CMD" == "y" ]; then
+  	rCode=0
+  else
+    rCode=1
+  fi
+
+  return $rCode
+}
+
+##############################################################################################
+# function erase(); 				                                                         #
+#                                                                                            #
+# Removes all the package contents                                                           #
+#                                                                                            #
+##############################################################################################
+function erase(){
+  TRACE_ENTER "$PACKAGE_NAME-$FUNCNAME"
+
+  local rCode=0
+	#Delete the package from internal path
+	CONF_PATH="$INT_PATH/$PACKAGE_NAME/$CONFIG_FILE"
+	if confirmation; then
+    if [ $OPT_INTERNAL_CLEANUP -eq $FALSE ]; then
+		  console_print "Deleting the package $PACKAGE_NAME ..."
+		  #1. Launching erase script if exists
+		  PYTHON_SCRIPT=$(get_script_name "erase")
+		   if [ -n "$PYTHON_SCRIPT" ]; then
+			   pushd $INT_PATH/$PACKAGE_NAME/PYTH > /dev/null
+         $CMD_PYTHON $PYTHON_SCRIPT
+         rCode=$?
+         wait			
+		     popd > /dev/null
+		   fi
+    fi  
+
+		#2. Check whether any task in config.xml is already running
+		for task in $($CMD_GREP "task name=" $CONF_PATH 2>/dev/null | $CMD_CUT -d'"' -f4 | $CMD_AWK '{print $1}'); do
+				ps -elf | $CMD_GREP $task | $CMD_GREP -v $CMD_GREP &>/dev/null
+				if [ $? -ne 1 ]; then
+					  console_abort "$action_ongoing<$task>\n'INFO: No changes done'" "$exit_fail"
+				fi
+				
+		done
+
+		#3. Check whether any action in config.xml is already running
+		for action in $($CMD_CAT $CONF_PATH 2>/dev/null | $CMD_GREP ExecutableFileName | $CMD_GREP -v "task name" | $CMD_CUT -d'"' -f2 | $CMD_AWK '{print $1}'); do
+			ps -elf | $CMD_GREP $action | $CMD_GREP -v $CMD_GREP &>/dev/null
+			if [ $? -ne 1 ]; then
+				 console_abort "$action_ongoing<$action>\n'INFO: No changes done'" "$exit_fail"
+			fi
+    done
+
+		# All conditions passed, package can be removed
+		pushd $INT_PATH &>/dev/null
+		$CMD_RM -rf $PACKAGE_NAME &>/dev/null
+		popd &>/dev/null
+		console_print 'Package Deleted!'
+	else
+		console_print 'INFO: No changes done'
+	fi
+
+  TRACE_LEAVE "$PACKAGE_NAME-$FUNCNAME"
+  return $rCode
+}
+
+##############################################################################################
+# function activate();			                                                             #
+#                                                                                            #
+# invoke one of the task under activate section from conf file based on task name provided   #
+#                                                                                            #
+##############################################################################################
+function activate(){
+  TRACE_ENTER "$PACKAGE_NAME-$FUNCNAME"
+
+	local script=''
+	local config_file="$INT_PATH/$PACKAGE_NAME/$CONFIG_FILE"
+  local rCode=0
+
+	# Validate the name of task as per the man page
+	local task_pattern='^[A-Za-z0-9]+[A-Za-z0-9-_]*$'
+	local len=$($CMD_ECHO -n "$TASK_NAME"|$CMD_WC -c)
+	if [ $len -lt 1 -o $len -gt 28 ]; then
+		console_abort "Unreasonable value<task name exceeds 28 charecters>" "$exit_fail"
+	fi
+
+	local found=$($CMD_ECHO $TASK_NAME|$CMD_GREP -vcP $task_pattern)
+	[[ $found -ne 0 ]] && console_abort "Unreasonable value<Invalid charecters provided in task name>" "$exit_fail"
+
+	script=$($CMD_CAT $config_file 2>/dev/null | $CMD_GREP ExecutableFileName | $CMD_GREP "task name" | $CMD_GREP -F "\"$TASK_NAME\"" |$CMD_AWK -F '"' '{print $2}')
+	if [ -n "$script" ]; then
+		PYTHON_SCRIPT=$(get_script_name "activate")
+		console_print "Activation ongoing for $PACKAGE_NAME ..."
+		console_print "$check_status_msg"
+		pushd $INT_PATH/$PACKAGE_NAME/PYTH > /dev/null 
+  	$CMD_PYTHON $PYTHON_SCRIPT 
+    rCode=$?
+		wait
+		popd > /dev/null
+	else
+		console_abort "$invalid_task" "$exit_fail"
+	fi
+
+  TRACE_LEAVE "$PACKAGE_NAME-$FUNCNAME"
+  return $rCode
+}
+
+##############################################################################################
+# function is_node_active();                                                                 #                                                                          #                                                                                            #
+# Check whether node is active or not                                                        #
+#                                                                                            #
+##############################################################################################
+function is_node_active(){
+        local NODE_STATE=''
+        local ACTIVE=1
+
+	#Print console output to make session active while importing
+	if [ $IMPORT_FLAG -eq $TRUE ]; then
+		console_print "Checking the Node Status..."
+	fi
+
+        # check if we are running on 'active-node'
+        local node_id=$(</etc/cluster/nodes/this/id)
+	if [ -f $is_swm_2_0 ]; then
+	        $(${CMD_IMMLIST} -a saAmfSISUHAState "safSISU=safSu=SC-$node_id\,safSg=2N\,safApp=ERIC-apg.nbi.aggregation.service,safSi=apg.nbi.aggregation.service-2N-1,safApp=ERIC-apg.nbi.aggregation.service" &>/dev/null)
+	else
+		$(${CMD_IMMLIST} -a saAmfSISUHAState "safSISU=safSu=$node_id\,safSg=2N\,safApp=ERIC-APG,safSi=AGENT,safApp=ERIC-APG" &>/dev/null)
+	fi
+        if [ $? -ne 0 ]; then
+                console_abort "Node state undefined. Command can be executed only on active node. Exiting..." "$exit_cmnd_abrt"
+        fi
+	if [ -f $is_swm_2_0 ]; then
+	        NODE_STATE=$(${CMD_IMMLIST} -a saAmfSISUHAState "safSISU=safSu=SC-$node_id\,safSg=2N\,safApp=ERIC-apg.nbi.aggregation.service,safSi=apg.nbi.aggregation.service-2N-1,safApp=ERIC-apg.nbi.aggregation.service" | $CMD_CUT -d = -f2)
+	else
+		NODE_STATE=$(${CMD_IMMLIST} -a saAmfSISUHAState "safSISU=safSu=$node_id\,safSg=2N\,safApp=ERIC-APG,safSi=AGENT,safApp=ERIC-APG" | $CMD_CUT -d = -f2)
+	fi
+        if [ $NODE_STATE -ne $ACTIVE ]; then
+        	console_abort "Command can be executed only on the active node." "$exit_cmnd_abrt"
+        fi
+}
+
+##############################################################################################
+# function sanity_check();                                                                   #                                                                          #                                                                                            #
+# perform sanity check                                                                       #
+#                                                                                            #
+##############################################################################################
+function sanity_check(){
+	TRACE_ENTER $FUNCNAME
+
+	#Print console output to make session active while importing
+	if [ $IMPORT_FLAG -eq $TRUE ]; then
+		console_print "Performing Sanity checks..."
+	fi
+	
+	#verify the existence of internal directory
+	if [ ! -d $INT_PATH ]; then
+		log "$INT_PATH is not available"
+		console_abort "$unresonable_value<path not found>" "$exit_cmnd_abrt"
+ 	fi
+
+ 	#Verify the existence of user
+ 	$CMD_CAT $USR_PATH | $CMD_GREP $USER_NAME &>/dev/null 
+ 	if [ $? -ne 0 ];then
+		log " $USER_NAME user is not available"
+	  console_abort "$unresonable_value<no user to launch command>" "$exit_cmnd_abrt"
+	fi
+
+	TRACE_LEAVE $FUNCNAME
+}
+
+##############################################################################################
+# function invoke();				                                                         #
+#                                                                                            #
+# invoke the command						                                                 #
+#                                                                                            #
+##############################################################################################
+function invoke(){
+	TRACE_ENTER $FUNCNAME
+
+	#check whether package is valid or not, This check is done for all options except import
+	if [ $OPT_IMPORT -eq $FALSE ] && [ -n "$PACKAGE_NAME" ]; then
+		if [ ! -d $INT_PATH/$PACKAGE_NAME ]; then
+			console_abort "$incorrect_pkg_name" "$exit_fail"
+		fi
+	fi
+
+	#Invoke the correct function based on option provided
+	[[ $OPT_ACTIVATE -eq $TRUE ]] && activate
+	[[ $OPT_ERASE -eq $TRUE ]] && erase
+	[[ $OPT_IMPORT -eq $TRUE ]] && import
+	[[ $OPT_LIST -eq $TRUE ]] && list
+	[[ $OPT_STATUS -eq $TRUE ]] && status_display
+
+	TRACE_LEAVE $FUNCNAME
+}
+
+function do_apply_patch()
+{
+  TRACE_ENTER "$PACKAGE_NAME-$FUNCNAME"
+  local rCode=0
+
+  # check if the package file is present
+  if [ -f "$PKG_PATH/$PACKAGE_NAME" ]; then
+    import 1>/dev/null # suppress stdout
+    rCode=$?
+    [ $rCode -ne 0 ]  && console_abort 'NOT OK'
+
+    local config_file="$INT_PATH/$PACKAGE_NAME/$CONFIG_FILE"
+    [ ! -f $config_file ] && console_abort 'NOT OK'
+    # works for only one task, can be extended to include multiple tasks
+    TASK_NAME=$( $CMD_AWK '/<activate>/{flag=1; next} /<\/activate>/{flag=0} flag' $config_file | $CMD_SED 's/.*task name=\"\(.*\)\" ExecutableFileName.*/\1/')
+    activate 1>/dev/null # suppress stdout
+    rCode=$?
+    [ $rCode -ne 0 ]  && console_abort 'NOT OK'
+
+    OPT_FORCE=$TRUE
+    erase 1>/dev/null # suppress stdout
+    rCode=$?
+    [ $rCode -ne 0 ]  && console_abort 'NOT OK'
+  fi
+
+  console_print "OK\n" # print 'OK' even if the package file is not found, to support automation use case of OPS user.
+
+  TRACE_LEAVE "$PACKAGE_NAME-$FUNCNAME"
+}
+
+function patch_usage(){
+  TRACE_ENTER $FUNCNAME
+  
+  # command usage:
+  # swmgr --apply-patch <package-file>
+  # 
+  # Result: OK/NOT OK
+  ##
+
+  # modify the user:group owner to apgswmgr:SWPKGGRP if not already.
+  # this should be useful when the command is invoked by apgswmgr user.
+  local USER_GROUP='apgswmgr:SWPKGGRP'
+  local E_USER_GROUP=$( stat -c '%U:%G' $LOG_DIR/$LOG_FILE)
+  if [ "$E_USER_GROUP" != "$USER_GROUP" ]; then
+    chown -h "$USER_GROUP" $LOG_DIR/$LOG_FILE &>/dev/null
+    [ $? -ne 0 ] && log "failed to apply [$USER_GROUP] to [$LOG_DIR/$LOG_FILE]"
+  fi
+
+  # check if the command is invoked with-out package name
+  if [ $# -ne 2 ]; then
+    console_abort 'NOT OK'  
+  fi
+  
+  # set few class-wide variables.
+  PACKAGE_NAME="$2"
+  OPT_APPLY_PATCH=$TRUE
+ 
+  # check the node is active
+  is_node_active 1>/dev/null # suppress stdout
+
+  # sanity checks here
+  sanity_check 1>/dev/null # suppress stdout
+
+  # apply patch
+  do_apply_patch
+
+  TRACE_LEAVE $FUNCNAME
+}
+
+function normal_usage(){
+  TRACE_ENTER $FUNCNAME
+
+  # Normal command usage starts from here.
+  # All the TR fixes with respect to normal usage __MUST__ be
+  # handled from here.
+
+  #Print the consoleprint while importing
+  if [ "$1" == "-i" ] || [ "$1" == "--import" ]; then
+    IMPORT_FLAG=$TRUE
+  fi
+
+  #Check the node status
+  is_node_active
+
+  # parse the command-line and invoke main functionality
+  parse_args $@
+
+  # Perform sanity checks
+  sanity_check
+
+  #invoke the command as per the options provided
+  invoke
+
+  TRACE_LEAVE $FUNCNAME
+}
+
+# Function definitions end here =====>>
+# _____________________
+#|    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |
+#|_____________________|
+# Here begins the "main" function...
+
+# Set the interpreter to exit if a non-initialized variable is used.
+#set -u
+
+# DO NOT add any code here. For normal usage of the command, any TR 
+# fixes must be handled from 'normal_usage' function
+if [ "$( echo "$1")" == '--apply-patch' ]; then
+  patch_usage $*   
+else 
+  normal_usage $*
+fi
+
+exit $exit_sucs
+

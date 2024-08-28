@@ -1,0 +1,17 @@
+Usage:  shelfmngr set clearrtfd [--verbose] [--help] <board>
+
+Set bios image, bios pointer to the UPG Image and clear GPR register BIOS PROGRESS releted to the RtfdStartedFlag flag.
+
+<board>                 represents the board(s) the command will operate on. It
+                        can assume one of the following values:		
+		                <board_name>
+		                <slot_number>
+				
+<board_name>            can assume one of the following values (the supported
+                        logical names are found in lib/common/slot_by_name.dat
+                        under the shelfmngr root directory):
+		                apub_a, apa
+		                apub_b, apb
+
+<slot_number>           must be an unsigned integer.
+

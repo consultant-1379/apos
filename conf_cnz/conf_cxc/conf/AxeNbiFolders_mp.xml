@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><!--
+	Copyright (c) 2020 Ericsson AB.
+	All rights reserved
+
+	DX ECIM Tool-chain generated this file on Dec 8, 2020 11:49:40 PM using:
+	* com.ericsson.ecim.m2m 3.13.0.202006261811
+	* com.ericsson.ecim.dsl 3.13.0.202006261811
+	* com.ericsson.ecim.edm 3.13.0.202006261811
+--><!DOCTYPE models SYSTEM "mp.dtd">
+<models>
+    <dtdVersion>K</dtdVersion>
+    <momMetaData>
+        <momTitle>Managed Object Model for NBI Folders</momTitle>
+        <momSubTitle/>
+        <momIdentity>
+            <docNum>3/19089-CXA 117 0029</docNum>
+            <docLang>Uen</docLang>
+            <docRev>C</docRev>
+            <docDate>2020-12-08</docDate>
+        </momIdentity>
+        <createdBy>
+            <signature>XHARBAV</signature>
+        </createdBy>
+    </momMetaData>
+    <mim author="Harika Bavana" contact="XHARBAV" correction="0" date="2020-12-08" docNo="" name="AxeNbiFolders" namespace="urn:com:ericsson:ecim:AxeNbiFolders" namespacePrefix="axenbifolders" organization="" release="1" revision="A" version="4">
+        <description>&lt;p&gt;NBI Folders.&lt;/p&gt;</description>
+        <domainExtension domain="ECIM">
+            <extension name="immNamespace" value="MOM_NAME"/>
+        </domainExtension>
+        <modelFeatures modelType="Template">
+            <modelFeature featureType="basic" name="CPI_HIDDEN"/>
+            <modelFeature featureType="basic" name="VIRTUAL_HIDDEN"/>
+            <modelFeature featureType="basic" name="VIRTUALDB_HIDDEN"/>
+        </modelFeatures>
+        <class name="NbiFoldersM">
+            <description>Represents the main folders exposed on APG file system.
+Each attribute value specifies the path of such folders.
+
+Once a File Transfer session is opened the APG file system is shown under '/' root path and a user can access to it depending on his authority level. </description>
+            <root/>
+            <attribute name="nbiFoldersMId">
+                <description>Holds the name used when identifying the MO.
+</description>
+                <mandatory/>
+                <noNotification/>
+                <restricted/>
+                <key/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            
+            <attribute name="cpPrintout">
+                <description>Specifies the folder path storing CP printouts routed in a file.
+The value is "/cp/printouts".</description>
+                <noNotification/>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="cpFiles">
+                <description>Specifies the folder path hosting files imported/exported to/from CP file system.
+The value is "/cp/files".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="mmlCommandsFile">
+                <description>Specifies the folder path where downloading MML commands file.
+The file is to be run via mml AP command in format 3.
+The value is "/cp/mml".</description>
+                <noNotification/>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="auditLog">
+                <description>Specifies the folder path hosting ALOG related files.
+The value is "/audit_logs".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="scrFiles">
+                <description>Specifies the folder path where downloading the SCR file.
+The value is "/sts_scr".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="backupRestore">
+                <description>Specifies the folder path hosting APG backup files.
+The value is "/backup_restore".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="dataTransferForResponding">
+                <description>Specifies the folder path storing files a remote destination configured in responding mode can access.
+The value is "/data_transfer/destinations".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="mirroring">
+                <description>Specifies the folder path storing mirrored data during a block based transfer.
+The value is "/data_transfer/data_mirrored".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="swPackageFW">
+                <description>Specifies the folder path where downloading the IPMI, RFU, and PFM FW packages.
+The value is "/sw_package/FW".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+                <decisionPoint>
+                    <decisionStatement decisionType="basic">if-feature NOT VIRTUAL_HIDDEN</decisionStatement>
+                </decisionPoint>
+            </attribute>
+            <attribute name="healthCheck">
+                <description>Specifies the folder path storing the result for health check reports.
+The value is "/health_check".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="licenseFile">
+                <description>Specifies the folder path where storing the LKF.
+The value is "/license_file".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="supportData">
+                <description>Specifies the folder path storing the info needed to write a CSR. 
+It contains the output of AP command mktr. 
+The value is "/support_data".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="sourceDataForCpFile">
+                <description>Specifies the folder path storing CP related files.
+They are ready to transferred out to a remote destination.
+The value is "/data_transfer/source/cp_file".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="sourceDataForStsFile">
+                <description>Specifies the folder path storing statistical counter related files.
+They are ready to be transferred out to a remote destination.
+The value is "/data_transfer/source/sts".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="swPackageAPG">
+                <description>Specifies the folder path where downloading the APG related SW.
+The value is "/sw_package/APG".
+The UP SW is to be stored under folder "/sw_package/APG/UPGRADE".
+Other APG related SW is to be stored under folder "/sw_package/APG".
+
+</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="swPackageCP">
+                <description>Specifies the folder path where downloading CP related SW package.
+The value is "/sw_package/CP".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            
+            
+            
+            
+            
+            <attribute name="media">
+                <description>Specifies the folder path exposing the file system of a mounted external media.
+The value is "/media".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+                <decisionPoint>
+                    <decisionStatement decisionType="basic">if-feature NOT VIRTUAL_HIDDEN</decisionStatement>
+                </decisionPoint>
+            </attribute>
+            <attribute name="tools">
+                <description>Specifies the folder path where storing the output of additional tools.
+These tools are installed for maintenance or supervision purposes.
+The value is "/tools".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="swPackage">
+                <description>Specifies the folder path where downloading the SW for APG and other different blades. 
+A sub-folder for each of them is predefined on APG file system. 
+The value is "/sw_package".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            
+            <attribute name="sourceCallRecords">
+                <description>Specifies the folder path storing CP data records.
+They are ready to transferred out to a remote destination.
+The value is "/data_transfer/source/data_records".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="swPackageCCF">
+                <description>Specifies the folder path where downloading the CCF used in a Multi-CP System configuration.
+The value is "/sw_package/CP/CCF".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+                <decisionPoint>
+                    <decisionStatement decisionType="basic">if-feature NOT VIRTUALDB_HIDDEN</decisionStatement>
+                </decisionPoint>
+            </attribute>
+            <attribute name="certificates">
+                <description>Specifies the folder path where downloading APG certificates.
+The value is "/certificates".</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            
+            
+            
+            <attribute name="swPackageZip">
+                <description>Specifies the folder where downloading zipped package files.
+The value is "/sw_package/zip".
+</description>
+                <readOnly/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            
+        </class>
+    </mim>
+    <interMim>
+        <relationship name="DataOutputHandling_to_NorhtBoundFolders">
+            <domainExtension domain="CoreMW">
+                <extension name="splitImmDn" value="true"/>
+            </domainExtension>
+            <containment>
+                <parent>
+                    <hasClass name="DataOutputHandling">
+                        <mimName>AxeFunctions</mimName>
+                    </hasClass>
+                </parent>
+                <child>
+                    <hasClass name="NbiFoldersM">
+                        <mimName>AxeNbiFolders</mimName>
+                    </hasClass>
+                    <cardinality>
+                        <min>1</min>
+                        <max>1</max>
+                    </cardinality>
+                </child>
+                <domainExtension domain="ECIM">
+                    <extension name="canCreate" value="true"/>
+                    <extension name="canDelete" value="true"/>
+                </domainExtension>
+            </containment>
+        </relationship>
+    </interMim>
+</models>

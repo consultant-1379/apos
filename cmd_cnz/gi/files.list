@@ -1,0 +1,32 @@
+# Directories
+555:lib
+555:lib/common
+555:lib/fetch_method
+555:lib/vendor
+555:lib/vendor/openstack
+555:lib/vendor/simulated
+555:lib/vendor/vmware
+
+# Files
+555:apos_getinfo
+555:lib/fetch_method/ovfenv.sh
+555:lib/fetch_method/vmtools.sh
+555:lib/fetch_method/user_data.sh
+555:lib/fetch_method/parse_openstack_userdata.py
+555:lib/fetch_method/parse_vmware_ovfenv.py
+555:lib/fetch_method/configdrive.sh
+555:lib/fetch_method/simuconfigdrive.sh
+555:lib/common/common_functions
+444:lib/common/dynamicNetworks
+444:lib/common/networkInterfaces
+444:lib/common/staticNetworks
+555:lib/vendor/vmware/properties.sh
+555:lib/vendor/vmware/netinfo.sh
+555:lib/vendor/simulated/uuid.sh
+555:lib/vendor/simulated/properties.sh
+555:lib/vendor/simulated/netinfo.sh
+555:lib/vendor/vmware/uuid.sh
+555:lib/vendor/openstack/properties.sh
+555:lib/vendor/openstack/netinfo.sh
+555:lib/vendor/openstack/uuid.sh
+555:lib/vendor/openstack/metadata.sh

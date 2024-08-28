@@ -1,0 +1,1054 @@
+#!/bin/bash -u
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2016 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       usermgmt
+# Description:
+#       A script to deploy content from a file to another file.
+# Note:
+#	None.
+##
+# Usage:
+#       Usage:  usermgmt --help
+#               usermgmt <command> <sub_command> [<sub_command_options>]
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Wed Jan 27 2016 - Antonio Nicoletti (eantnic)
+#       First version.
+##
+
+# Load the apos common functions.
+. /opt/ap/apos/conf/apos_common.sh
+
+# Variables -------------------------------------------------------------- BEGIN
+COMMAND=''
+SUB_COMMAND=''
+export OPT_DEBUG=$FALSE
+
+export BASE_DIR="$(dirname $0)"
+export LIB_DIR="$BASE_DIR/lib"
+export LIB_COMMON_DIR="$LIB_DIR/common"
+export MAN_DIR="$LIB_COMMON_DIR/man"
+# Variables ---------------------------------------------------------------- END
+
+apos_intro $0
+apos_log "parameters: $*"
+
+function get_commands(){
+	local COMMANDS='group user'
+	echo $COMMANDS
+}
+
+function get_sub_commands(){
+	local SUB_COMMANDS='add modify delete list'
+	echo $SUB_COMMANDS
+}
+
+# usage: command_is_valid <command>
+function command_is_valid(){
+	local COMMAND=''
+	if [ $# -gt 0 ]; then
+		COMMAND=$1		
+	else
+		apos_abort 'missing parameter'
+	fi	
+	local VALID_COMMANDS=$(get_commands)
+	for C in $VALID_COMMANDS; do
+		[ "$COMMAND" == "$C" ] && return $TRUE
+	done
+	return $FALSE
+}
+
+# usage: sub_command_is_valid <sub_command>
+# usage: sub_command_is_valid <command> <sub_command>
+function sub_command_is_valid(){
+	local COMMAND=''
+	local SUB_COMMAND=''
+	if [ $# -eq 1 ]; then		
+		SUB_COMMAND=$1
+	elif [ $# -eq 2 ]; then
+		COMMAND=$1
+		SUB_COMMAND=$2
+	else
+		apos_abort 'missing or unexpected parameter'
+	fi	
+	local VALID_SUB_COMMANDS=$(get_sub_commands $COMMAND)
+	for SC in $VALID_SUB_COMMANDS; do
+		[ "$SUB_COMMAND" == "$SC" ] && return $TRUE
+	done
+	return $FALSE
+}
+
+# usage: function_exists <function_name>
+function function_exists() {
+    declare -f -F $1 > /dev/null
+    return $?
+}
+
+function parse_cmdline(){	
+	local ARGS="$@"	
+	eval set -- "$ARGS"
+	if [ $# -le 0 ]; then
+		usage
+		apos_abort 'you must specify at least one option/command'
+	fi
+
+	while [ $# -gt 0 ]; do
+		case $1 in		
+			--debug)
+				set -x
+				OPT_DEBUG=$TRUE
+			;;
+			--help)
+				usage
+				exit $TRUE
+			;;
+			$(command_is_valid $1 && echo $1))
+				COMMAND=$1			
+				shift
+				if [ $# -le 0 ]; then
+					usage
+					apos_abort 'you must specify at least one sub-command'
+				fi
+				case "$1" in
+					$(sub_command_is_valid $COMMAND $1 && echo $1))
+						SUB_COMMAND=$1
+						shift
+            apos_log "Executing  ${COMMAND}_${SUB_COMMAND}"
+            #invoke function
+            ${COMMAND}_${SUB_COMMAND} $*
+            
+            EXIT_CODE=$?
+						popd >/dev/null 2>&1
+						[ $EXIT_CODE -ne $TRUE ] && apos_abort "the command \"$COMMAND $SUB_COMMAND\" ended with errors"
+						return $EXIT_CODE
+					;;
+					*)
+						apos_abort "sub-command \"$1\" not valid"
+					;;
+				esac			
+			;;		
+			*)			
+				apos_abort "command/option \"$1\" not valid"
+			;;
+		esac
+		shift
+	done
+	return $?
+}
+
+function check_debug(){	
+	[ $OPT_DEBUG -eq $TRUE ] && set -x
+}
+
+# usage: apos_add_local_group <group> <opt>
+function apos_add_local_group() {
+	
+  local GROUP=''
+  if [ $# -gt 0 ]; then
+    GROUP=$1
+  fi
+   
+  local OPT=''
+  if [ $# -gt 1 ]; then
+    shift
+    OPT="$*"
+  fi
+ 	
+	[ -z "$GROUP" ] && apos_abort "Empty GROUP passed"	
+	
+	CMD_GROUPADD=$( which groupadd 2>/dev/null )
+	[ -z "$CMD_GROUPADD" ] && CMD_GROUPADD='/usr/sbin/groupadd'	
+		
+	$CMD_GROUPADD $OPT $GROUP 2>/dev/null
+	RET_CODE=$?
+	if [ $RET_CODE -ne 0 ];then
+    apos_log "Local group $GROUP not created"
+		return $RET_CODE
+  fi
+	
+	apos_log "Local group $GROUP created"
+	return 0;
+}
+
+# usage: apos_add_global_group <group> <opt>
+function apos_add_global_group() {
+
+ local GROUP=''
+  if [ $# -gt 0 ]; then
+    GROUP=$1
+  fi
+   
+  local OPT=''
+  if [ $# -gt 1 ]; then
+    shift
+    OPT="$*"
+  fi
+	
+	[ -z "$GROUP" ] && apos_abort "Empty GROUP passed"
+	
+	apos_add_local_group $GROUP $OPT
+	RET_ADDGROUP=$?
+	
+	# If the apos_add_local_group command exits with errorcode=9
+  # the local group name is already definied
+	if [ $RET_ADDGROUP -eq 9 ]; then
+    apos_log "Local group $GROUP already defined"
+	elif [ $RET_ADDGROUP -ne 0 ]; then
+		apos_abort "Failure while creating local group $GROUP"
+  fi
+	
+	CMD_LDEGLOBALUSER=$( which lde-global-user 2>/dev/null )
+	[ -z "$CMD_LDEGLOBALUSER" ] && CMD_LDEGLOBALUSER='/usr/sbin/lde-global-user'	
+	
+	GLOBAL_GROUP="/cluster/etc/group"
+	if [ -f $GLOBAL_GROUP ]; then
+		if grep -q "^$GROUP:" $GLOBAL_GROUP; then
+			apos_log "Global group $GROUP already exists: skip"
+		else
+			$CMD_LDEGLOBALUSER -g $GROUP 2>/dev/null
+			if [ $? -ne 0 ]; then
+				apos_abort "Failure while globalize the local group $GROUP"
+			fi	
+			apos_log "Success on globalize the local group $GROUP"
+		fi
+	else
+		apos_abort "global group data does not exist: ${GLOBAL_GROUP}"
+	fi
+}
+
+# usage: apos_add_local_user <user> <opt>
+function apos_add_local_user() {
+	
+  local USER=''
+  if [ $# -gt 0 ]; then
+    USER=$1
+  fi
+   
+  local OPT=''
+  if [ $# -gt 1 ]; then
+    shift
+    OPT="$*"
+  fi
+ 	
+	[ -z "$USER" ] && apos_abort "Empty USER passed"	
+	
+	CMD_USERADD=$( which useradd 2>/dev/null )
+	[ -z "$CMD_USERADD" ] && CMD_USERADD='/usr/sbin/useradd'	
+		
+	$CMD_USERADD $OPT $USER 2>/dev/null
+	RET_CODE=$?
+	if [ $RET_CODE -ne 0 ];then
+    apos_log "Local user $USER not created"
+		return $RET_CODE
+  fi
+	
+	apos_log "Local user $USER created"
+	return 0;
+}
+
+# usage: apos_add_global_user <user> <opt>
+function apos_add_global_user() {
+
+  local USER=''
+  if [ $# -gt 0 ]; then
+    USER=$1
+  fi
+   
+  local OPT=''
+  if [ $# -gt 1 ]; then
+    shift
+    OPT="$*"
+  fi
+	
+	[ -z "$USER" ] && apos_abort "Empty USER passed"
+	
+	apos_add_local_user $USER $OPT
+	RET_ADDUSER=$?
+	
+	# If the apos_add_local_group command exits with errorcode=9
+  # the local USER is already definied
+	if [ $RET_ADDUSER -eq 9 ]; then
+    apos_log "Local group $USER already defined"
+	elif [ $RET_ADDUSER -ne 0 ]; then
+		apos_abort "Failure while creating local user $USER"
+  fi
+	
+	CMD_LDEGLOBALUSER=$( which lde-global-user 2>/dev/null )
+	[ -z "$CMD_LDEGLOBALUSER" ] && CMD_LDEGLOBALUSER='/usr/sbin/lde-global-user'	
+	
+	GLOBAL_USERS="/cluster/etc/passwd"
+	if [ -f $GLOBAL_USERS ]; then
+		if grep -q "^$USER:" $GLOBAL_USERS; then
+			apos_log "Global user $USER already exists: skip"
+		else
+			$CMD_LDEGLOBALUSER -u $USER 2>/dev/null
+			if [ $? -ne 0 ]; then
+				apos_abort "Failure while globalize the local user $USER"
+			fi	
+			apos_log "Success on globalize the local user $USER"
+		fi
+	else
+		apos_abort "global user data does not exist: ${GLOBAL_USER}"
+	fi
+}
+
+function usage() {
+  cat $MAN_DIR/usermgmt.man
+}
+
+# usage: usage_sub <cmd> <sub_cmd>
+function usage_sub() {
+  local CMD=""
+  local SUBCMD=""
+  
+  if [ $# -eq 2 ]; then
+    CMD=$1
+    SUBCMD=$2
+    cat $MAN_DIR/"$CMD"_"$SUBCMD".man
+  fi
+  
+  
+}
+
+# usage: group_add <opt>
+function group_add(){
+  # LONG_OPTIONS is a list of space-separated multi-character options.
+	#  The string must be in the form:
+	#   Example: 'option1 option2 ... optionN'.
+	#  Options that takes an argument must be followed by a colon:
+	#   Example: 'option1: option2 ... optionN:'
+	#  Options with an optional argument must be followed by a double colon:
+	#   Example: 'option1:: option2:: ... optionN'
+	local LONG_OPTIONS='help gid=: gname=: global'
+	
+	[ $# -le 0 ] && usage_sub "group" "add" && apos_abort 'missing parameter'
+	
+	/usr/bin/getopt --quiet --quiet-output --longoptions="$LONG_OPTIONS" -- "$@"
+	EXIT_CODE=$?
+	if [ $EXIT_CODE -ne $TRUE ]; then
+		usage_sub "group" "add"
+		apos_abort "Command line parameter error"
+	fi	
+	local ARGS="$@"
+	eval set -- "$ARGS"
+	
+  local OPT_GLOBAL=$FALSE
+  local GID=""
+  local GNAME=""
+  
+	# Make sure to handle the cases for all the options listed in OPTIONS
+	#  and LONG_OPTIONS and to fill up the right script-wide variables.
+	while [ $# -gt 0 ]; do		
+		case "$1" in
+      --global)
+        OPT_GLOBAL=$TRUE
+        ;;
+			--gid=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            GID=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+			--gname=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            GNAME=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+			--help)
+				usage_sub "group" "add"
+				return $TRUE
+			;;
+			--)
+				# "end of argument list"
+				shift
+				break
+			;;
+			*)
+				apos_abort "unrecognized option ($1)"
+			;;
+		esac
+		shift
+	done
+  
+	[[ -z $GNAME ]] && apos_abort 'missing parameter'
+  
+  local OPT="";
+  if [ ! -z $GID ]; then
+    if [ "$GID" == "random" ]; then
+      OPT="-r"
+    else 
+      OPT="-g $GID"
+    fi
+  fi
+  
+  if [ "$OPT_GLOBAL" == $TRUE ]; then
+    apos_add_global_group $GNAME $OPT
+  else
+    apos_add_local_group $GNAME $OPT
+  fi
+  
+  return $?
+}	
+
+# usage: group_modify <opt>
+function group_modify(){
+
+  # LONG_OPTIONS is a list of space-separated multi-character options.
+	#  The string must be in the form:
+	#   Example: 'option1 option2 ... optionN'.
+	#  Options that takes an argument must be followed by a colon:
+	#   Example: 'option1: option2 ... optionN:'
+	#  Options with an optional argument must be followed by a double colon:
+	#   Example: 'option1:: option2:: ... optionN'
+	local LONG_OPTIONS='help gid=: gname=:'
+	
+	[ $# -le 0 ] && usage_sub "group" "modify" && apos_abort 'missing parameter'
+	
+	/usr/bin/getopt --quiet --quiet-output --longoptions="$LONG_OPTIONS" -- "$@"
+	EXIT_CODE=$?
+	if [ $EXIT_CODE -ne $TRUE ]; then
+		usage_sub "group" "modify"
+		apos_abort "Command line parameter error"
+	fi	
+	local ARGS="$@"
+	eval set -- "$ARGS"
+	
+  local GID=""
+  local GNAME=""
+  
+	# Make sure to handle the cases for all the options listed in OPTIONS
+	#  and LONG_OPTIONS and to fill up the right script-wide variables.
+	while [ $# -gt 0 ]; do		
+		case "$1" in
+        --gid=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            GID=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+			--gname=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            GNAME=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+			--help)
+				usage_sub "group" "modify"
+				return $TRUE
+			;;
+			--)
+				# "end of argument list"
+				shift
+				break
+			;;
+			*)
+				apos_abort "unrecognized option ($1)"
+			;;
+		esac
+		shift
+	done
+  
+	[[ -z $GNAME ]] && apos_abort 'missing parameter'
+  
+  local OPT="";
+  if [ ! -z $GID ]; then
+    OPT="-g $GID"
+  fi
+  
+  CMD_GROUPMOD=$( which groupmod 2>/dev/null )
+	[ -z "$CMD_GROUPMOD" ] && CMD_GROUPMOD='/usr/sbin/groupmod'	
+	
+  $CMD_GROUPMOD $OPT $GNAME
+  CMD_RES=$?
+  # if [ $? -eq 0 ]; then
+    # GLOBAL_GROUP="/cluster/etc/group"
+    # if [ -f $GLOBAL_GROUP ]; then
+      # if grep -q "^$GROUP:" $GLOBAL_GROUP; then
+        # apos_log "Global group $GROUP already exists: skip"
+      # else
+        # $CMD_LDEGLOBALUSER -g $GROUP 2>/dev/null
+        # if [ $? -ne 0 ]; then
+          # apos_abort "Failure while globalize the local group $GROUP"
+        # fi	
+        # apos_log "Success on globalize the local group $1"
+      # fi
+    # else
+      # apos_abort "global group data does not exist: ${GLOBAL_GROUP}"
+    # fi
+  # fi
+  
+  return $?
+}	
+
+# usage: group_delete <opt>
+function group_delete(){
+  # LONG_OPTIONS is a list of space-separated multi-character options.
+	#  The string must be in the form:
+	#   Example: 'option1 option2 ... optionN'.
+	#  Options that takes an argument must be followed by a colon:
+	#   Example: 'option1: option2 ... optionN:'
+	#  Options with an optional argument must be followed by a double colon:
+	#   Example: 'option1:: option2:: ... optionN'
+	local LONG_OPTIONS='help gname=:'
+	
+	[ $# -le 0 ] && usage_sub "group" "delete" && apos_abort 'missing parameter'
+	
+	/usr/bin/getopt --quiet --quiet-output --longoptions="$LONG_OPTIONS" -- "$@"
+	EXIT_CODE=$?
+	if [ $EXIT_CODE -ne $TRUE ]; then
+		usage_sub "group" "delete"
+		apos_abort "Command line parameter error"
+	fi	
+	local ARGS="$@"
+	eval set -- "$ARGS"
+	
+  local GNAME=""
+  
+	# Make sure to handle the cases for all the options listed in OPTIONS
+	#  and LONG_OPTIONS and to fill up the right script-wide variables.
+	while [ $# -gt 0 ]; do		
+		case "$1" in
+      --gname=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            GNAME=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+			--help)
+				usage_sub "group" "delete"
+				return $TRUE
+			;;
+			--)
+				# "end of argument list"
+				shift
+				break
+			;;
+			*)
+				apos_abort "unrecognized option ($1)"
+			;;
+		esac
+		shift
+	done
+  
+	[[ -z $GNAME ]] && apos_abort 'missing parameter'
+  
+  CMD_GROUPDEL=$( which groupdel 2>/dev/null )
+	[ -z "$CMD_GROUPDEL" ] && CMD_GROUPDEL='/usr/sbin/userdel'	
+	
+	$CMD_GROUPDEL $GNAME 2>/dev/null
+		
+	RET_CODE=$?
+	if [ $RET_CODE -ne 0 ];then
+    apos_abort "Group $GNAME not deleted"
+  fi
+  
+  return $RET_CODE
+}	
+
+# usage: group_list [user]
+function group_list(){
+  #[ $# -le 0 ] && usage && apos_abort 'missing parameter'
+	
+  local ARGS="$@"
+  eval set -- "$ARGS"
+	
+  local USERNAME=""
+   
+	while [ $# -gt 0 ]; do		
+    case "$1" in
+      --user=*)
+        VAR=$(echo $1 | awk -F'=' '{print $2}')
+        if [ ! -z "$VAR" ]; then
+          USERNAME=$VAR
+				else
+					apos_abort 'missing mandatory parameter'
+				fi
+			;;
+			--help)
+				usage_sub "group" "list"
+				exit $TRUE
+			;;
+			--)
+				# "end of argument list"
+				shift
+				break
+			;;
+			*)
+				apos_abort "unrecognized option ($1)"
+			;;
+		esac
+		shift
+	done
+	
+  CMD_GROUPLIST=$( which groups 2>/dev/null )
+	[ -z "$CMD_GROUPLIST" ] && CMD_GROUPLIST='/usr/sbin/groups'	
+  
+  if [ -z $USERNAME ]; then
+    $CMD_GROUPLIST 2>/dev/null
+  else
+    $CMD_GROUPLIST $USERNAME 2>/dev/null
+  fi
+  
+  return $?
+}	
+
+# usage: user_add <opt>
+function user_add(){
+  # LONG_OPTIONS is a list of space-separated multi-character options.
+	#  The string must be in the form:
+	#   Example: 'option1 option2 ... optionN'.
+	#  Options that takes an argument must be followed by a colon:
+	#   Example: 'option1: option2 ... optionN:'
+	#  Options with an optional argument must be followed by a double colon:
+	#   Example: 'option1:: option2:: ... optionN'
+	local LONG_OPTIONS='help uid=: uname=: gname=: secgroups=: shell=: homedir=: comment=: global createhome'
+	
+	[ $# -le 0 ] && usage && apos_abort 'missing parameter'
+	
+	/usr/bin/getopt --quiet --quiet-output --longoptions="$LONG_OPTIONS" -- "$@"
+	EXIT_CODE=$?
+	if [ $EXIT_CODE -ne $TRUE ]; then
+		usage
+		apos_abort "Command line parameter error"
+	fi	
+	local ARGS="$@"
+	eval set -- "$ARGS"
+	
+  local OPT_GLOBAL=$FALSE
+  local OPT_CREATEHOME=$FALSE
+  local USERID=""
+  local GNAME=""
+  local SEC_GROUPS=""
+  local UNAME=""
+  local SHELL=""
+  local HOME_DIR=""
+  local COMMENT=""
+  
+	# Make sure to handle the cases for all the options listed in OPTIONS
+	#  and LONG_OPTIONS and to fill up the right script-wide variables.
+	while [ $# -gt 0 ]; do		
+		case "$1" in
+      --global)
+        OPT_GLOBAL=$TRUE
+        ;;
+      --createhome)
+        OPT_CREATEHOME=$TRUE
+        ;;
+		--uid=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            USERID=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+			--gname=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            GNAME=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+      --secgroups=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            SEC_GROUPS=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+      --uname=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            UNAME=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+      --shell=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            SHELL=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+       --homedir=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            HOME_DIR=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+       --comment=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            COMMENT=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+			--help)
+				usage_sub "user" "add"
+				return $TRUE
+			;;
+			--)
+				# "end of argument list"
+				shift
+				break
+			;;
+			*)
+				apos_abort "unrecognized option ($1)"
+			;;
+		esac
+		shift
+	done
+  
+	[[ -z $UNAME ]] && apos_abort 'missing parameter'
+  
+  local OPT="";
+  if [ ! -z $USERID ]; then
+    if [ "$USERID" == "random" ]; then
+      OPT="-r"
+    else 
+      OPT="-u $USERID"
+    fi
+  fi
+  
+  if [ ! -z $GNAME ]; then
+    OPT="$OPT -g $GNAME"
+  fi
+  
+  if [ ! -z $SEC_GROUPS ]; then
+    OPT="$OPT -G $SEC_GROUPS"
+  fi
+  
+  if [ ! -z $SHELL ]; then
+    OPT="$OPT -s $SHELL"
+  fi
+  
+  if [ ! -z $HOME_DIR ]; then
+    OPT="$OPT -d $HOME_DIR"
+  else
+    if [ "$OPT_CREATEHOME" == $TRUE ]; then
+      OPT="$OPT -m"
+    fi
+  fi
+  
+  if [ ! -z $COMMENT ]; then
+    OPT="$OPT -c $COMMENT"
+  fi
+  
+  if [ "$OPT_GLOBAL" == $TRUE ]; then
+    apos_add_global_user $UNAME $OPT
+  else
+    apos_add_local_user $UNAME $OPT
+  fi
+  
+  return 0
+}	
+
+# usage: user_modify <opt>
+function user_modify(){
+  # LONG_OPTIONS is a list of space-separated multi-character options.
+	#  The string must be in the form:
+	#   Example: 'option1 option2 ... optionN'.
+	#  Options that takes an argument must be followed by a colon:
+	#   Example: 'option1: option2 ... optionN:'
+	#  Options with an optional argument must be followed by a double colon:
+	#   Example: 'option1:: option2:: ... optionN'
+	local LONG_OPTIONS='help uid=: uname=: gname=: secgroups=: shell=: rmgroup=: appendgroup'
+	
+	[ $# -le 0 ] && usage && apos_abort 'missing parameter'
+	
+	/usr/bin/getopt --quiet --quiet-output --longoptions="$LONG_OPTIONS" -- "$@"
+	EXIT_CODE=$?
+	if [ $EXIT_CODE -ne $TRUE ]; then
+		usage
+		apos_abort "Command line parameter error"
+	fi	
+	local ARGS="$@"
+	eval set -- "$ARGS"
+	
+  local USERID=""
+  local GNAME=""
+  local SEC_GROUPS=""
+  local UNAME=""
+  local SHELL=""
+  local RMGROUP=""
+  local OPT_APPENDGROUP=$FALSE
+  
+	# Make sure to handle the cases for all the options listed in OPTIONS
+	#  and LONG_OPTIONS and to fill up the right script-wide variables.
+	while [ $# -gt 0 ]; do		
+		case "$1" in
+      --appendgroup)
+        OPT_APPENDGROUP=$TRUE
+      ;;  
+      --uid=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            USERID=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+			--gname=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            GNAME=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+      --secgroups=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            SEC_GROUPS=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+      --uname=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            UNAME=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+      --shell=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            SHELL=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+      --rmgroup=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            RMGROUP=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+			--help)
+				usage_sub "user" "modify"
+				return $TRUE
+			;;
+			--)
+				# "end of argument list"
+				shift
+				break
+			;;
+			*)
+				apos_abort "unrecognized option ($1)"
+			;;
+		esac
+		shift
+	done
+  
+	[[ -z $UNAME ]] && apos_abort 'missing parameter'
+  
+  if [ ! -z $RMGROUP ]; then
+    
+    CMD_USERREMGROUP=$( which gpasswd 2>/dev/null )
+    [ -z "$CMD_USERREMGROUP" ] && CMD_USERREMGROUP='/usr/bin/gpasswd'	
+      
+    $CMD_USERREMGROUP -d $UNAME $RMGROUP 2>/dev/null
+    
+    RET_CODE=$?
+    if [ $RET_CODE -ne 0 ];then
+      apos_abort "Group $RMGROUP not removed for user $USER"
+    fi
+  
+    return $RET_CODE
+  fi
+  
+  local OPT="";
+  if [ ! -z $USERID ]; then
+    OPT="-u $USERID"
+  fi
+  
+  if [ ! -z $GNAME ]; then
+    OPT="$OPT -g $GNAME"
+  fi
+  
+  if [ ! -z $SEC_GROUPS ]; then
+    if [ $OPT_APPENDGROUP==$TRUE ]; then
+      OPT="$OPT -a -G $SEC_GROUPS"
+    else
+      OPT="$OPT -G $SEC_GROUPS"
+    fi
+  fi
+  
+  if [ ! -z $SHELL ]; then
+    OPT="$OPT -s $SHELL"
+  fi
+  
+  CMD_USERMOD=$( which usermod 2>/dev/null )
+	[ -z "$CMD_USERMOD" ] && CMD_USERMOD='/usr/sbin/usermod'	
+	
+	$CMD_USERMOD $OPT $UNAME 2>/dev/null
+		
+	RET_CODE=$?
+	if [ $RET_CODE -ne 0 ];then
+    apos_abort "User $USER not modified"
+  fi
+  
+  return $RET_CODE
+}	
+
+# usage: user_delete <opt>
+function user_delete(){
+  # LONG_OPTIONS is a list of space-separated multi-character options.
+	#  The string must be in the form:
+	#   Example: 'option1 option2 ... optionN'.
+	#  Options that takes an argument must be followed by a colon:
+	#   Example: 'option1: option2 ... optionN:'
+	#  Options with an optional argument must be followed by a double colon:
+	#   Example: 'option1:: option2:: ... optionN'
+	local LONG_OPTIONS='help uname=:'
+	
+	[ $# -le 0 ] && usage && apos_abort 'missing parameter'
+	
+	/usr/bin/getopt --quiet --quiet-output --longoptions="$LONG_OPTIONS" -- "$@"
+	EXIT_CODE=$?
+	if [ $EXIT_CODE -ne $TRUE ]; then
+		usage
+		apos_abort "Command line parameter error"
+	fi	
+	local ARGS="$@"
+	eval set -- "$ARGS"
+	
+  local UNAME=""
+  
+	# Make sure to handle the cases for all the options listed in OPTIONS
+	#  and LONG_OPTIONS and to fill up the right script-wide variables.
+	while [ $# -gt 0 ]; do		
+		case "$1" in
+      --uname=*)
+          VAR=$(echo $1 | awk -F'=' '{print $2}')
+          if [ ! -z $VAR ]; then
+            UNAME=$VAR
+          else
+            apos_abort 'missing mandatory parameter'
+          fi
+			;;
+			--help)
+				usage_sub "user" "delete"
+				return $TRUE
+			;;
+			--)
+				# "end of argument list"
+				shift
+				break
+			;;
+			*)
+				apos_abort "unrecognized option ($1)"
+			;;
+		esac
+		shift
+	done
+  
+	[[ -z $UNAME ]] && apos_abort 'missing parameter'
+  
+  CMD_USERDEL=$( which userdel 2>/dev/null )
+	[ -z "$CMD_USERDEL" ] && CMD_USERDEL='/usr/sbin/userdel'	
+	
+	$CMD_USERDEL $UNAME 2>/dev/null
+		
+	RET_CODE=$?
+	if [ $RET_CODE -ne 0 ];then
+    apos_abort "User $UNAME not deleted"
+  fi
+  
+  return $RET_CODE
+}	
+
+# usage: user_list
+function user_list(){
+   # LONG_OPTIONS is a list of space-separated multi-character options.
+	#  The string must be in the form:
+	#   Example: 'option1 option2 ... optionN'.
+	#  Options that takes an argument must be followed by a colon:
+	#   Example: 'option1: option2 ... optionN:'
+	#  Options with an optional argument must be followed by a double colon:
+	#   Example: 'option1:: option2:: ... optionN'
+	local LONG_OPTIONS='help'
+	
+	[ $# -le 0 ] && usage && apos_abort 'missing parameter'
+	
+	/usr/bin/getopt --quiet --quiet-output --longoptions="$LONG_OPTIONS" -- "$@"
+	EXIT_CODE=$?
+	if [ $EXIT_CODE -ne $TRUE ]; then
+		usage
+		apos_abort "Command line parameter error"
+	fi	
+	local ARGS="$@"
+	eval set -- "$ARGS"
+	
+  local UNAME=""
+  
+	# Make sure to handle the cases for all the options listed in OPTIONS
+	#  and LONG_OPTIONS and to fill up the right script-wide variables.
+	while [ $# -gt 0 ]; do		
+		case "$1" in
+      --help)
+				usage_sub "user" "list"
+				return $TRUE
+			;;
+			--)
+				# "end of argument list"
+				shift
+				break
+			;;
+			*)
+				apos_abort "unrecognized option ($1)"
+			;;
+		esac
+		shift
+	done
+  
+	CMD_USERLIST=$( which groups 2>/dev/null )
+	[ -z "$CMD_USERLIST" ] && CMD_USERLIST='/usr/sbin/users'	
+  
+  $CMD_USERLIST 2>/dev/null
+  
+  return $?
+}	
+
+#                                              __    __   _______   _   __    _
+#                                             |  \  /  | |  ___  | | | |  \  | |
+#                                             |   \/   | | |___| | | | |   \ | |
+#                                             | |\  /| | |  ___  | | | | |\ \| |
+#                                             | | \/ | | | |   | | | | | | \   |
+#                                             |_|    |_| |_|   |_| |_| |_|  \__|
+#
+parse_cmdline $@
+EXIT_CODE=$?
+apos_outro $0
+
+exit $EXIT_CODE
+# End of file

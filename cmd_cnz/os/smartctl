@@ -1,0 +1,27 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       smartctl
+# Description:
+#       A script to wrap the invocation of smartctl by TS user.
+# Note:
+#       None.
+##
+# Usage:
+#       None.
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Thu Nov 08 2013  - Madhu Muthyala (xmadmut)
+#       First version.
+##
+
+/usr/bin/sudo /usr/sbin/smartctl $@
+exit $?
+

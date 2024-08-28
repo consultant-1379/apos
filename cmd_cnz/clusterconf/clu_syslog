@@ -1,0 +1,254 @@
+#!/bin/bash
+# Author: Satya Deepthi
+
+# Changelog
+# Updated by XPRANSI
+# Date: 27-10-2011
+
+# Funtions
+
+# User-Input validations	
+
+#validation for target
+ validate_target() {
+			target=${!1}
+                        if [ -z $target ] ; then
+                                return 1
+			else
+                        num=$( echo $target | grep -Eq "^[0-9]+$")
+                        chk_num=$?
+                        	if [ $chk_num != 0 ] && [ $target != "control" ]&& [ $target != "payload" ] && [ $target != "all" ] ; then
+ 	                        return 1
+       				fi                      
+			fi
+			echo $target
+	}
+
+# Validation for syslog facility 
+ validate_facility() {
+		facility=${!1}
+                if [ -z $facility ] ; then
+                      return 1
+                else
+		flag=0
+			for i in $(seq 0 7)
+			do
+				 if [ $facility == "local$i" ]
+				  then flag=1
+				 fi		
+			done
+			if [ $flag == 0 ] ; then
+                               return 1
+			fi
+                fi
+			echo $facility
+	}
+
+# validation for file name
+ validate_filename() {
+		filename=${!1}
+		if [ -z $filename ]
+			then return 1
+		fi
+		echo $filename
+	}
+
+# Validation for rule number
+ validate_integer() {
+			threshold=${!1}
+			if [ -z $threshold ] ; then
+				return 1
+			else
+                        num=$( echo $threshold | grep -Eq "^[0-9]+$")
+                        chk_num=$?
+	                        if [ $chk_num -eq 1 ] ; then
+                                return 1
+				fi
+			fi
+			echo $threshold
+	}
+
+# To delete an existing watchdog rule
+ delete() {
+        word=${!1}
+        rule=${!2}
+        rule_num=`validate_integer rule`
+        if [ $? -ne 0 ]
+        then
+                help
+                echo "Enter rule number as argument. Empty values not accepted "
+                exit 1
+        fi
+
+        # Calling cluster_parse file to delete boot rule
+        $clu_file $word --delete $rule_num
+
+	}
+
+# To add/modify an existing rule
+  add_mod() {
+        word=${!1}
+        arg=${!2}
+	target=${!3}
+        facility=${!4}
+	filename=${!5}
+	st=${!6}
+        w1=$(echo $arg | cut -d : -f 2)
+        if [ "$w1" != "$word" ]
+         then
+                echo "Wrong format"
+                help
+                exit 1
+        fi
+
+	if [ $st == "modify" ]
+	then 
+	        rule=$(echo $arg | cut -d: -f 1)
+        	rule_num=`validate_integer rule`
+	        if [ $? -ne 0 ]
+        	then
+                	help
+	                echo "Enter correct format of arguments. "
+        	        exit 1
+	        fi
+	fi
+
+        target_new=`validate_target target`
+        if [ $? -ne 0 ]
+        then
+		help 
+		echo "Target value should be either node number or node type (control/payload) or all. Empty values not accepted."
+                exit 1
+        fi
+
+        facility_new=`validate_facility facility`
+        if [ $? -ne 0 ]
+        then
+		help 
+		echo "Value of facility can be between local0-local7. Empty values not accepted."
+                exit 1
+        fi
+
+        filename_new=`validate_filename filename`
+        if [ $? -ne 0 ]
+        then
+                help
+                echo "Empty values not accepted for filename."
+                exit 1
+        fi
+
+        # Calling cluster_parse file to modify syslog rule
+	new_rule="$word $target_new $facility_new $filename_new"
+	chk_rule="$word $target_new $facility_new"
+	if [ $st == "modify" ]
+	then 
+        	$clu_file $word --modify $rule_num $new_rule $chk_rule
+	else
+		$clu_file $word --add $new_rule $chk_rule
+	fi
+        }
+
+# To display existing alarm rules
+ display() {
+        $clu_file $word --display
+	}
+
+# To display help
+help()
+{
+echo "
+Usage: clu_syslog <option> <rule>
+
+Options:
+-a|--add 	<New-rule>			To add a new $word rule 
+-d|--delete 	<Existing-rule-number>			To delete an existing $word rule
+-m|--modify 	<rule-number>:<new-rule>	To modify an existing $word rule
+-D|--display					To display all the existing rules
+-h|--help					To display help
+
+Rule: $syslog <target> <facility> <file>
+<target> 		<Node-number|control|payload|all>
+<facility> 		Name of the facility (local0-local7)
+<file>			Name of the file where log entries should be stored
+"
+}
+
+
+#Main
+
+
+pwd=`pwd`
+fname="clu_parse"
+clu_file="/opt/ap/apos/bin/clusterconf/$fname"
+word="syslog"
+
+if [ -f /cluster/etc/cluster.conf ];then
+        clu_Conf_path="/cluster/etc/"
+        clu_Conf_file="cluster.conf"
+else
+        echo -e "\n/cluster/etc/cluster.conf file does not exists"
+        exit 1
+fi
+
+        if [ -f $clu_file ];then
+                if [ -x $clu_file ];then
+                 ch=$1
+		 arg2=$2
+		 arg3=$3
+		 arg4=$4
+		 arg5=$5
+
+		  case $ch in
+			--add|-a)
+				st="add"
+				if [ $# -gt 5 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					add_mod word arg2 arg3 arg4 arg5 st
+		   	   	fi
+				;;
+			--delete|-d)  
+				if [ $# -gt 2 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					delete word arg2
+		   	   	fi
+				;;
+			--modify|-m)
+				st="modify"
+				if [ $# -gt 5 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					add_mod word arg2 arg3 arg4 arg5 st
+		   	   	fi
+				;;
+			--display|-D) 
+				if [ $# -gt 1 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					display
+		   	   	fi
+				;;
+			--help|-h) 
+				if [ $# -gt 1 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					help
+				fi
+				;;
+			*) 	echo -e "\nWrong input format, please follow the below format...\n"
+				help
+				;;
+		  esac 
+	else
+                        echo -e "\n$clu_file is not executable"
+                fi
+        else
+                echo -e "\n$clu_file file does not exists"
+        fi
+

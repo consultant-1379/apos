@@ -1,0 +1,675 @@
+#!/bin/bash
+#
+# 
+#
+### END INIT INFO
+
+#. /etc/rc.lotc
+
+#define globals here
+#
+exit_success=0
+exit_failure=1
+
+sa_amf_ha_active=1
+sa_amf_ha_standby=2
+sa_amf_ha_quiesced=3
+sa_amf_ha_quiescing=4
+
+ADMIN_SI_SWAP=7
+GEP1STRING="GEP1"
+GEP2STRING="GEP2"
+ACTIVE=1
+STANDBY=2
+ENABLED=1
+ADMIN_UNLOCK=1
+ADMIN_LOCK=2
+ADMIN_LOCK_INSTANTIATION=3
+ADMIN_UNLOCK_INSTANTIATION=4
+timeout=5
+HWTYPE="/opt/ap/apos/conf/apos_hwtype.sh"
+RDMGMT_PATH="/opt/ap/apos/bin/raidmgmt"
+
+log() {
+	/bin/logger -t apos_ha_operations "$@"
+}
+
+function get_nodeid(){
+
+	#Check which node we are running on
+	#
+	node_id=$(cmwea tipcaddress-get | cut -d , -f 3)
+	
+	if [ $node_id -ne 1 ] && [ $node_id -ne 2 ]; then
+		log "Invalid node id"
+		return $exit_failure
+	fi
+	echo $node_id
+}
+
+function amfnode(){
+
+	local host=$1
+	for n in $(immfind -c SaAmfNode); do
+		if immlist -a saAmfNodeClmNode $n | grep -q "safNode=$host,"; then
+			echo $n
+			return $exit_success
+		fi
+	done
+	log "Node for host [$host] not found"
+	return $exit_failure
+}
+
+function wait_for_admstate() {
+	local dn=$1
+	local state=$2
+	local start=$(date +"%s")
+	local now=$start
+	while test $((now-start)) -le $timeout; do
+		eval $(immlist -a saAmfNodeAdminState $dn)
+		test "$saAmfNodeAdminState" = "$state" && return $exit_failure 
+		usleep 100000
+		now=$(date +"%s")
+	done
+	log "Timeout wait_for_admstate ($state) [$dn]"
+	return $exit_failure
+}
+
+function list_port_disk(){
+
+	#check which gep are we on 
+	#and list the data disks attached to the scsi controllers ports
+	#
+
+	if [ ! -x $HWTYPE ];then
+		log "Error! $HWTYPE does not have execute permission.. exiting"
+		return $exit_failure
+	fi	
+
+	#gep_string=`gawk -F: '{ print $2 }' /proc/mpt/ioc0/summary | cut -d " " -f 2` 
+	gep_string=$($HWTYPE)
+	if [ "$gep_string" = "$GEP1STRING" ]; then
+		disk1=$($RDMGMT_PATH --dfi | awk -F'/' '/phy0/{print $3}')
+		disk2=$($RDMGMT_PATH --dfi | awk -F'/' '/phy4/{print $3}') 
+		if [ -z "$disk1" ]; then
+			disk1="null"
+		fi
+		
+		if [ -z "$disk2" ]; then
+			disk2="null"
+		fi
+		echo "PORT1: $disk1"
+		echo "PORT2: $disk2"
+		return $exit_success
+	fi
+
+	if [ "$gep_string" = "$GEP2STRING" ]; then
+		disk1=$($RDMGMT_PATH --dfi | awk -F'/' '/phy3/{print $3}')
+		disk2=$($RDMGMT_PATH --dfi | awk -F'/' '/phy7/{print $3}')
+
+		if [ -z "$disk1" ]; then
+			disk1="null"
+		fi
+		
+		if [ -z "$disk2" ]; then
+			disk2="null"
+		fi
+
+		echo "PORT1: $disk1"
+		echo "PORT2: $disk2"
+		return $exit_success
+	fi
+
+	return $exit_failure #we support only GEP1 and GEP2 for now
+}
+
+function gep2_port_status(){
+
+	#GEP2 port mapping
+	#	port1 	----------> 3 (scsi controller port)
+	#		----------> scsi_eh_3(thread to monitor)
+	#	port2 	----------> 7 (scsi controller port)
+	#		----------> scsi_eh_7 (thread to monitor)
+	#
+	port=$1
+	if [ $port == 1 ];then
+		pid=$(pidof scsi_eh_3)
+		if [ -z $pid ]; then
+			echo "PORT1: unhealthy"	
+			pid=0
+		fi
+
+		if [ -d /proc/$pid ]; then
+			echo "PORT1: healthy"
+		fi
+		return $exit_success
+	fi
+
+	if [ $port == 2 ];then
+		pid=$(pidof scsi_eh_7)
+		if [ -z $pid ]; then
+			echo "PORT2: unhealthy"	
+			pid=0
+		fi
+
+		if [ -d /proc/$pid ]; then
+			echo "PORT2: healthy"
+		fi
+		return $exit_success
+	fi
+
+	log "Error! Invalid port number received"	
+	return $exit_failure
+}
+
+function gep1_port_status(){
+
+	#Check the status of the port
+	#
+	port=$1
+
+	#GEP1 port mapping
+	#	port1 	----------> 0 (scsi controller port)
+	#		----------> scsi_eh_0 (thread to monitor)
+	#	port2 	----------> 4 (scsi controller port)
+	#		----------> scsi_eh_4  (thread to monitor)
+
+	if [ $port == 1 ];then
+		pid=$(pidof scsi_eh_0)
+		if [ -z $pid ]; then
+			log "PORT1: unhealthy"
+			echo "PORT1: unhealthy"	
+			pid=0
+		fi
+
+		if [ -d /proc/$pid ]; then
+			#log "PORT1: healthy"
+			echo "PORT1: healthy"
+		fi
+		return $exit_success
+	fi
+
+	if [ $port == 2 ];then
+		pid=$(pidof scsi_eh_4)
+		if [ -z $pid ]; then
+			log "PORT2: unhealthy"
+			echo "PORT2: unhealthy"	
+			pid=0
+		fi
+
+		if [ -d /proc/"$pid" ]; then
+			#log "PORT2: healthy"
+			echo "PORT2: healthy"
+		fi
+		return $exit_success
+	fi
+	
+	log "Error! Invalid port number received"	
+	return $exit_failure
+}
+
+function cluster_mip_activate(){
+
+	#get mip details from /cluster/etc/cluster.conf file
+	#
+	if [ ! -f /cluster/etc/cluster.conf ]; then
+		log "Error! /cluster/etc/cluster.conf Not Found"
+		return $exit_failure
+	fi
+
+	mip_list=$(cat /cluster/etc/cluster.conf | grep "mip control" | awk '{print $3}')
+	for mip in $mip_list
+	do
+		if [ "$mip" = "nfs" ] || [ "$mip" = "primary_sc" ] || [ "$mip" = "boot" ]; then
+			log "Skipping $mip activate"
+			continue
+		fi
+
+		#Activate rest of the mips one by one now
+		#
+		log "Activating MIP $mip"
+		if  ! $(/usr/bin/cluster ip --activate $mip)
+		then
+			log "Activating $mip Failed"
+			return $exit_failure
+		fi
+		usleep 500000 #sleep for .5 secs
+	done
+	return $exit_success
+}
+
+function cluster_mip_deactivate(){
+	
+	#get mip details from /cluster/etc/cluster.conf file
+	#
+	if [ ! -f /cluster/etc/cluster.conf ]; then
+		log "Error! /cluster/etc/cluster.conf Not Found"
+		return $exit_failure
+	fi
+
+	mip_list=$(cat /cluster/etc/cluster.conf | grep "mip control" | awk '{print $3}')
+	for mip in $mip_list
+	do
+		if [ "$mip" = "nfs" ] || [ "$mip" = "primary_sc" ] || [ "$mip" = "boot" ]; then
+			log "Skipping $mip deactivate"
+			continue
+		fi
+
+		#Activate rest of the mips one by one now
+		#
+		log "De-Activating MIP $mip"
+		if  ! $(/usr/bin/cluster ip --deactivate $mip)
+		then
+			log "Deactivating $mip Failed"
+			return $exit_failure
+		fi
+	done
+
+	log "Cluster mip de-activate Success"
+	return $exit_success
+}
+
+function lock_node() {
+
+	#This script is similar to what coremw provides cmw-node-lock.
+        #The only difference is our script waits for half a second to
+        #to check the status
+
+	#Check which node we are running on
+	#
+	node_id=$(get_nodeid)
+
+	#Check we are active node
+	#	
+	node_state=$(immlist -a saAmfSISUHAState "safSISU=safSu=SC-$node_id\,safSg=2N\,safApp=OpenSAF,safSi=SC-2N,safApp=OpenSAF" | cut -d = -f2)
+	
+	dn=$(amfnode SC-2-$node_id)
+	if [ -z $dn ]; then
+		log "Invalid Node Name"
+		return $exit_failure
+	fi
+
+	if ! $(immadm -o $ADMIN_LOCK $dn); then
+	       	log "Failed [immadm -o $ADMIN_LOCK $dn]"
+		return $exit_failure
+	fi
+	retval=$(wait_for_admstate $dn 2)
+	if [ "$retval" = "$exit_failure" ]; then
+		log "wait_for_admstate FAILED!"
+		return $exit_failure
+	fi
+	
+	if ! $(immadm -o $ADMIN_LOCK_INSTANTIATION $dn); then
+		log "Failed [immadm -o $ADMIN_LOCK_INSTANTIATION $dn]"
+		return $exit_failure
+	fi
+
+	retval=$(wait_for_admstate $dn 3)
+	if [ "$retval" = "$exit_failure" ]; then
+		log "wait_for_admstate FAILED!"
+		return $exit_failure
+	fi
+
+	log "Node Lock Success!"			
+	return $exit_success
+}
+
+function unlock_node(){
+	
+	#This script is similar to what coremw provides cmw-node-unlock.
+        #The only difference is our script waits for half a second to
+        #to check the status
+
+	#Check which node we are running on
+	#
+	node_id=$(get_nodeid)
+	
+	dn=$(amfnode SC-2-$node_id)
+	if [ -z $dn ]; then
+		log "Invalid Node Name"
+		return $exit_failure
+	fi
+
+	if ! $(immadm -o $ADMIN_UNLOCK_INSTANTIATION $dn); then
+		log "Failed [immadm -o $ADMIN_UNLOCK_INSTANTIATION $dn]"
+		return $exit_failure
+	fi
+	retval=$(wait_for_admstate $dn 2)
+	if [ "$retval" = "$exit_failure" ]; then
+		log "wait_for_admstate FAILED!"
+		return $exit_failure
+	fi
+
+	if ! $(immadm -o $ADMIN_UNLOCK $dn); then
+		log "Failed [immadm -o $ADMIN_UNLOCK $dn]"
+		return $exit_failure
+	fi
+	retval=$(wait_for_admstate $dn 1)
+	if [ "$retval" = "$exit_failure" ]; then
+		log "wait_for_admstate FAILED!"
+		return $exit_failure
+	fi
+
+	log "Node Unlock Success!"		
+	return $exit_success
+}
+
+function reboot_node(){
+
+	node_id=$(get_nodeid)
+
+	#check if the reboot is in progress
+	#
+	rlevel=$(runlevel | cut -d' ' -f2)
+	if [ "$rlevel" = "1" ] || [ "$rlevel" = "6" ]; then
+		log "Reboot is already in progress,exiting..."
+		return $exit_success
+	fi
+
+	hostname=$(</etc/cluster/nodes/control/$node_id/hostname)
+	log "Rebooting $hostname using cluster command"
+	/usr/bin/cluster reboot --node $node_id
+	
+	#sleep for 3 secs to allow reboot to happen
+	#
+	sleep 3
+	
+	#if we are still here go for kill
+	#
+	/sbin/reboot 
+
+	return $exit_success
+}
+
+function reboot_mate(){
+
+	node_id=$(get_nodeid)
+
+	#check for mate id
+	#
+	if [ "$node_id" = "1" ] ; then
+		mate_id=2
+	else
+		mate_id=1
+	fi
+
+	mate_hostname=$(</etc/cluster/nodes/control/$mate_id/hostname)
+	log "Rebooting $mate_hostname using cluster command"
+	/usr/bin/cluster reboot --node $mate_id
+
+	# Wait for 5secs to allow mate node reboot
+	#
+	sleep 5
+
+	#Check if mate node goes for reboot
+	#
+	if ping -c 1 -W 1 $HOSTNAME &> /dev/null; then
+		#make second attempt again
+		log "Rebooting $mate_hostname FAILED. Attempting to issue reboot again"
+		/usr/bin/cluster reboot --node $mate_id
+	else
+		log "Rebooting $mate_hostname SUCCESS" 
+	fi
+	
+	return $exit_success
+}
+
+function update_datadisk_status(){
+
+	node_id=$(get_nodeid)
+	cluster_dir=`cat /usr/share/pso/storage-paths/config`"/ha/nodes/$node_id"
+	if [ ! -d $cluster_dir ]; then
+		mkdir -p $cluster_dir
+	fi
+
+	cluster_file="$cluster_dir/disk_status"
+	log "cluster_file = $cluster_file"
+
+	if [ ! -x $HWTYPE ];then
+		log "Error! $HWTYPE does not have execute permission.. exiting"
+		return $exit_failure
+	fi	
+
+	#gep_string=`gawk -F: '{ print $2 }' /proc/mpt/ioc0/summary | cut -d " " -f 2` 
+	gep_string=$($HWTYPE)
+	if [ "$gep_string" = "$GEP1STRING" ]; then
+		port1=$(gep1_port_status 1)
+		disk1=$($RDMGMT_PATH --dfi | awk -F'/' '/phy0/{print $3}') 
+		if [ -z "$disk1" ]; then
+			disk1="null"
+		fi
+		echo "$port1			Disk: $disk1" >$cluster_file
+		port2=`gep1_port_status 2`
+		disk2=$($RDMGMT_PATH --dfi | awk -F'/' '/phy4/{print $3}') 
+		if [ -z "$disk2" ]; then
+			disk2="null"
+		fi
+		echo "$port2			Disk: $disk2" >>$cluster_file
+		log "data disk status in GEP1"
+		log "$port1                    Disk: $disk1"
+		log "$port2                    Disk: $disk2"
+	fi
+	
+	if [ "$gep_string" = "$GEP2STRING" ]; then
+		port1=$(gep2_port_status 1)
+		disk1=$($RDMGMT_PATH --dfi | awk -F'/' '/phy3/{print $3}') 
+		if [ -z "$disk1" ]; then
+			disk1="null"
+		fi
+		echo "$port1			Disk: $disk1" >$cluster_file
+		port2=$(gep2_port_status 2)
+		disk2=$($RDMGMT_PATH --dfi | awk -F'/' '/phy7/{print $3}') 
+		if [ -z "$disk2" ]; then
+			disk2="null"
+		fi
+		echo "$port2			Disk: $disk2" >>$cluster_file
+		log "data disk status in GEP2"
+		log "$port1                    Disk: $disk1"
+		log "$port2                    Disk: $disk2"
+        fi
+
+	return $exit_success
+}
+
+function  list_raid_disks(){
+
+	#check if the raid is configured
+	#
+	raid_configured=$(cat /proc/mdstat | grep md0)
+
+	if [ -z "$raid_configured" ]; then
+		log "Error! Active RAID not found"
+		return $exit_failure
+	fi
+
+	if [ ! -x $HWTYPE ];then
+		log "Error! $HWTYPE does not have execute permission.. exiting"
+		return $exit_failure
+	fi	
+
+	#gep_string=`gawk -F: '{ print $2 }' /proc/mpt/ioc0/summary | cut -d " " -f 2` 
+	gep_string=$($HWTYPE)
+	if [ "$gep_string" = "$GEP1STRING" ]; then
+		disk1=$($RDMGMT_PATH --dfi | awk -F'/' '/phy0/{print $3}')
+		disk2=$($RDMGMT_PATH --dfi | awk -F'/' '/phy4/{print $3}')
+	fi
+
+	if [ "$gep_string" = "$GEP2STRING" ]; then
+		disk1=$($RDMGMT_PATH --dfi | awk -F'/' '/phy3/{print $3}') 
+		disk2=$($RDMGMT_PATH --dfi | awk -F'/' '/phy7/{print $3}') 
+	fi
+
+	if [ -z "$disk1" ]; then
+		disk1="null"
+		diskOneState="null"
+	else
+		diskOneState=$(mdadm --detail /dev/md0 | grep $disk1 | awk '{print $5 }')
+	fi		
+
+	if [ -z "$disk2" ]; then
+		disk2="null"
+		diskTwoState="null"
+	else
+		diskTwoState=$(mdadm --detail /dev/md0 | grep $disk2 | awk '{print $5 }')
+	fi
+	
+	echo "DISK1:	$disk1	RaidState:	$diskOneState"
+	echo "DISK2:	$disk2	RaidState:	$diskTwoState"
+	
+	return $exit_status
+}
+
+function get_node_adminstate(){
+
+	node_id=$1	
+	adminstate=$(immlist -a saAmfNodeAdminState safAmfNode=SC-$node_id,safAmfCluster=myAmfCluster | cut -d = -f2)	
+	if [ "$adminstate" == "$ADMIN_UNLOCK" ]
+	then
+		echo "UNLOCKED"
+	else
+		echo "ERROR"
+	fi
+}
+
+function get_node_operstate(){
+
+	node_id=$1
+	operstate=$(immlist -a saAmfNodeOperState safAmfNode=SC-$node_id,safAmfCluster=myAmfCluster | cut -d = -f2)
+	if [ "$operstate" == "$ENABLED" ]
+	then
+		echo "ENABLED"
+	else
+		echo "ERROR"
+	fi
+}
+
+function l_node_state() {
+
+	node_id=$(get_nodeid)
+	
+	admin_state=$(get_node_adminstate $node_id)
+	oper_state=$(get_node_operstate $node_id)
+	
+	if [ "$admin_state" != "UNLOCKED" ] 
+	then
+		echo "UNDEFINED admin"
+		return $exit_success
+	fi
+
+	if [ "$oper_state" != "ENABLED" ]
+	then
+		echo "UNDEFINED oper"
+		return $exit_success
+	fi
+
+	l_node_state=$(immlist -a saAmfSISUHAState "safSISU=safSu=SC-$node_id\,safSg=2N\,safApp=OpenSAF,safSi=SC-2N,safApp=OpenSAF" | cut -d = -f2)
+
+	if [ "$l_node_state" = "$sa_amf_ha_active" ]
+	then
+		echo "ACTIVE"
+		return $exit_success
+	fi
+	
+	if [ "$l_node_state" = "$sa_amf_ha_standby" ]
+	then
+		echo "STANDBY"
+		return $exit_success
+	fi
+	
+	if [ "$l_node_state" = "$sa_amf_ha_quiesced" ]
+	then
+		echo "QUIESCED"
+		return $exit_success
+	fi
+		
+	if [ "$l_node_state" = "$sa_amf_ha_quiescing" ]
+	then
+		echo "QUIESCING"
+		return $exit_success
+	fi
+
+	echo "UNDEFINED"
+	return $exit_success
+}
+
+case $1 in
+
+	--mip-activate|-m)
+		cluster_mip_activate
+		retval=$?
+		;;
+
+	--mip-deactivate|-d)
+		cluster_mip_deactivate
+		retval=$?
+		;;
+
+	--lock-node|-l)
+		lock_node
+		retval=$?
+		;;
+
+	--unlock-node|-u)
+		unlock_node
+		retval=$?
+		;;
+	
+	--gep-one-port-status|-p)
+		gep1_port_status $2
+		retval=$?
+		;;
+
+	--list-port-disk|-L)
+		list_port_disk
+		retval=$?
+		;;
+
+	--gep-two-port-status|-s)
+		gep2_port_status $2
+		retval=$?
+		;;
+
+	--reboot-node|-r)
+		reboot_node
+		retval=$?
+		;;
+	
+	--reboot-mate|-t)
+		reboot_mate
+		retval=$?
+		;;
+
+	--update-diskstatus|-U)
+		update_datadisk_status
+		retval=$?
+		;;
+
+	--list-raid-disks|-R)
+		list_raid_disks
+		retval=$?
+		;;
+	--node-state|-n)
+		l_node_state
+		retval=$?
+		;;
+	*)
+		echo "usage: $0
+			--mip-activate|-m 
+			--mip-deactivate|-d
+			--lock-node|-l
+			--unlock-node|-u
+			--list-port-disk|-L
+			--gep-one-port-status|-p
+			--gep-two-port-status|-s
+			--reboot-node|-r
+			--reboot-mate|-t
+			--update-diskstatus|-U
+			--list-raid-disks|-R
+			--node-state|-n
+					"
+		exit $exit_failure
+esac
+
+exit $retval
+
+# End of file

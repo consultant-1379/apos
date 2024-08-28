@@ -1,0 +1,1197 @@
+<?xml version="1.0" encoding="utf-8"?><!-- 
+  Copyright (c) 2011 Ericsson AB.
+  All rights reserved
+
+  DX ECIM Tool-chain generated this file on Oct 7, 2011 4:30:45 PM using 
+    * coremw.m2m (1.3.0.Release)
+    * coremw.m2t (1.3.0.Release)
+    * coremw.dsl (1.3.0.Release)
+    * coremw.imm (1.3.0.Release)
+--><imm:IMM-contents xmlns:imm="http://www.saforum.org/IMMSchema" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.saforum.org/IMMSchema SAI-AIS-IMM-XSD-A.01.01.xsd">
+
+	<object class="Role">
+        <dn>roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value> </value>
+        </attr>
+	     <attr>
+            <name>roleName</name>
+            <value>IpStpCpSystemAdministrator</value>
+        </attr>
+	</object>
+   
+    <object class="Rule">
+        <dn>ruleId=IpStpSaTop_1,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read only permission to ManagedElement MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement</value>
+        </attr>
+    </object>   
+
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFunctions_1,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read only permission to AxeFunctions MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaHealthCheck_1,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-Write-Execute permissions to Health Check Management function MOM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,HealthCheckM,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaSystemHandling_1,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC SystemHandling</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaCpFileSystem_1,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-Write access to MOC CpFileSystemM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,CpFileSystemM,*</value>
+        </attr>
+    </object>
+	
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaAlphaDevice_1,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read and action execute permissions to MOC AlphanumericDeviceM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>5</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,*</value>
+        </attr>
+    </object>
+	
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_1,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder etc used to export timezone information on File Transfer session</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=etc,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_2,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to the folder cp and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,*</value>
+        </attr>
+    </object>
+	
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_3,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/mml and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_4,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder cp/mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_5,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_6,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/files and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_7,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in cp/files</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_8,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/files</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_9,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/printouts and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=printouts.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_10,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder cp/printouts</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=printouts,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_11,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/printouts</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=printouts,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_12,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to the folder health_check and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=health_check,*</value>
+        </attr>
+    </object>	
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_13,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder health_check and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=health_check.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_14,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder health_check</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=health_check,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_15,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder health_check</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=health_check,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_16,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder data_transfer/source/health_check and it's subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=health_check,*</value>
+        </attr>
+    </object>
+		
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_17,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder data_transfer/source/health_check and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=health_check.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_18,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder data_transfer/source/health_check</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=health_check,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_19,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder data_transfer/source/health_check</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=health_check,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_20,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to the folder sw_package/CP and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=CP,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_21,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder sw_package/CP and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=CP.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_22,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder sw_package/CP</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=CP,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_23,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder sw_package/CP</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=CP,FileInformation,*</value>
+        </attr>
+    </object>
+
+        <object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_24,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder /support_data and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,*</value>
+        </attr>
+    </object>
+
+        <object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_25,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder /support_data and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data.*</value>
+        </attr>
+    </object>
+
+        <object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_26,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder /support_data</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileGroup,*</value>
+        </attr>
+    </object>
+
+        <object class="Rule">
+        <dn>ruleId=IpStpSaFileManagement_27,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder /support_data</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSaApCmd_1,roleId=IpStpCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Execute permission to some AP commands</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>regexp:acease|alist|alogfind|bupidls|cfeted|clhls|cmdlls|cpdtest|cpfls|cpfrm|cqrhils|cqrhlls|crdls|fixerls|misclhls|mml|tesrvls|mktr</value>
+        </attr>
+    </object>
+	
+	<object class="Role">
+        <dn>roleId=IpStpCpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value> </value>
+        </attr>
+	     <attr>
+            <name>roleName</name>
+            <value>IpStpCpSecurityAdministrator</value>
+        </attr>
+	</object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSecTop_1,roleId=IpStpCpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to ManagedElement MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSecFunctions_1,roleId=IpStpCpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to AxeFunctions MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSecSystemHandling_1,roleId=IpStpCpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC SystemHandling</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling</value>
+        </attr>
+    </object>
+	
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSecAlphaDevice_1,roleId=IpStpCpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read and action execute permissions to MOC AlphanumericDeviceM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>5</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpSecApCmd_1,roleId=IpStpCpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Execute permission to AP command mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>regexp:mml</value>
+        </attr>
+    </object>
+	
+	<object class="Role">
+        <dn>roleId=IpStpCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value> </value>
+        </attr>
+	     <attr>
+            <name>roleName</name>
+            <value>IpStpCpPrivacyOperator</value>
+        </attr>
+	</object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpTop_1,roleId=IpStpCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC ManagedElement</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpFunctions_1,roleId=IpStpCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC AxeFunctions</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpPriSystemHandling_1,roleId=IpStpCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC SystemHandling</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpPriAlphaDevice_1,roleId=IpStpCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read and action execute permissions to MOC AlphanumericDeviceM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>5</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpPriFileManagement_1,roleId=IpStpCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder etc used to export timezone information on File Transfer session</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=etc,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpPriFileManagement_2,roleId=IpStpCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to the folder cp and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpPriFileManagement_3,roleId=IpStpCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/mml and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpPriFileManagement_4,roleId=IpStpCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder cp/mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpPriFileManagement_5,roleId=IpStpCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpPriApCmd_1,roleId=IpStpCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Execute permission to AP command mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>regexp:mml</value>
+        </attr>
+    </object>
+	
+	<object class="Role">
+        <dn>roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value> </value>
+        </attr>
+	     <attr>
+            <name>roleName</name>
+            <value>IpStpCpOperator</value>
+        </attr>
+	</object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeTop_1,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC ManagedElement</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeFunctions_1,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC AxeFunctions</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeSystemHandling_1,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC SystemHandling</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeHealthCheck_1,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to Health Check Management function MOM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,HealthCheckM</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeHealthCheck_2,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to Category and it's child Mos under Health Check Management function MOM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,HealthCheckM,Category,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeHealthCheck_3,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to Job and it's child Mos under Health Check Management function MOM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,HealthCheckM,Job,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeHealthCheck_4,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to RuleFileManager MOM and it's child Mos</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,HealthCheckM,RuleFileManager,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeCpFileSystem_1,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to CpFileSystemM MOM and it's child MOs</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,CpFileSystemM,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeAlphaDevice_1,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read and action execute permissions to MOC AlphanumericDeviceM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>5</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeFileManagement_1,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder etc used to export timezone information on File Transfer session</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=etc,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeFileManagement_2,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to the folder cp and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeFileManagement_3,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/mml and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeFileManagement_4,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder cp/mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeFileManagement_5,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,*</value>
+        </attr>
+    </object>
+		
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeFileManagement_6,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/files and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeFileManagement_7,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in cp/files</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeFileManagement_8,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/files</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpOpeApCmd_1,roleId=IpStpCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Execute permission to some AP commands</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>regexp:alist|cpdtest|cpfls|cpfrm|crdls|fixerls|misclhls|mml</value>
+        </attr>
+    </object>
+		
+	<object class="Role">
+        <dn>roleId=IpStpCpReadOnly,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value> </value>
+        </attr>
+	     <attr>
+            <name>roleName</name>
+            <value>IpStpCpReadOnly</value>
+        </attr>
+	</object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpRoSystemHandling_1,roleId=IpStpCpReadOnly,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read only permission to ManagedElement MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement</value>
+        </attr>
+    </object>
+	
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpRoSystemHandling_2,roleId=IpStpCpReadOnly,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read only permission to AxeFunctions MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=IpStpRoApCmd_1,roleId=IpStpCpReadOnly,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Execute permission to AP commands alist and mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>regexp:alist|mml</value>
+        </attr>
+    </object>
+	
+</imm:IMM-contents>

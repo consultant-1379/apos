@@ -1,0 +1,22 @@
+Usage:  usermgmt user add [--help] [--gid=group_id] [--global] 
+                          [--gname=group_name] <--uname=username>
+
+Creates a new user account using the values specified.
+ 
+<--gname=>              Specify the Group name.
+
+<--uid=>                Specify the UID.
+
+<--uname=>              Specify the usename.
+
+<--secgroups=>          Specify the secondary groups as a comma separated list.
+
+<--shell=>              Specify the default shell.
+
+<--homedir=>            Specify the home directory.
+
+<--comment=>            Set a comment for the user.
+
+<--global>              Specify if the user must be global.
+
+<--help>                This help.

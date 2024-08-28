@@ -1,0 +1,21 @@
+#
+# This file contains a list of port numbers between 600 and 1024,
+# which should not be used by bindresvport. bindresvport is mostly
+# called by RPC services. This mostly solves the problem, that a
+# RPC service uses a well known port of another service.
+#
+623     # ASF, used by IPMI on some cards
+631     # cups
+636     # ldaps
+657     # rmc, suse fate #311666
+664     # Secure ASF, used by IPMI on some cards
+774     # rpasswd
+921     # lwresd
+993     # imaps
+995     # pops
+705     # agentx
+830     # NETCONF over SSH
+831     # NETCONF over BEEP
+832     # NETCONF for SOAP over HTTPS
+833     # NETCONF for SOAP over BEEP
+

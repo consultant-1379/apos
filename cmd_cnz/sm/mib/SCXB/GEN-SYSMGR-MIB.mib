@@ -1,0 +1,575 @@
+-- =============================================================================
+--
+-- %CCaseFile:	GEN-SYSMGR-MIB.mib %
+-- %CCaseRev:	/main/R1A/1 %
+-- %CCaseDate:	2010-08-27 %
+-- %CCaseDocNo:	12/196 03-CRA 119 1365 Ux %
+-- Author:      qsangov	
+--
+-- =============================================================================
+--
+-- Copyright (C) 2009-2010 by Ericsson AB
+-- S-126 25  STOCKHOLM
+-- SWEDEN, tel int + 46 8 719 0000
+--
+-- This Program may be used and/or copied only with the written permission
+-- from Ericsson AB, or in accordance with the terms and
+-- conditions stipulated in the agreement/contract under which the program
+-- has been supplied.
+--
+-- All rights reserved.
+--
+-- =============================================================================
+--
+-- REVISION HISTORY
+--
+-- Rev        Date         Name        What
+-- ========   ==========   ========    ========
+-- PA1        2009-09-15   qsangov     Generic system manager mib 
+-- PA2	      2009-09-17   qsangov     Updated after first review
+-- A          2010-02-12   qsangov     Firm revision of GEN-SYSMGR_MIB
+-- PB1	      2010-06-28   qsangov     Added object to set system time
+-- A          2010-08-27   uabpnil     New document number
+-- =============================================================================
+
+GEN-SYSMGR-MIB	DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY,
+    OBJECT-TYPE,
+    NOTIFICATION-TYPE,
+    enterprises,
+    Integer32
+	FROM SNMPv2-SMI
+
+    OBJECT-GROUP,
+    NOTIFICATION-GROUP,
+    MODULE-COMPLIANCE
+        FROM SNMPv2-CONF
+    
+    DisplayString,
+    TruthValue,
+    TEXTUAL-CONVENTION,
+    DateAndTime
+        FROM SNMPv2-TC;
+
+
+-- ********************************************************************
+   genSysMgr MODULE-IDENTITY
+        LAST-UPDATED 
+   		"200909150000Z"
+        ORGANIZATION
+		"Ericsson AB "
+	CONTACT-INFO
+		"E-mail: ingvar.froroth@ericsson.com"
+	DESCRIPTION
+		"This MIB module defines objects for managing various System functionality
+                 for a component"
+ 
+	-- Revision history. 
+        REVISION "201006280000Z"
+        DESCRIPTION "See top of document"
+
+        ::= { enterprises ericsson(193) component(177) generic(2) equipment(2) 5 }
+
+
+-- ============================================================================
+-- Definitions of objects
+-- ============================================================================
+
+--ericsson		OBJECT IDENTIFIER ::= {enterprises 193}
+--component		OBJECT IDENTIFIER ::= {ericsson 177}
+--generic		OBJECT IDENTIFIER ::= {component 2}
+--equipment		OBJECT IDENTIFIER ::= {generic 2}
+--genSysMgr            	OBJECT IDENTIFIER ::= {equipment 5}
+
+-------------------------------------------------------------------------------
+
+sysMgrNotifications	    	OBJECT IDENTIFIER ::= { genSysMgr 0 }
+--sysMgrNotificationObjects	OBJECT IDENTIFIER ::= { genSysMgr 1 }
+sysMgrUserObjects	    	OBJECT IDENTIFIER ::= { genSysMgr 2 }
+sysMgrCPUIfObjects		OBJECT IDENTIFIER ::= { genSysMgr 3 }
+sysMgrCtrlPathObjects	        OBJECT IDENTIFIER ::= { genSysMgr 4 }
+sysMgrStartObjects  	        OBJECT IDENTIFIER ::= { genSysMgr 5 }
+sysMgrFileSystemObjects	        OBJECT IDENTIFIER ::= { genSysMgr 6 }
+
+sysMgrConformance		OBJECT IDENTIFIER ::= { genSysMgr 7 }
+sysMgrGroups		        OBJECT IDENTIFIER ::= { sysMgrConformance 1 }
+--sysMgrCompliance		OBJECT IDENTIFIER ::= { sysMgrConformance 2 }
+
+-- ============================================================================
+-- Textual conventions
+-- ============================================================================
+
+GenIfType ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "Values indicating different types of ports."
+    SYNTAX      INTEGER {
+                   rs232front (0),
+		   ethfront (1)
+		   }
+
+UserType ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "Values indicating different user types."
+    SYNTAX      INTEGER {
+                   basic (0),
+                   advanced (1)
+                   }
+
+StartType ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "Values indicating different start types."
+    SYNTAX      INTEGER {
+                   other (0),
+                   boardLevelPowerLoss (1)
+                   }
+
+Control ::= TEXTUAL-CONVENTION
+    STATUS	current
+    DESCRIPTION
+	"Values indicating start or stop."
+    SYNTAX	INTEGER {
+                   disable (0),
+		   enable (1)
+		   }
+
+Confirmation ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "Values indicating yes or no."
+    SYNTAX      INTEGER {
+                   no (0),
+                   yes (1)
+                   }
+
+--acknowledge ::= TEXTUAL-CONVENTION
+--    STATUS	current
+--    DESCRIPTION
+--	"Values indicating ok or not ok."
+--    SYNTAX	INTEGER {
+--                   nok (0),
+--		   ok (1)
+--		   }
+
+--action ::= TEXTUAL-CONVENTION
+--    STATUS	current
+--    DESCRIPTION
+--	"Values indicating start or stop."
+--    SYNTAX	INTEGER {
+--                   stop (0),
+--		   start (1)
+--		   }
+
+FaultStatus ::= TEXTUAL-CONVENTION
+    STATUS	current
+    DESCRIPTION
+	"Values indicating fault or nofault/working."
+    SYNTAX	INTEGER {
+                   fault (0),
+		   nofault (1)
+		   }
+
+SystemAction::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "Values indicating actions to be taken by the system."
+    SYNTAX      INTEGER {
+                   noAction(0),
+                   restartBoard(1),
+                   reinitialiseSupervision(2)
+                   }
+
+
+-- ----------------------------------------------------------------------------
+-- sysMgrNotifications OBJECT IDENTIFIER ::= { genSysMgr 0 }
+-- ----------------------------------------------------------------------------
+
+ctrlPathLost NOTIFICATION-TYPE 
+      STATUS      current 
+      DESCRIPTION 
+        "Sent by SysMgr block when a control path is considered down." 
+      ::= { sysMgrNotifications 1 } 
+
+fileSystemFault NOTIFICATION-TYPE 
+      STATUS      current 
+      DESCRIPTION 
+        "Sent to indicate the File system fault. Manual action is necessary to
+         recover from this fault." 
+      ::= { sysMgrNotifications 2 } 
+
+rootLoggedIn NOTIFICATION-TYPE 
+      STATUS      current 
+      DESCRIPTION 
+        "Sent to indicate the root user logged-in." 
+      ::= { sysMgrNotifications 3 } 
+
+-- ----------------------------------------------------------------------------
+-- sysMgrUserObjects OBJECT IDENTIFIER ::= { genSysMgr 2 }
+-- ----------------------------------------------------------------------------
+
+-- ----------------------------------------------------------------------------
+-- SCALAR OBJECTS
+-- ----------------------------------------------------------------------------
+rootLogInStatus OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+      "true(1):  The root user has successfully logged in since last time
+                 this object was written to false(2).
+                 In case no root login has been scheduled, this may indicate
+                 a serious intrusion has occurred.
+
+       false(2): The root user has not logged in since last time this object
+                 was written to false(2).
+
+       A Management Station can set it to false(2), but not to true(1)." 
+    ::= { sysMgrUserObjects 1 }
+
+-- ----------------------------------------------------------------------------
+-- Table 
+-- ----------------------------------------------------------------------------
+sysMgrUserTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF SysMgrUserEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table is a list of usertypes for
+	accessing this component, the parameters apply both to
+	OS and switching CLI."
+    ::= { sysMgrUserObjects 2 }
+
+sysMgrUserEntry OBJECT-TYPE
+    SYNTAX      SysMgrUserEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry in the User Management table"
+    INDEX { userMgmType }
+    ::= { sysMgrUserTable 1 }
+
+SysMgrUserEntry ::= SEQUENCE {
+    userMgmType	UserType,
+    userMgmName DisplayString,
+    userMgmPwd	DisplayString,
+    userResetPwd	Confirmation
+--    userMgmRowStatus  RowStatus, fixed size table, no rowstatus
+    }
+
+userMgmType OBJECT-TYPE
+    SYNTAX	UserType
+    MAX-ACCESS	not-accessible
+    STATUS	current
+    DESCRIPTION
+	"Index to this table, each row is a user type.
+	  basic(0):	This user has read only privileges.
+
+	  advanced(1):	This user has access to all basic user commands, 
+	                and also a subset of the write commands."
+    ::= { sysMgrUserEntry 1 }
+
+userMgmName OBJECT-TYPE
+    SYNTAX	DisplayString
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Userid of the usertype indicated by the row."
+    ::= { sysMgrUserEntry 2 }
+
+userMgmPwd OBJECT-TYPE
+    SYNTAX	DisplayString
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+	"A set of this object will change the active password for this user. 
+         A get of this object will not display the password."
+    ::= { sysMgrUserEntry 3 }
+
+userResetPwd OBJECT-TYPE
+    SYNTAX	Confirmation
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+	"A set of this object will reset the password to factory default."
+    ::= { sysMgrUserEntry 4 }
+
+
+-- ----------------------------------------------------------------------------
+--   sysMgrCPUIfObjects   OBJECT IDENTIFIER ::= { genSysMgr 3 }
+-- ----------------------------------------------------------------------------
+
+cpuIfTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF CPUIfEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "List of interfaces connected to the CPU and their properties."
+    ::= { sysMgrCPUIfObjects 1 }
+
+cpuIfEntry OBJECT-TYPE
+    SYNTAX      CPUIfEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry int the CPU If Table."
+    INDEX { cpuIfType }
+    ::= { cpuIfTable 1 }
+
+CPUIfEntry ::= SEQUENCE {
+    cpuIfType		GenIfType,
+    cpuIfTime		Integer32,
+    cpuIfState	        Control
+--    userCPUIfRowStatus  RowStatus, fixed size table, no rowstatus
+    }
+
+cpuIfType OBJECT-TYPE
+    SYNTAX      GenIfType
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The index to this table, each row is an If.
+	  rs232front(0)
+	  ethfront (1)"
+    ::= { cpuIfEntry 1 }
+
+cpuIfTime OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The time in which the If will stay open if opened.
+	Value is in minutes, 0 means forever."
+    ::= { cpuIfEntry 2 }
+
+cpuIfState OBJECT-TYPE
+    SYNTAX      Control
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Opens or closes a communication interface, reading this object
+	gives the status of the interface, default state is disable (0)."
+    DEFVAL {0}
+    ::= { cpuIfEntry 3 }
+
+
+-- ----------------------------------------------------------------------------
+-- sysMgrCtrlPathObjects OBJECT IDENTIFIER ::= { genSysMgr 4 }
+-- ----------------------------------------------------------------------------
+
+ctrlPathMgmTimeout OBJECT-TYPE
+    SYNTAX	Integer32
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+	"This object specfies the supervision interval in seconds. The default
+        value is 0, which implicitely means that the function is disabled.
+
+        When a non-zero supervision interval has been set by the manager a 
+        timer will be started, and the manager must make sure to set this
+        object again before the specified supervision interval expires. If
+        the object has not been set before the specified supervision interval
+        expires then the notification ctrlPathLost will be sent and the
+	system will take action based on the ctrlPathMgmAction object."
+    ::= { sysMgrCtrlPathObjects 1 }
+
+ctrlPathMgmAction OBJECT-TYPE
+    SYNTAX      SystemAction
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object specfies the action to be taken by the system when the 
+         control path supervision is lost i.e ctrlPathMgmTimeout expires.
+
+         noAction(0) - No action is taken by system
+
+         restartBoard(1) - Restart the board when control path supervision
+                           times out
+         reinitialiseSupervision(2) - Reinitialise control path supervision 
+                           with the previously configured timeout value"  
+    DEFVAL {restartBoard}
+    ::= { sysMgrCtrlPathObjects 2 }
+
+-- ----------------------------------------------------------------------------
+-- sysMgrStartObjects OBJECT IDENTIFIER ::= { genSysMgr 5 }
+-- ----------------------------------------------------------------------------
+
+startType OBJECT-TYPE
+    SYNTAX	StartType
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"The last start type performed by the component."
+    ::= { sysMgrStartObjects 1 }
+
+generalPurposeRegisterA OBJECT-TYPE
+    SYNTAX	Integer32
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+	"General purpose register available for a manager to use if needed,
+        the object will be set default to 0 at system start."
+    ::= { sysMgrStartObjects 2 }
+
+systemTime OBJECT-TYPE
+    SYNTAX      DateAndTime 
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+	"Object to set and get system time.
+
+	 A set on this object will update the Linux and RTC with the time
+	 value provided. Also, any currently running NTP services will be 
+	 stopped.
+
+	A get on this object will return the current Linux system time."
+    ::= { sysMgrStartObjects 3 }
+
+-- ----------------------------------------------------------------------------
+-- sysMgrFileSystemObjects OBJECT IDENTIFIER ::= { genSysMgr 6 }
+-- ----------------------------------------------------------------------------
+fileSystemStatus OBJECT-TYPE
+    SYNTAX      FaultStatus
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "fault(0):   File system is malfunctioning, manual action required.
+         nofault(1): File system is working properly."
+    ::= { sysMgrFileSystemObjects 1 }
+
+-- ----------------------------------------------------------------------------
+-- sysMgrConformance OBJECT IDENTIFIER ::= { genSysMgr 7 }
+-- ----------------------------------------------------------------------------
+
+-- ----------------------------------------------------------------------------
+-- sysMgrGroups OBJECT IDENTIFIER ::= { sysMgrConformance 1 }
+-- ----------------------------------------------------------------------------
+
+notificationGroup1 NOTIFICATION-GROUP
+    NOTIFICATIONS {
+       ctrlPathLost
+       }
+    STATUS	current
+    DESCRIPTION
+	"See corresponding notification description."
+    ::= { sysMgrGroups 1 }
+
+notificationGroup2 NOTIFICATION-GROUP
+    NOTIFICATIONS {
+       fileSystemFault 
+       }
+    STATUS	current
+    DESCRIPTION
+	"See corresponding notification description."
+    ::= { sysMgrGroups 2 }
+
+notificationGroup3 NOTIFICATION-GROUP
+    NOTIFICATIONS {
+       rootLoggedIn 
+       }
+    STATUS	current
+    DESCRIPTION
+	"See corresponding notification description."
+    ::= { sysMgrGroups 3 }
+
+userMgmObjectGroup OBJECT-GROUP
+    OBJECTS {
+       rootLogInStatus,
+--       userMgmType,
+       userMgmName,
+       userMgmPwd,
+       userResetPwd
+       }
+    STATUS	current
+    DESCRIPTION
+	"See corresponding object description."
+    ::= { sysMgrGroups 4 }
+
+cpuIfObjectGroup OBJECT-GROUP
+    OBJECTS {
+--       userCPUIfType,
+       cpuIfTime,
+       cpuIfState
+       }
+    STATUS      current
+    DESCRIPTION
+        "See corresponding object description."
+    ::= { sysMgrGroups 5 }
+
+ctrlPathObjectGroup OBJECT-GROUP
+    OBJECTS {
+       ctrlPathMgmTimeout,
+       ctrlPathMgmAction
+       }
+    STATUS	current
+    DESCRIPTION
+	"See corresponding object description."
+    ::= { sysMgrGroups 6 }
+
+startObjectGroup OBJECT-GROUP
+    OBJECTS {
+       	startType,
+	generalPurposeRegisterA,
+        systemTime
+       }
+    STATUS	current
+    DESCRIPTION
+	"See corresponding object description."
+    ::= { sysMgrGroups 7 }
+
+fileSystemObjectGroup OBJECT-GROUP
+    OBJECTS {
+       fileSystemStatus
+       }
+    STATUS	current
+    DESCRIPTION
+	"See corresponding object description."
+    ::= { sysMgrGroups 8 }
+-- ----------------------------------------------------------------------------
+-- sysMgrCompliance OBJECT IDENTIFIER ::= { sysMgrConformance 2 }
+-- ----------------------------------------------------------------------------
+
+sysMgrCompliance MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+	"The compliance statement for components instrumenting this mib module"
+    MODULE -- this module
+
+    GROUP  notificationGroup1
+    DESCRIPTION 
+        "Implementation of this group is optional"
+
+    GROUP  notificationGroup2
+    DESCRIPTION 
+        "Implementation of this group is optional"
+
+    GROUP notificationGroup3 
+    DESCRIPTION 
+        "Implementation of this group is optional"
+
+    GROUP  userMgmObjectGroup
+    DESCRIPTION 
+        "Implementation of this group is optional"
+
+    GROUP  cpuIfObjectGroup 
+    DESCRIPTION
+        "Implementation of this group is optional"
+
+    GROUP  ctrlPathObjectGroup
+    DESCRIPTION
+        "Implementation of this group is optional"
+
+    GROUP  startObjectGroup
+    DESCRIPTION
+        "Implementation of this group is optional"
+
+    GROUP  fileSystemObjectGroup 
+    DESCRIPTION
+        "Implementation of this group is optional"
+
+    ::= { sysMgrConformance 2 }
+
+END

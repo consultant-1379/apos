@@ -1,0 +1,1518 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#      vlanrm
+# Description:
+#       To remove an existing VLAN in the system
+##
+#Usage on NON BSP nodes
+#Usage : vlanrm -v name, tag ... [-f]
+#
+#Usage on BSP nodes
+#Usage : vlanrm -v name, tag ... [-f]
+#        vlanrm -q name ... [ -f] 
+#
+#Usage on virtual environment
+#Usage : vlanrm -a name ... [-f]
+#
+##
+# Changelog:
+# - Wed 18 Jan 2017 - Neeraj Kasula(XNEEKAS)
+#   vlan command inhibition changes in virtualized environment
+# - Fri 11 Nov 2016 - Swapnika Baradi (XSWAPBA)
+#       Fix for TR HU79440(Adding ETX character at confirmation)
+# - Thu 14 Jul 2016 - Rajashekar Narla (XCSRAJN)
+#	  Fix provided for the issue when VNIC is given as a VLAN NAme
+# - Fri 23 Jun 2016 - Rajashekar Narla (XCSRAJN)
+#	  Fix provided for the issue related to deleting AP domain vlans.
+# - Fri 11 Mar 2016 - Nazeema Begum (XNAZBEG)
+#	  fix provided for TR HU12946 
+# - Wed 09 Mar 2016 - Baratam Swetha(XSWEBAR)
+# 	To Handle TR HU13076 (vlanrm commands needs to handle ipsec configuration)
+# - Tue 14 JUN 2016 - Rajashekar Narla (XCSRAJN)
+#   Fixed provided for TRs HU91096, HU83568 and HU83692
+# - Mon 30 May 2016 - Rajashekar Narla (XCSRAJN)
+#   Fixed minor issues found during regression test
+# - Tue 12 APR 2016 - Mallikarjuna Rao Dogiparthi (XMALRAO)
+#   Added the "vlanrm -a" option as per the IS "vAPZ Networking"
+# - Mon Mar 07 2016 - Crescenzo Malvone (ECREMAL)
+#       apos servicemgmt adaptation
+# - Fri Nov 27 2015 - Antonio Buonocunto (EANBUON)
+#       apos servicemgmt adaptation
+# - Thu 17 Dec 2015 - Roni Newatia(XRONNEW)
+#  VLAN_TYPE in BSP is handled for TR HU27377
+# - Fri 6 Nov 2015 - PratapReddy Uppada(XPRAUPP)
+# Fix for TR HU27377
+# - Thur 1 OCT 2015 - Raghavendra Koduri (XKODRAG)
+#	changed error code to a valid error code	
+# - Mon 11 MAY 2015 - Sindhuja Palla (XSINPAL)
+#	1. Replaced option -e to option -v to remove APG external vlans on BSP nodes
+#	2. Replaced option -i to option -q  to remove APT vlans on BSP nodes
+# - Tue 6 APR 2015 - Sindhuja Palla (XSINPAL)
+#	1. Enable new option -e to remove APG external vlans on BSP nodes
+#	2. Enable new option -i to remove APT vlans on BSP nodes
+# - Thu 27 Nov 2014 - Madhu Muthyala (XMADMUT)
+#	Updated to inhibit vlanrm command in virtualized architecture
+# - Tue 24 Jun 2014 - Fabrizio Paglia (XFABPAG)
+#       Added procedure to remove IPSec policies related to VLAN
+#       The procedure is skipped if ACS_ASECBIN is not installed
+# - Mon 19 May 2014 - Fabrizio Paglia (XFABPAG)
+#       Bugs fixed
+# - Fri 16 May 2014 - Fabrizio Paglia (XFABPAG)
+#       Removed unused functions, variables and commented old code
+#       Renamed get_valn_adapter() in get_vlan_adapter()
+# - Thu 8 May 2014 - Fabrizio Paglia (XFABPAG)
+#       Bug fixed
+# - Wed 30 Apr 2014 - Torgny Wilhelmsson (XTORWIL)
+#       Rejection call to apos_common
+# - Tue 29 Apr 2014 - Torgny Wilhelmsson (XTORWIL)
+#       Rejection of removal of Public VLAN in Cable less configuration
+# - Wed 23 Apr 2014 - Torgny Wilhelmsson (XTORWIL)
+#       Change of error exit printouts  'updation'->'update', 'sync'->'synchronized'
+# - Tue Mar 25 2014 - Fabrizio Paglia (XFABPAG)
+#	Removed extra echo(es) from remove_network and remove_gateway
+# - Mon Mar 24 2014 - Fabrizio Paglia (XFABPAG)
+#	Public VLAN can be defined as 'Public', 'public', 'pUbLiC' etc.
+# - Tue Mar 18 2014 - Fabrizio Paglia (XFABPAG)
+#	Additional gateways for VLAN Public expected as public_gw<n> in cluster.conf
+#	Numbers allowed in VLAN name (as future implementation of vlandef/netdef)
+# - Mon Mar 17 2014 - Fabrizio Paglia (XFABPAG)
+#	Doesn't remove the inferface in case of VLAN Public (reboot needed)
+# - Fri Mar 14 2014 - Fabrizio Paglia (XFABPAG)
+#	Adaptation to the new behaviour of VLAN Public:
+#	 When Public VLAN is removed, network settings are moved back to
+#	 the native physical interface (eth1 or bond1)
+# - Tue Aug 19 2013 - Greeshmalatha C (xgrecha)
+#	1. Fix provided for TR HR64397 
+# - Thu Jun 20 2013 - Furquan Ullah (XFURULL)
+#	1. Fix provided for TR HR48007       
+# - Tue Sep 11 2012 - Sameer Chandra (XSAMECH)
+#		1.Removed traces related to network from cluster.conf 	
+# - Wed Aug 01 2012 - Pratap Reddy (XPRAUPP)
+#       rework done to include
+#               1. Improve the code quality
+#               2. Removed 'own/ther' phrases
+# - Thu Mar 10 2011 - Satya Deepthi (XSATDEE)
+# - Thu Mar 10 2011 - Madhu- Thu Mar 10 2011 - Madhu Aravabhumi (XMADARA)
+#	First version.
+##
+
+# LOAD APOS COMMON FUNCTION
+APOS_COMMON="${AP_HOME:-/opt/ap}/apos/conf/apos_common.sh"
+source $APOS_COMMON
+
+# paths and files variables
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+LOG_TAG='vlanrm'
+LOG_DIR=/tmp
+LOG_FILE=vlanrm.log
+PROC_VLAN=/proc/net/vlan
+CLUSTER_CONF=/cluster/etc/cluster.conf
+CMD_CLUSTER_CONF=/opt/ap/apos/bin/clusterconf/clusterconf
+VLAN_MAPING_CONF=/cluster/etc/ap/apos/vlan_adapter_maping.conf
+LOCK_FILE=$(apos_create_brf_folder clear)/.vlan_adapter_maping.lock
+
+# command-list
+CMD_GREP=/usr/bin/grep
+CMD_AWK=/usr/bin/awk
+CMD_CAT=/bin/cat
+CMD_CUT=/usr/bin/cut
+CMD_SSH=/usr/bin/ssh
+CMD_LOG=/bin/logger
+CMD_HEAD=/usr/bin/head
+CMD_LS=/bin/ls
+CMD_CUT=/usr/bin/cut
+CMD_TOUCH=/usr/bin/touch
+CMD_PING=/bin/ping
+CMD_GETOPT=/usr/bin/getopt
+CMD_RM=/bin/rm
+CMD_WC=/usr/bin/wc
+CMD_PING=/bin/ping
+CMD_SED=/usr/bin/sed
+CLUS_MGMT_OPTS='mgmt --cluster'
+CMD_IMMLIST=/usr/bin/immlist
+CMD_IMMCFG=/usr/bin/immcfg
+CMD_HWTYPE='/opt/ap/apos/conf/apos_hwtype.sh'
+
+# script-wide variables
+OPT_VLAN=$FALSE
+OPT_INTERNAL=$FALSE
+OPT_FORCE=$FALSE
+OPT_VNAME_LIST=()
+OPT_VTAG_LIST=()
+OPT_VNIC_LIST=()
+OPT_DOMAIN_LIST=()
+VLAN_NAME=''
+VLAN_TAG=''
+VLAN_ADAPTER=''
+VLAN_MAX_LEN=32
+TAG_MAX_SIZE=4094
+TAG_MIN_SIZE=1
+LOCK_TIME=15
+LNODE=''
+LHOST=''
+RNODE=''
+RHOST=''
+NETWORK=''
+INTERFACE=''
+PEER_NODE_UP=''
+RM_INTERACE=''
+CNT=0
+Public_vlan_name="Public"
+Public_vlan_name_lowercase="public"
+IPSEC_CONF_DIR="/etc/racoon"
+IPSEC_SETKEY_FILE="setkey.conf"
+IPSEC_RACOON_FILE="racoon.conf"
+IPSEC_PSK_FILE="psk.txt"
+VLAN_TYPE=''
+SHELF_ARCH=''
+HW_TYPE=''
+TMP_MAPPING_FILE=''
+ipaddresses_array=()
+
+#exit-code error flags
+exit_sucs=0
+exit_fail=1
+exit_usge=2
+exit_cmnd_abrt=3
+exit_cmdx_fail=4
+exit_clus_fail=5
+exit_vlan_eror=6
+exit_vlan_delt=7
+exit_ilgl_optn=20
+exit_ures_valu=22
+exit_publ_eror=23
+exit_sync_eror=24
+exit_apache_eror=25
+
+exit_CableLessDefined=43
+exit_CableLessDefined_string="Illegal option in this system configuration"
+exit_virtual_arch=44
+#----------------------------------------------------------------------------------------
+function INFO(){
+        echo "[$(date --utc +'%Y-%m-%d %H:%M:%S')] $@" >>$LOG_DIR/$LOG_FILE
+}
+
+#-------------------------------------------------------------------------------------------------------
+# log to system-log
+function log(){
+	$CMD_LOG -t "$LOG_TAG" "$*"
+}
+
+#-------------------------------------------------------------------------------------------------------
+function abort(){
+        console_print "Error when executing (general fault)"
+        log "ABORTING: <"ERROR: $1">"
+        log "END: <$0>"
+	unlock
+        exit $exit_fail
+}
+
+#-------------------------------------------------------------------------------------------------------
+function console_print(){
+        echo -e "$1"
+}
+
+#-------------------------------------------------------------------------------------------------------
+
+function TRACE_ENTER(){
+        INFO "$1() >>"
+}
+
+#----------------------------------------------------------------------------------------
+function TRACE_LEAVE(){
+        INFO "$1() <<"
+}
+#----------------------------------------------------------------------------------------
+function usage(){
+if isBSP; then
+	$CMD_CAT << EOF
+Usage : vlanrm -v name,tag ... [-f]
+        vlanrm -q name ... [-f]
+
+EOF
+elif isvAPG; then
+	$CMD_CAT << EOF
+	Usage : vlanrm -a name ... [-f]
+
+EOF
+else
+	$CMD_CAT << EOF
+Usage : vlanrm -v name,tag ... [-f]
+
+EOF
+fi
+}
+
+#-------------------------------------------------------------------------------------------------------
+function usage_error(){
+        console_print "$1"
+        usage
+        exit $2
+}
+
+#-------------------------------------------------------------------------------------------------------
+function console_abort(){
+        console_print "$1\n"
+        unlock
+	exit $2
+}
+
+#-------------------------------------------------------------------------------------------------------
+
+function trylock(){
+        # check if the lock file exist first
+        [ ! -f $LOCK_FILE ] && return $exit_sucs
+        local CNT=0
+        while [ $CNT -le $LOCK_TIME ]
+        do
+        	[ -f $LOCK_FILE ] && {
+          		sleep 1
+        		((CNT=CNT + 1))
+        	}
+        	[ ! -f $LOCK_FILE ] && break
+        done
+
+        [ -f $LOCK_FILE ] && return $exit_fail
+        return $exit_sucs                                                                                                    
+}
+
+#-------------------------------------------------------------------------------------------------------
+function lock(){
+        # check if we can lock the adapter-mapping configuration file.
+        if ! trylock; then
+	        abort "Unable to lock the vlan-adapter mapping file"
+        fi
+       
+	# Ok. we can proceed with locking now.
+        $CMD_TOUCH $LOCK_FILE
+}
+
+#------------------------------------------------------------------------------------------------------
+function unlock(){
+	$CMD_RM -f $LOCK_FILE
+	[ -f $TMP_MAPPING_FILE ] && $CMD_RM -f $TMP_MAPPING_FILE
+}
+
+#------------------------------------------------------------------------------------------------------
+function vlanrm_abort() {
+	TRACE_ENTER $FUNCNAME
+	local SIGNAL=$1
+	trap '' SIGINT SIGHUP SIGTERM
+	# Something wrong. fallback with older cluster config
+	rollback_vlanrm
+
+	# Roll back mapping file changes
+	cp $TMP_MAPPING_FILE $VLAN_MAPING_CONF
+
+	# cleanup
+	[ -f $TMP_MAPPING_FILE ] && $CMD_RM -f $TMP_MAPPING_FILE
+	
+	$CMD_CLUSTER_CONF mgmt --cluster --abort &> /dev/null \
+	|| console_abort "Error when executing (general fault)" $exit_fail
+	
+	abort "ERROR: Interrupt($SIGNAL) received, Aborting changes" $exit_clus_fail
+}
+
+#-------------------------------------------------------------------------------------------------------
+function sanity_check(){
+
+	TRACE_ENTER $FUNCNAME
+
+	# trap the signals
+	trap "vlanrm_abort SIGINT" SIGINT
+	trap "vlanrm_abort SIGHUP" SIGHUP
+	trap "vlanrm_abort SIGTERM" SIGTERM
+
+	SHELF_ARCH=$($CMD_IMMLIST -a apgShelfArchitecture axeFunctionsId=1 | ${CMD_AWK} -F "=" '{print $2}' 2>/dev/null)
+	[ $? -ne 0 ] &&  abort "ERROR: Failed to get apgShelfArchitecture "
+
+	HW_TYPE=$( $CMD_HWTYPE 2>/dev/null)
+	[ -z "$HW_TYPE" ] && abort "ERROR: HW_TYPE not found"
+	
+	[ ! -f ${CLUSTER_CONF}   ] && abort "File [$CLUSTER_CONF] not found"
+
+	# keep the node info ready for later use.
+	LNODE=$(</etc/cluster/nodes/this/id)
+	RNODE=$(</etc/cluster/nodes/peer/id)
+	LHOST=$(</etc/cluster/nodes/this/hostname)
+	RHOST=$(</etc/cluster/nodes/peer/hostname)
+
+	if ! isvAPG; then
+	NETWORK='public'
+
+	# The last awk command remove the VLAN tag in case Public VLAN is defined
+	INTERFACE=$(${CMD_GREP} ^ip $CLUSTER_CONF | ${CMD_GREP} -w $NETWORK | ${CMD_HEAD} -1 | ${CMD_AWK} '{ print $3}' | ${CMD_AWK} -F'.' '{ print $1 }')
+	[ -z $INTERFACE ] && abort "Public adaptor not found"
+	fi
+
+	TRACE_LEAVE $FUNCNAME
+	return $TRUE
+
+}
+
+
+#----------------------------------------------------------------------------------------
+function ping_peer(){
+        PEER_NODE_UP=$FALSE
+	${CMD_PING} -c 1 -W 1 $RHOST &>/dev/null
+	[ $? -eq 0 ] && PEER_NODE_UP=$TRUE
+}
+
+#-------------------------------------------------------------------------------------------------------
+function remove_gateway(){
+	
+	local CNT
+	local INDEX=0
+	if isvAPG ; then
+		RM_INTERACE=${VLAN_NAME}"_gw"
+	else
+		if [ "$VLAN_NAME" != "Public" ] ; then
+			RM_INTERACE="public_vlan"$VLAN_TAG"_gw"
+		else
+			RM_INTERACE="public_gw"
+		fi
+	fi
+
+	CNT=$( $CMD_CLUSTER_CONF route --display |$CMD_GREP $RM_INTERACE | $CMD_WC -l )
+	while [ $INDEX -lt $CNT ]
+	do
+		RULE_NO=$( $CMD_CLUSTER_CONF route --display |$CMD_GREP $RM_INTERACE | $CMD_HEAD -1 | $CMD_AWK '{print $1}' )
+		$CMD_CLUSTER_CONF route --m_delete $RULE_NO &>/dev/null
+               	[ $? -ne 0 ] && console_abort "ERROR: Cluster configuration update failed" $exit_clus_fail
+               	((INDEX=INDEX + 1))
+	done
+
+}
+
+#-------------------------------------------------------------------------------------------------------
+function remove_alias(){
+	
+	if isvAPG; then
+	RULE_NO=$( $CMD_CLUSTER_CONF interface --display | $CMD_GREP alias | $CMD_GREP -w "$INTERFACE" | $CMD_AWK '{print $1}' )
+	else
+ 	RULE_NO=$( $CMD_CLUSTER_CONF interface --display | $CMD_GREP alias | $CMD_GREP -w "$VLAN_TAG" | $CMD_AWK '{print $1}' )
+	fi
+	[ ! -z "$RULE_NO" ] && {
+ 		$CMD_CLUSTER_CONF interface --m_delete $RULE_NO &>/dev/null 
+		[ $? -ne 0 ] && console_abort "ERROR: Cluster configuration update failed" $exit_clus_fail
+	}	
+
+}
+
+#-------------------------------------------------------------------------------------------------------
+function remove_mip(){
+
+	if isvAPG; then
+			RM_INTERACE=$VLAN_NAME"_mip"
+	else
+		if [ "$VLAN_NAME" != "Public" ] ; then
+			RM_INTERACE="public_vlan$VLAN_TAG"
+		else
+			RM_INTERACE="public"
+		fi
+	fi
+	RULE_NO=$( $CMD_CLUSTER_CONF mip --display | $CMD_GREP -w "$RM_INTERACE" |$CMD_AWK '{print $1}' )	
+	[ ! -z $RULE_NO ] && {
+	if isvAPG; then
+		$CMD_CLUSTER_CONF mip --m_delete $RULE_NO &>/dev/null
+	        [ $? -ne 0 ] && console_abort "ERROR: Cluster configuration update failed" $exit_clus_fail
+	elif [ "$VLAN_NAME" != "Public" ] ; then
+		$CMD_CLUSTER_CONF mip --m_delete $RULE_NO &>/dev/null
+		[ $? -ne 0 ] && console_abort "ERROR: Cluster configuration update failed" $exit_clus_fail
+	else
+		# Moving back MIP to native physical interface
+		local rule=$($CMD_CLUSTER_CONF mip --display | grep "^\s\s*$RULE_NO\s" | awk '{ for (i=2; i<=NF; i++) print $i }' | tr '\n' ' ')
+		local new_rule=$(echo "$rule" | sed "s/\(\s\s*\)$INTERFACE.$VLAN_TAG\(:\)/\1$INTERFACE\2/")
+		$CMD_CLUSTER_CONF mip --m_modify $RULE_NO:$new_rule &> /dev/null
+		[ $? -ne 0 ] && console_abort "ERROR: Cluster configuration update failed" $exit_clus_fail
+	fi
+	}
+}
+
+#-------------------------------------------------------------------------------------------------------
+function remove_ip(){
+
+	if isvAPG; then
+		RM_INTERACE=$INTERFACE
+	elif [ "$VLAN_NAME" != "Public" ] ; then
+		RM_INTERACE="public_vlan$VLAN_TAG"
+	else
+		RM_INTERACE="public"
+	fi
+
+	local CNT
+	local NODE_NUM
+	local INDEX=0
+
+	if isvAPG; then
+		CNT=$( $CMD_CLUSTER_CONF ip --display |$CMD_GREP -w "$RM_INTERACE" | $CMD_WC -l )
+	else
+		CNT=$( $CMD_CLUSTER_CONF ip --display |$CMD_GREP -w "$RM_INTERACE" | $CMD_GREP "\s\s*$INTERFACE.$VLAN_TAG\s\s*" | $CMD_WC -l )
+	fi
+
+	while [ $INDEX -lt $CNT ]
+	do
+		((NODE_NUM=INDEX+1))
+		if isvAPG; then
+			RULE_NO=$( $CMD_CLUSTER_CONF ip --display |$CMD_GREP -w "$RM_INTERACE" | $CMD_HEAD -1 | $CMD_AWK '{print $1}')
+		else
+			RULE_NO=$( $CMD_CLUSTER_CONF ip --display |$CMD_GREP -w "$RM_INTERACE" | $CMD_GREP "\s\s*$INTERFACE.$VLAN_TAG\s\s*" | $CMD_HEAD -1 | $CMD_AWK '{print $1}')
+		fi
+		
+		if isvAPG; then
+			 $CMD_CLUSTER_CONF ip --m_delete $RULE_NO &>/dev/null
+                        [ $? -ne 0 ] && console_abort "ERROR: Cluster configuration update failed" $exit_clus_fail
+		elif [ "$VLAN_NAME" != "Public" ] ; then
+			$CMD_CLUSTER_CONF ip --m_delete $RULE_NO &>/dev/null
+			[ $? -ne 0 ] && console_abort "ERROR: Cluster configuration update failed" $exit_clus_fail
+		else
+			# Moving back IP addresses to native physical interface
+			local rule=$($CMD_CLUSTER_CONF ip --display | grep "^\s\s*$RULE_NO\s" | awk '{ for (i=2; i<=NF; i++) print $i }' | tr '\n' ' ')
+			local new_rule=$(echo "$rule" | sed "s/\(\s\s*\)$INTERFACE.$VLAN_TAG\(\s\s*\)/\1$INTERFACE\2/")
+			$CMD_CLUSTER_CONF ip --m_modify $RULE_NO:$new_rule &> /dev/null
+			[ $? -ne 0 ] && console_abort "ERROR: Cluster configuration update failed" $exit_clus_fail
+		fi
+               	((INDEX=INDEX + 1))
+	done
+}
+ 
+#------------------------------------------------------------------------------------------------------
+function remove_iptable(){
+	DEST_NW=$( $CMD_CLUSTER_CONF network -D| $CMD_GREP vlan"$VLAN_TAG"_gw|$CMD_AWK '{print $4}' )
+	RULE_NO=$( $CMD_CLUSTER_CONF iptables -D | $CMD_GREP "$DEST_NW"| $CMD_HEAD -1 | $CMD_AWK '{print $1}' )
+	$CMD_CLUSTER_CONF iptables -d $RULE_NO &>/dev/null
+	[ $? -ne 0 ] && abort "Removal of iptable failed."
+}
+
+#-------------------------------------------------------------------------------------------------------
+function remove_network(){
+
+	if isvAPG; then
+		RM_INTERACE=$VLAN_NAME
+	else
+		if [ "$VLAN_NAME" != "Public" ] ; then
+			RM_INTERACE="public_vlan$VLAN_TAG(\s|_gw)"
+		else
+			RM_INTERACE="public_gw"
+		fi
+	fi
+	local INDEX=0
+	CNT=$( $CMD_CLUSTER_CONF network --display |$CMD_GREP -E $RM_INTERACE | $CMD_WC -l )
+	while [ $INDEX -lt $CNT ]
+	do
+		RULE_NO=$( $CMD_CLUSTER_CONF network  --display |$CMD_GREP -E $RM_INTERACE | $CMD_HEAD -1 | $CMD_AWK '{print $1}' )
+		$CMD_CLUSTER_CONF network --m_delete $RULE_NO &>/dev/null
+               	[ $? -ne 0 ] && console_abort "ERROR: Cluster configuration update failed" $exit_clus_fail
+               	((INDEX=INDEX + 1))
+	done
+
+}
+
+#-------------------------------------------------------------------------------------------------------
+function rollback_vlanrm(){
+	if [ "$VLAN_NAME" != "Public" ] ; then
+		#Rolling back vlanrm
+		VLAN_CMD="ip link add link $INTERFACE name $INTERFACE.$VLAN_TAG type vlan id $VLAN_TAG"
+		# launch the command on the local node
+		$($VLAN_CMD 2>/dev/null)
+		[ $? -ne 0 ] && console_abort "ERROR: Error removing VLAN, no changes done" $exit_cmdx_fail
+
+		if [ $PEER_NODE_UP -eq $TRUE ]; then
+			$(${CMD_SSH} $RHOST $VLAN_CMD 2>/dev/null)
+			[ $? -ne 0 ] && console_abort "ERROR: Error removing VLAN, no changes done" $exit_cmdx_fail
+		fi
+	fi
+}
+
+#-------------------------------------------------------------------------------------------------------
+function remove_interface(){
+	if isvAPG; then
+		RULE_NO=$( $CMD_CLUSTER_CONF interface --display | $CMD_GREP "interface control $INTERFACE" | awk '{print $1}')
+	else
+		RULE_NO=$( $CMD_CLUSTER_CONF interface --display | $CMD_GREP "interface control $VLAN_ADAPTER vlan" | awk '{print $1}')
+	fi
+        $CMD_CLUSTER_CONF interface --m_delete $RULE_NO &>/dev/null
+        [ $? -ne 0 ] && console_abort "ERROR: Cluster configuration update failed" $exit_clus_fail
+
+}
+
+#-------------------------------------------------------------------------------------------------------
+function vlanrm(){
+	local rCode=$exit_sucs
+	
+	if [ "$VLAN_NAME" != "Public" ] ; then
+		#Save currently defined IP address
+		local old_nodeA_IP="$($CMD_CLUSTER_CONF ip -D | $CMD_GREP -w "public_vlan$VLAN_TAG" | $CMD_GREP -w "ip 1" | $CMD_AWK '{ print $6 }')"
+		local old_nodeB_IP="$($CMD_CLUSTER_CONF ip -D | $CMD_GREP -w "public_vlan$VLAN_TAG" | $CMD_GREP -w "ip 2" | $CMD_AWK '{ print $6 }')"
+		local old_cluster_IP="$($CMD_CLUSTER_CONF mip -D | $CMD_GREP -w "public_vlan${VLAN_TAG}_mip" | $CMD_AWK '{ print $7 }')"
+	fi
+	
+	if [ "$VLAN_NAME" != "Public" ] ; then
+		#Removing VLAN from the node using
+		#basic OS vconfig command
+		ip link del $VLAN_ADAPTER &>/dev/null
+		[ $? -ne 0 ] && console_abort "ERROR: Error removing VLAN, no changes done" $exit_cmdx_fail
+		if [ $PEER_NODE_UP -eq $TRUE ]; then	
+			$CMD_SSH $RHOST ip link del $VLAN_ADAPTER &>/dev/null
+			[ $? -ne 0 ] && console_abort "ERROR: Error removing VLAN, no changes done" $exit_cmdx_fail
+		fi
+	fi
+	# Modifying cluster.conf for local node
+	#Removing gateway rules from the cluster.conf
+	remove_gateway
+
+	#Removing alias rule from the cluster.conf
+	remove_alias
+	
+	#Removing mip rule from the cluster.conf
+ 	remove_mip
+	
+	#Removing ip rule from the cluster.conf
+	remove_ip
+		
+	#Removing interface rules from the cluster.conf
+	remove_interface
+	
+	#Removing iptables from the cluster.conf
+	is_dscp_supported && remove_iptable
+	
+	#Removing  network defined on vlan
+	remove_network
+
+	# verify cluster configuration is OK after update.
+        $CMD_CLUSTER_CONF $CLUS_MGMT_OPTS --verify &>/dev/null || rCode=$exit_fail
+      	if [ $rCode -eq $exit_fail ]; then
+        	# Something wrong. fallback with older cluster config
+		rollback_vlanrm
+			${CMD_CLUSTER_CONF} $CLUS_MGMT_OPTS --abort &>/dev/null 
+			abort "Cluster management verification failed."
+        fi
+        # verify seems to be OK. reload the cluster now.
+        $CMD_CLUSTER_CONF $CLUS_MGMT_OPTS --reload --verbose &>/dev/null || rCode=$exit_fail
+        if [ $rCode -eq $exit_fail ]; then
+                # something wrong in reload. fallback on older cluster config
+		rollback_vlanrm
+									${CMD_CLUSTER_CONF} $CLUS_MGMT_OPTS --abort &>/dev/null
+									abort "Cluster management reload failed."
+        fi
+
+        # things seems to be OK so-far. commit cluster configration now.
+        $CMD_CLUSTER_CONF $CLUS_MGMT_OPTS --commit &>/dev/null || rCode=$exit_fail
+        if [ $rCode -eq $exit_fail ]; then
+                # commit should not fail, as it involves only removing the
+                # back up file. anyway bail-out?
+		rollback_vlanrm
+				${CMD_CLUSTER_CONF} $CLUS_MGMT_OPTS --abort &>/dev/null
+				abort "Cluster Management commit failed"
+        fi
+
+	# update vlan-adpter mapping file
+        remove_mapping	
+	
+        [ "$CNT" -eq "0" ] && echo -e "INFO: Successfully Removed VLAN:$VLAN_NAME ID:$VLAN_TAG\n"
+	[ "$CNT" -ne "0" ] && echo -e "INFO: Successfully Removed VLAN:$VLAN_NAME ID:$VLAN_TAG\n"
+	
+	if [ "$VLAN_NAME" != "Public" ] ; then
+		remove_ipsec_policies "$old_nodeA_IP" "$old_nodeB_IP" "$old_cluster_IP"
+	fi
+}
+
+#-------------------------------------------------------------------------------------------------------
+function parse_args(){
+
+	TRACE_ENTER $FUNCNAME
+        ARG_CNT=$#
+	local OPTIONS='v: q: f'
+
+	isvAPG && OPTIONS='a: f'
+        $CMD_GETOPT --quiet --quiet-output --options="$OPTIONS" -- "$@"
+        [ $? -ne $TRUE ] && usage_error "Incorrect usage" $exit_ilgl_optn
+        local INDEX=0
+
+        while [ $# -gt 0 ]; do
+	case "$1" in
+		'-v')
+			OPT_VLAN=$TRUE
+			# vlan name and tag is to be defined separated by comma
+                        OPT_ARG=${2:-''}
+			OPT_ARG_CNT=$( echo $OPT_ARG | ${CMD_AWK} -F "," '{print NF}' )
+			[ $OPT_ARG_CNT -gt 2 ] && usage_error "Incorrect usage" $exit_usge
+			local vlan_name=$( echo $OPT_ARG | ${CMD_AWK} -F "," '{print $1}')
+			local vlan_name_lowercase=$(echo "$vlan_name" | ${CMD_AWK} '{ print tolower($0) }')
+			if [ "$vlan_name_lowercase" == "$Public_vlan_name_lowercase" ] ; then
+				vlan_name="$Public_vlan_name"
+			fi
+			if [ "$vlan_name" == "$Public_vlan_name" ] ; then
+				## New function for cable less APG
+				if [ $(get_oam_access_attr) -eq 1 ]; then
+				console_abort "$exit_CableLessDefined_string" $exit_CableLessDefined
+				fi
+			fi
+
+			OPT_VNAME_LIST[$INDEX]="$vlan_name"
+                        OPT_VTAG_LIST[$INDEX]=$( echo $OPT_ARG | ${CMD_AWK} -F "," '{print $2}')
+			# check if any of the value is null
+                        [[ -z ${OPT_VNAME_LIST[$INDEX]} ||  -z  ${OPT_VTAG_LIST[$INDEX]} ]] &&
+                        usage_error "Incorrect usage" $exit_usge
+                        ((INDEX=INDEX + 1))
+                        shift
+                        ;;
+		'-q')
+			OPT_INTERNAL=$TRUE
+			OPT_ARG=${2:-''}
+			OPT_ARG_CNT=$( echo $OPT_ARG | ${CMD_AWK} -F "," '{print NF}' )
+			[ $OPT_ARG_CNT -gt 1 ] && usage_error "Incorrect usage" $exit_usge
+			local vlan_name=$( echo $OPT_ARG )
+			OPT_VNAME_LIST[$INDEX]="$vlan_name"
+			# check if any of the value is null
+			[ -z ${OPT_VNAME_LIST[$INDEX]} ] && usage_error "Incorrect usage" $exit_usge
+			((INDEX=INDEX + 1))
+			shift
+			;;
+		'-a')
+			OPT_VAPG=$TRUE
+			# vlan name,vnic and domain is to be defined separated by comma
+			OPT_ARG=${2:-''}
+			OPT_ARG_CNT=$( echo $OPT_ARG | ${CMD_AWK} -F " " '{print NF}' )
+			[ $OPT_ARG_CNT -gt 1 ] && usage_error "Incorrect usage" $exit_usge
+			OPT_VNAME_LIST[$INDEX]=$OPT_ARG
+
+			# check if any of the value given is null
+			[ -z ${OPT_VNAME_LIST[$INDEX]} ] && usage_error "Incorrect usage" $exit_usge
+			((INDEX=INDEX + 1))
+			shift
+			;;
+
+		'-f')
+                        OPT_FORCE=$TRUE
+                        ;;
+                *)
+                        usage_error "Incorrect usage" $exit_ilgl_optn
+                        ;;
+	esac
+        shift
+        done
+
+        # error checking
+        [ $ARG_CNT -eq 0 ] && usage_error "Incorrect usage" $exit_usge
+	if isvAPG; then
+		[[ $OPT_FORCE -eq $TRUE  && $ARG_CNT -lt 3 ]] && usage_error "Incorrect usage" $exit_usge
+		[[ $OPT_FORCE -eq $FALSE && $ARG_CNT -lt 2 ]] && usage_error "Incorrect usage" $exit_usge
+	else
+		[[ $OPT_VLAN -eq $TRUE && $OPT_INTERNAL -eq $TRUE ]] && usage_error "Incorrect usage" $exit_usge
+		[[ $OPT_FORCE -eq $TRUE  && $ARG_CNT -lt 3 ]] && usage_error "Incorrect usage" $exit_usge
+		[[ $OPT_FORCE -eq $FALSE && $ARG_CNT -lt 2 ]] && usage_error "Incorrect usage" $exit_usge
+		[[ $OPT_INTERNAL -eq $FALSE && ! -f $VLAN_MAPING_CONF ]] && console_abort "ERROR: VLAN mapping file not found"  $exit_vlan_eror
+	fi
+
+  # Check if apache is configured with vlan ip
+  apos_pso=$(apos_check_and_cat $STORAGE_CONFIG_PATH)
+  HTTP_FILE="$apos_pso/apos/http_files/listen.conf"
+  for (( INDEX=0; INDEX<${#OPT_VTAG_LIST[@]}; INDEX++ ))
+  do
+    V_TAG=${OPT_VTAG_LIST[$INDEX]}
+    old_cluster_IP="$($CMD_CLUSTER_CONF mip -D | grep -w "public_vlan$V_TAG" | awk '{ print $7 }')"
+    if [[ ! -z $old_cluster_IP && -f $HTTP_FILE ]]; then
+     	grep -w "$old_cluster_IP" "$HTTP_FILE" &> /dev/null
+     	if [ $? == 0 ]; then
+				console_abort "ERROR: Apache configuration conflict with $V_TAG" $exit_apache_eror
+			fi
+    fi
+  done
+  
+	# to handle roll back condition
+	if [ -f $VLAN_MAPING_CONF ]; then
+		TMP_MAPPING_FILE=$( mktemp --tmpdir vlan_adapter_maping_XXXXX )
+		cp -f $VLAN_MAPING_CONF $TMP_MAPPING_FILE &> /dev/null
+	fi
+
+	TRACE_LEAVE $FUNCNAME
+	return $exit_sucs
+}
+
+#-------------------------------------------------------------------------------------------------------
+function count_vlans(){
+	local CNT=0
+	local VLAN_L=()
+	VLAN_L=$( $CMD_CAT $VLAN_MAPING_CONF)
+	for LINE in ${VLAN_L[@]}
+	do
+		V_ADAPTER=$(echo $LINE | $CMD_CUT -d ' ' -f2)	
+		[ -f $PROC_VLAN/$V_ADAPTER ] && ((CNT=CNT+1))
+	done
+	echo $CNT
+}
+
+#------------------------------------------------------------------------------------------------------
+function get_vlan_adapter(){
+
+        local l_VNAME
+        local l_ADAPTER
+        while read line
+        do
+                l_VNAME=$(echo $line | ${CMD_CUT} -d " " -f1)
+                [ "$l_VNAME" != "$VLAN_NAME" ] && continue
+                l_ADAPTER=$(echo $line | ${CMD_CUT} -d " " -f2)
+		[ "$l_ADAPTER" == "$INTERFACE.$VLAN_TAG" ] && echo $l_ADAPTER
+                break
+        done <$VLAN_MAPING_CONF
+}
+
+#------------------------------------------------------------------------------------------------------
+function remove_mapping(){
+         
+        local l_VLAN_NAME
+	while read line
+	do
+		l_VLAN_NAME=$( echo $line | ${CMD_CUT} -d " " -f2)
+		[ "$l_VLAN_NAME" == "$VLAN_ADAPTER" ] && {
+			${CMD_SED} -i "/\b\($VLAN_ADAPTER\)\b/d" $VLAN_MAPING_CONF
+			break
+		}
+	done <$VLAN_MAPING_CONF
+}
+
+#-------------------------------------------------------------------------------------------------------
+function check_args(){
+
+	#check vlan name is not defined earlier for APT/APZ vlans also on BSP Node
+	setVlanType
+	
+	! isBSP && [ $OPT_INTERNAL -eq $TRUE ] && console_abort "Illegal option in this system configuration\n" $exit_ures_valu
+	isBSP && check_vlanqos_params
+	[ $OPT_VLAN -eq $TRUE ] && check_vlantag_params
+		
+	# check vlan name
+        [ -z $VLAN_NAME ] && console_abort "Unreasonable value <$VLAN_NAME>" $exit_ures_valu
+
+        # check vlan name length
+        LEN=$(expr length $VLAN_NAME)
+        [ $LEN -gt $VLAN_MAX_LEN ] && console_abort "Unreasonable value <$VLAN_NAME>" $exit_ures_valu
+
+        # check if the name contatins only alphabets
+	$( echo $VLAN_NAME | ${CMD_GREP} -Eq "^[a-zA-Z0-9_-]+$") ||
+        console_abort "Unreasonable value <$VLAN_NAME>" $exit_ures_valu
+
+	return $exit_sucs
+}
+
+#----------------------------------------------------------------------------------------
+function check_vlantag_params(){
+
+	# check if vlan tag is null
+	[ -z $VLAN_TAG ] && console_abort "Unreasonable value <$VLAN_TAG>" $exit_ures_valu
+
+	# check if the tag contains only numerics.
+	$( echo $VLAN_TAG  | ${CMD_GREP} -Eq "^[0-9]+$") ||
+	console_abort "Unreasonable value <$VLAN_TAG>" $exit_ures_valu
+
+	# check if tag lenth is exceeding the size
+	[[ $VLAN_TAG -gt $TAG_MAX_SIZE || $VLAN_TAG -lt $TAG_MIN_SIZE ]] &&
+	console_abort "Unreasonable value <$VLAN_TAG>" $exit_ures_valu
+
+	# retreive vlan adapter name for the vlan name given.
+        VLAN_ADAPTER=$(get_vlan_adapter)
+		if [[ -z $VLAN_ADAPTER ]];then
+                        echo "Error when executing <Invalid VLAN_NAME:$VLAN_NAME,VLAN_TAG:$VLAN_TAG>"
+                        echo -e "INFO: No VLAN deleted\n"
+                        unlock
+                        exit $exit_vlan_delt
+                fi
+
+
+	M_VLAN_TAG=$(grep -w "$VLAN_NAME" $VLAN_MAPING_CONF | awk -F " " '{print $2}' | ${CMD_CUT} -d "." -f2 )
+        M_VLAN_NAME=$(grep -w "$VLAN_NAME" $VLAN_MAPING_CONF | awk -F " " '{print $1}')
+
+	### FIX for TR HU27377 ###
+	if [[ -z "$M_VLAN_TAG" && -z "$M_VLAN_NAME" ]]; then
+		for VLAN_ID in $(${CMD_CLUSTER_CONF} interface --display | ${CMD_GREP} -w vlan |
+		${CMD_GREP} $INTERFACE | ${CMD_AWK} '{print $4}' | ${CMD_CUT} -d . -f2)
+		do
+			if [ $VLAN_ID == $VLAN_TAG ]; then
+				VLAN_ADAPTER="$INTERFACE.$VLAN_TAG"
+			        [ ! -f $PROC_VLAN/$VLAN_ADAPTER ] && rollback_vlanrm
+				continue
+			fi
+		done
+	fi
+	### FIX for TR HU27377 ###
+
+        [[ ! -z $M_VLAN_NAME  || ! -z $M_VLAN_TAG ]] && {
+                if [[ "$VLAN_TAG" != "$M_VLAN_TAG" ]];then
+                        echo "Error when executing <Invalid VLAN_TAG:$VLAN_TAG>"
+                        echo -e "INFO: No VLAN deleted\n"
+                        unlock
+                        exit $exit_vlan_delt
+                fi
+
+                if [[ "$VLAN_NAME" != "$M_VLAN_NAME" ]];then
+                        echo "Error when executing <Invalid VLAN_NAME:$VLAN_NAME>"
+                        echo -e "INFO: No VLAN deleted\n"
+                        unlock
+                        exit $exit_vlan_delt
+                fi
+        }
+	
+	# check if the vlan name is present on the local node
+	if [ ! -f $PROC_VLAN/$VLAN_ADAPTER ]; then
+                echo "Error when executing <Invalid VLAN_NAME:'$VLAN_NAME'>"
+                echo -e "INFO: No VLAN deleted\n"
+		unlock
+                exit $exit_vlan_delt
+        fi
+
+	# check if the vlan name is present on the remote node.
+	# assumption is, both nodes (cluster) should have the same info.
+	if [ $PEER_NODE_UP -eq $TRUE ]; then
+		CNT=$(${CMD_SSH} $RHOST ${CMD_LS} $PROC_VLAN/$VLAN_ADAPTER 2>/dev/null | ${CMD_WC} -l)
+		[ $CNT -eq 0 ] && console_abort "VLAN information in the cluster is not synchronized" $exit_sync_eror 
+	fi
+	
+	# check if we are deleting 'Public' Vlan.
+	# if so, we need to make sure, no other Vlan exist on the same network.
+	[ $VLAN_NAME = 'Public' ] && {
+		COUNT=$( count_vlans)	
+		[ $COUNT -gt 1 ] && console_abort "VLAN Public is not allowed to be deleted" $exit_publ_eror
+	}	
+}
+
+#----------------------------------------------------------------------------------------
+function check_vlanqos_params(){
+	
+	# check if shelf architecture is BSP
+	! isBSP && console_abort "Illegal option in this system configuration\n" $exit_ures_valu
+	#check for reserved vlans
+	[ $RESERVED_VLAN_TYPE -eq $TRUE ] && console_abort "Invalid operation for $VLAN_NAME VLAN\n" $exit_ures_valu
+	[ "$VLAN_TYPE" == "" ] && console_abort "Error when executing <VLAN with name $VLAN_NAME does not exist>" $exit_ures_valu
+	[[ $OPT_VLAN -eq $TRUE && "$VLAN_TYPE" == "APZ" ]] && console_abort "Invalid operation for $VLAN_NAME VLAN\n" $exit_ures_valu
+	[[ $OPT_VLAN -eq $TRUE && "$VLAN_TYPE" == "APT" ]] && console_abort "Invalid option for $VLAN_NAME VLAN\n" $exit_ures_valu
+	[[ $OPT_INTERNAL -eq $TRUE && "$VLAN_TYPE" == "APZ" ]] && console_abort "Invalid operation for $VLAN_NAME VLAN\n" $exit_ures_valu
+	[[ $OPT_INTERNAL -eq $TRUE && "$VLAN_TYPE" == "APG" ]] && console_abort "Invalid operation for $VLAN_NAME VLAN\n" $exit_ures_valu
+		
+}
+
+#----------------------------------------------------------------------------------------
+function isvAPG(){
+	[[ $SHELF_ARCH -eq 3 && "$HW_TYPE" == 'VM' ]] && return $TRUE
+	return $FALSE
+}
+
+#----------------------------------------------------------------------------------------
+function setVlanType(){
+	VLAN_TYPE=''
+	RESERVED_VLAN_TYPE=$FALSE
+
+	if  grep -wq "$VLAN_NAME" $VLAN_MAPING_CONF &>/dev/null ; then
+		VLAN_TYPE='APG'
+	fi
+
+	if [ -z $VLAN_TYPE ]; then
+		#check vlan object from vlan table in imm 
+		local OBJ_VLAN_TYPE=$($CMD_IMMLIST -a "vlanType"  vlanId=$VLAN_NAME,vlanCategoryId=1,AxeEquipmentequipmentMId=1 2>/dev/null | awk -F'=' '{ print($2) }')
+
+		if [ ! -z  $OBJ_VLAN_TYPE ]; then
+			#set vlantype APT/APZ   
+			[ $OBJ_VLAN_TYPE -eq 0 ] && VLAN_TYPE='APZ'
+			[ $OBJ_VLAN_TYPE -eq 1 ] && VLAN_TYPE='APT'
+
+			#setting vlan reserved type TRUE/FALSE
+			local local_VLANRESERVED=$($CMD_IMMLIST -a "reserved"  vlanId=$VLAN_NAME,vlanCategoryId=1,AxeEquipmentequipmentMId=1 2>/dev/null | awk -F'=' '{ print($2) }')
+			[ -z  $local_VLANRESERVED ] && abort "Error when executing <VLAN with name $VLAN_NAME getting  reserved type>\nINFO: No VLAN changed."
+  
+			#set vlanReserved type TRUE/FALSE
+			[ $local_VLANRESERVED -eq 1 ] && RESERVED_VLAN_TYPE=$TRUE
+
+		fi
+	fi 
+
+}
+
+#----------------------------------------------------------------------------------------
+function confirm(){
+
+        CMD=''
+        local rCode
+        while [ "$CMD" != "y" ] && [ "$CMD" != "n" ]; do
+		echo -e "Are you sure you want to do these changes:"
+		echo -en "[y=yes, n=no]?\003:"
+		read CMD           
+        done
+
+        if [ "$CMD" == "y" ]; then
+                rCode=0
+        else
+                rCode=1
+        fi
+
+        return $rCode
+}
+
+#-------------------------------------------------------------------------------------------------------
+function vlanrm_external(){
+
+	TRACE_ENTER $FUNCNAME
+      
+	# lock vlan-adapter mapping file
+	lock
+
+	# iterate through each vlan to remove
+        for (( INDEX=0; INDEX<${#OPT_VNAME_LIST[@]}; INDEX++ ))
+        do
+                VLAN_NAME=${OPT_VNAME_LIST[$INDEX]}
+		VLAN_TAG=${OPT_VTAG_LIST[$INDEX]}
+		
+		# check if the remote node is up
+	        ping_peer
+
+		# check if the provided argument list is valid.
+                check_args
+
+                # remove vlan
+                echo "Removing VLAN:$VLAN_NAME ID:$VLAN_TAG"
+                vlanrm
+		sleep 1
+		
+        done
+
+	# unlock vlan-adapter mapping file
+	unlock
+	TRACE_LEAVE $FUNCNAME
+}
+	   
+#-------------------------------------------------------------------------------------------------------
+function vlanrm_internal(){
+	TRACE_ENTER $FUNCNAME
+
+	# iterate through each vlan to remove
+	for (( INDEX=0; INDEX<${#OPT_VNAME_LIST[@]}; INDEX++ ))
+	do
+		VLAN_NAME=${OPT_VNAME_LIST[$INDEX]}
+		# check if the provided argument list is valid.
+		check_args
+	
+		# remove vlan
+		echo "Removing VLAN:$VLAN_NAME"
+		$( immcfg -d -u vlanId=$VLAN_NAME,vlanCategoryId=1,AxeEquipmentequipmentMId=1 &> /dev/null )
+		[ $? -ne 0 ] && console_abort "ERROR: Error removing VLAN, no changes done" $exit_cmdx_fail
+		echo -e "INFO: Successfully Removed VLAN:$VLAN_NAME\n"
+		sleep 1
+	done
+	TRACE_LEAVE $FUNCNAME
+}
+#-------------------------------------------------------------------------------------------------------
+function vlanrm_vapg(){
+
+	TRACE_ENTER $FUNCNAME
+	# Iterate through each vlan to remove
+	for (( INDEX=0; INDEX<${#OPT_VNAME_LIST[@]}; INDEX++ ))
+		do
+			VLAN_NAME=${OPT_VNAME_LIST[$INDEX]}
+			
+
+			if ! $( ${CMD_GREP} -qw "^$VLAN_NAME" $VLAN_MAPING_CONF); then
+  		              console_abort "Error when executing <VLAN with name $VLAN_NAME does not exist>\nINFO: No VLAN changed" $exit_ures_valu
+			fi
+
+			L_DOMAIN=$( $CMD_GREP -w "^$VLAN_NAME" $VLAN_MAPING_CONF | $CMD_AWK -F " " '{print $2}')
+
+			[ "$L_DOMAIN" == "AP" ] && vlanrm_ap_domain
+			[ "$L_DOMAIN" == "CP" ] && vlanrm_cp_domain
+	done
+	TRACE_LEAVE $FUNCNAME
+
+}
+#-------------------------------------------------------------------------------------------------------
+function vlanrm_ap_domain(){
+
+	# lock vlan-adapter mapping file
+	lock
+
+	# Get adapter file name
+	# --------------------------------------------------------#
+	# /cluster/etc/ap/apos/vlan_adapter_maping.conf structure #
+	# VLAN_NAME		DOMAIN		VNICNAME.<Number> #
+	# Ex: SIG1;AP;VNIC1.eth7				  #
+	#			SIG2;CP;VNIC2			  #
+	# ------------------------------------------------------- #
+	VLAN_ADAPTER=$( $CMD_GREP -w "^$VLAN_NAME" $VLAN_MAPING_CONF | $CMD_AWK -F " " '{print $3}')
+  	INTERFACE=$(echo $VLAN_ADAPTER | $CMD_AWK -F. '{print $2}')
+
+  	local rCode=$exit_sucs
+	#Save currently defined IP address
+	local old_nodeA_IP="$($CMD_CLUSTER_CONF ip -D | $CMD_GREP -w "$VLAN_NAME" | $CMD_GREP -w "ip 1" | $CMD_AWK '{ print $6 }')"
+	local old_nodeB_IP="$($CMD_CLUSTER_CONF ip -D | $CMD_GREP -w "$VLAN_NAME" | $CMD_GREP -w "ip 2" | $CMD_AWK '{ print $6 }')"
+	local old_cluster_IP="$($CMD_CLUSTER_CONF mip -D | $CMD_GREP -w "${VLAN_NAME}_mip" | $CMD_AWK '{ print $7 }')"
+
+	RULE_NO=$( $CMD_CLUSTER_CONF interface --display | $CMD_GREP alias | $CMD_GREP -w "$INTERFACE" | $CMD_AWK '{print $1}' )
+	if [ ! -z "$RULE_NO" ];then
+	#Removing gateway rules from the cluster.conf
+	remove_gateway
+
+	#Removing alias rule from the cluster.conf
+	remove_alias
+
+	#Removing mip rule from the cluster.conf
+	remove_mip
+
+	#Removing ip rule from the cluster.conf
+	remove_ip
+
+	#Removing interface rules from the cluster.conf
+	remove_interface
+
+	#Removing  network defined on vlan
+	remove_network
+
+	# verify cluster configuration is OK after update.
+	$CMD_CLUSTER_CONF $CLUS_MGMT_OPTS --verify &>/dev/null || rCode=$exit_fail
+	if [ $rCode -eq $exit_fail ]; then
+		# Something wrong. fallback with older cluster config
+		# Roll back mapping file changes
+			[ -f $TMP_MAPPING_FILE ] && cp $TMP_MAPPING_FILE $VLAN_MAPING_CONF
+			${CMD_CLUSTER_CONF} $CLUS_MGMT_OPTS --abort &>/dev/null 
+			abort "Cluster management verification failed."
+	fi
+	
+	# verify seems to be OK. reload the cluster now.
+	$CMD_CLUSTER_CONF $CLUS_MGMT_OPTS --reload --verbose &>/dev/null || rCode=$exit_fail
+	if [ $rCode -eq $exit_fail ]; then
+		# something wrong in reload. fallback on older cluster config
+		# Roll back mapping file changes
+			[ -f $TMP_MAPPING_FILE ] && cp $TMP_MAPPING_FILE $VLAN_MAPING_CONF
+			${CMD_CLUSTER_CONF} $CLUS_MGMT_OPTS --abort &>/dev/null 
+			abort "Cluster management reload failed."
+	fi
+
+	# things seems to be OK so-far. commit cluster configration now.
+	$CMD_CLUSTER_CONF $CLUS_MGMT_OPTS --commit &>/dev/null || rCode=$exit_fail
+	if [ $rCode -eq $exit_fail ]; then
+		# commit should not fail, as it involves only removing the
+		# back up file. anyway bail-out?
+		# Roll back mapping file changes
+			[ -f $TMP_MAPPING_FILE ] && cp $TMP_MAPPING_FILE $VLAN_MAPING_CONF
+			${CMD_CLUSTER_CONF} $CLUS_MGMT_OPTS --abort &>/dev/null 
+			abort "Cluster Management commit failed"
+		fi
+	fi
+	# unlock vlan-adapter mapping file
+	unlock
+
+	vlanrm_cp_domain
+
+	# Removing ipsec policies
+	remove_ipsec_policies "$old_nodeA_IP" "$old_nodeB_IP" "$old_cluster_IP"
+
+}
+
+#-------------------------------------------------------------------------------------------------------
+function vlanrm_cp_domain(){
+
+	# lock vlan-adapter mapping file
+        lock
+
+	#Removing vlan from adpter file
+	local pattern=$( $CMD_GREP -w "^$VLAN_NAME" $VLAN_MAPING_CONF )
+
+	$CMD_SED -i "/\b\($pattern\)\b/d" $VLAN_MAPING_CONF
+
+        # Removing the vlan from imm
+        echo "Removing VLAN:$VLAN_NAME"
+        $( immcfg -d -u vlanId=$VLAN_NAME,vlanCategoryId=1,AxeEquipmentequipmentMId=1 &> /dev/null )
+        [ $? -ne 0 ] && console_abort "ERROR: Error removing VLAN, no changes done" $exit_cmdx_fail
+        echo -e "INFO: Successfully Removed VLAN:$VLAN_NAME\n"
+
+	sleep 1
+
+	# unlock vlan-adapter mapping file
+	unlock
+
+}
+
+#-------------------------------------------------------------------------------------------------------
+function invoke(){
+
+	TRACE_ENTER $FUNCNAME
+	[ $OPT_FORCE -eq $FALSE ] &&
+	if ! confirm; then
+		console_abort "INFO: No changes done" $exit_cmnd_abrt
+	fi
+
+	#Check whether shelf architecture is vAPG
+	if isvAPG; then
+		vlanrm_vapg
+
+	elif [ $OPT_INTERNAL -eq $TRUE ]; then
+		#On BSP Infrastructure two concepts of VLAN are introduced: external and internal. 
+		# 1. An external VLAN in BSP is a VLAN (or a Subnet) used to connect the AXE node towards 
+		#    the Virtual Routers. This enables communication between AXE Node and the other 
+		#    application node in BSP and between AXE node and the BSP external networks.
+		vlanrm_internal
+
+	else
+		# 2. An internal VLAN in BSP is a VLAN used for communication between the AXE node blades.
+		#APZ and APT Vlans are internal vlans
+		vlanrm_external
+	fi
+
+	# cleanup the temp files
+	[ -f $TMP_MAPPING_FILE ] && $CMD_RM -f $TMP_MAPPING_FILE
+
+	# reset the trap signals
+	trap - SIGINT SIGTERM SIGHUP
+
+	TRACE_LEAVE $FUNCNAME
+        return $exit_sucs
+}
+
+############################################################################################################################
+# function remove_ipsec_policies($old_nodeA_IP,$old_nodeB_IP,$old_cluster_IP);                                             #
+#                                                                                                                          #
+# Update the IPSec configuration files, removing the IPSec policies related to the VLAN IP addresses,                      #
+# and restart the racoon IPSec service.                                                                                    #
+# If the IPSec features provided by ACS_ASECBIN are not installed, this function does nothing.                             #
+# The check is done on the existence of ipsecls script                                                                     #
+#                                                                                                                          #
+# Arguments:                                                                                                               #
+# - $old_nodeA_IP old APG Node A IP address                                                                                #
+# - $old_nodeB_IP old APG Node B IP address                                                                                #
+# - $old_cluster_IP old APG Cluster IP address                                                                             #
+#                                                                                                                          #
+# Exits:                                                                                                                   #
+# - "Error when executing (general fault)"                                                                                 #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function remove_ipsec_policies() {
+	local rCode=$exit_fail
+	
+	if which ipsecls &> /dev/null ; then
+		local old_nodeA_IP="$1"
+		local old_nodeB_IP="$2"
+		local old_cluster_IP="$3"
+		
+		if [ "$old_nodeA_IP" != "" ] && [ "$old_nodeB_IP" != "" ] && [ "$old_cluster_IP" != "" ] ; then
+			[[ -e $IPSEC_CONF_DIR"/"$IPSEC_SETKEY_FILE ]] || console_abort "Error when executing (general fault)" $exit_fail
+			[[ -e $IPSEC_CONF_DIR"/"$IPSEC_RACOON_FILE ]] || console_abort "Error when executing (general fault)" $exit_fail
+			[[ -e $IPSEC_CONF_DIR"/"$IPSEC_PSK_FILE ]] || console_abort "Error when executing (general fault)" $exit_fail
+			
+			ipsec_remove_tmp_files
+			ipsec_backup
+			
+			cp -f "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE" "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE.tmp" &> /dev/null || console_abort "Error when executing (general fault)" $exit_fail
+			cp -f "$IPSEC_CONF_DIR/$IPSEC_RACOON_FILE" "$IPSEC_CONF_DIR/$IPSEC_RACOON_FILE.tmp" &> /dev/null || console_abort "Error when executing (general fault)" $exit_fail
+			cp -f "$IPSEC_CONF_DIR/$IPSEC_PSK_FILE" "$IPSEC_CONF_DIR/$IPSEC_PSK_FILE.tmp" &> /dev/null || console_abort "Error when executing (general fault)" $exit_fail
+			
+			local policies_to_remove=()
+			policies_to_remove=($($CMD_GREP "spdadd ${old_cluster_IP}\[any\]" -B1 "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE" | $CMD_GREP '^#POLICY_NAME=' | $CMD_AWK -F'=' '{ print $2 }' | tr '\n' ' '))
+			local policy
+			if [ ${#policies_to_remove[@]} -ne 0 ];then
+				for policy in "${policies_to_remove[@]}" ; do
+					remove_ipsec_policy "$policy"
+				done
+			fi 
+			
+			trap "ipsec_restore;ipsec_remove_backup;ipsec_remove_tmp_files;vlanrm_abort;console_abort \"Error when executing (general fault)\" $exit_fail" SIGHUP SIGINT SIGQUIT SIGILL SIGABRT SIGBUS SIGSEGV SIGPIPE SIGTERM SIGCHLD SIGTSTP SIGXCPU SIGPWR SIGSYS
+			mv "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE.tmp" "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE" &> /dev/null || {
+				ipsec_restore
+				ipsec_remove_backup
+				ipsec_remove_tmp_files
+				console_abort "Error when executing (general fault)" $exit_fail
+			}
+			mv "$IPSEC_CONF_DIR/$IPSEC_RACOON_FILE.tmp" "$IPSEC_CONF_DIR/$IPSEC_RACOON_FILE" &> /dev/null || {
+				ipsec_restore
+				ipsec_remove_backup
+				ipsec_remove_tmp_files
+				console_abort "Error when executing (general fault)" $exit_fail
+			}
+			mv "$IPSEC_CONF_DIR/$IPSEC_PSK_FILE.tmp" "$IPSEC_CONF_DIR/$IPSEC_PSK_FILE" &> /dev/null || {
+				ipsec_restore
+				ipsec_remove_backup
+				ipsec_remove_tmp_files
+				console_abort "Error when executing (general fault)" $exit_fail
+			}
+			
+			trap - SIGHUP SIGINT SIGQUIT SIGILL SIGABRT SIGBUS SIGSEGV SIGPIPE SIGTERM SIGCHLD SIGTSTP SIGXCPU SIGPWR SIGSYS
+			
+			apos_servicemgmt stop racoon.service &> /dev/null
+			pkill racoon &> /dev/null
+			setkey -DP -F &> /dev/null
+			apos_servicemgmt start racoon.service &> /dev/null
+			if [ $? -ne 0 ] ; then
+				ipsec_restore
+				ipsec_remove_backup
+				apos_servicemgmt stop racoon.service &> /dev/null
+				pkill racoon &> /dev/null
+				setkey -DP -F &> /dev/null
+				apos_servicemgmt start racoon.service &> /dev/null
+				console_abort "Error when executing (general fault)" $exit_fail
+			else
+				ipsec_remove_backup
+			fi
+			
+			rCode=$exit_sucs
+		fi
+	fi
+	
+	return $rCode
+}
+
+############################################################################################################################
+# function remove_ipsec_policy($policy_name);                                                                              #
+#                                                                                                                          #
+# Remove an IPSec policy                                                                                                   #
+#                                                                                                                          #
+# Arguments:                                                                                                               #
+# - $policy_name name of the IPSec policy as reported in /etc/racoon/setkey.conf                                           #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function remove_ipsec_policy() {
+	local rCode=$exit_fail
+	
+	local policy_name="$1"
+	
+	local rh_ipaddress=$(ipsec_remove_policy "$policy_name" "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE.tmp")
+	local gw_ipaddress=$(ipsec_remove_gateway_policy "$policy_name" "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE.tmp")
+	#ipaddresses_array=("${ipaddresses_array[@]} $rh_ipaddress")
+	if [ -z "$gw_ipaddress" ] ; then
+   	local gw_count=1
+    	local remote_true=1
+  	else
+   	 local gw_count=$($CMD_GREP -w "$gw_ipaddress" "$IPSEC_CONF_DIR"/*."$IPSEC_RACOON_FILE" | $CMD_GREP -c "remote")
+    	 remote_true=0
+  	fi
+  rh_count=$($CMD_GREP -w "$rh_ipaddress" "$IPSEC_CONF_DIR"/*."$IPSEC_RACOON_FILE" | $CMD_GREP -c "remote")
+  if [ "$rh_count" == 0 ] ||  [ "$rh_count" == 1 ] ; then 
+    if  [ "$gw_count" == 1 ]; then
+      if [ "$remote_true" == 1 ]; then
+	local psk_line=$($CMD_GREP -nE "^$rh_ipaddress\s" "$IPSEC_CONF_DIR/$IPSEC_PSK_FILE.tmp") &> /dev/null
+	    else
+        local psk_line=$($CMD_GREP -nE "^$gw_ipaddress\s" "$IPSEC_CONF_DIR/$IPSEC_PSK_FILE.tmp") &> /dev/null
+      fi
+	local psk_line_components=(${psk_line//":"/ })
+	local psk_line_number=${psk_line_components[0]}
+	$CMD_SED -i $psk_line_number"d" "$IPSEC_CONF_DIR/$IPSEC_PSK_FILE.tmp" &> /dev/null
+	  fi
+	fi
+	ipsec_remove_in_out_policy "$policy_name" "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE.tmp"
+	local include_line=$($CMD_GREP -n 'include "'$IPSEC_CONF_DIR/$rh_ipaddress.racoon.conf'";' "$IPSEC_CONF_DIR/$IPSEC_RACOON_FILE.tmp")
+	local include_line_components=(${include_line//":"/ })
+	local include_line_number=${include_line_components[0]}
+  	local file_to_remove=$(head -$include_line_number  "$IPSEC_CONF_DIR/$IPSEC_RACOON_FILE.tmp" | tail -n -1 | cut -d "/" -f4)
+	file_to_remove=$(echo ${file_to_remove::${#file_to_remove}-2})
+	rm "$IPSEC_CONF_DIR/$file_to_remove"
+	$CMD_SED -i $include_line_number"d" "$IPSEC_CONF_DIR/$IPSEC_RACOON_FILE.tmp" &> /dev/null
+	
+	rCode=$exit_sucs
+	return $rCode
+}
+
+# START functions "stolen" by ipsec_commons
+############################################################################################################################
+# function ipsec_remove_tmp_files();                                                                                       #
+#                                                                                                                          #
+# Remove all *.tmp files under /etc/racoon                                                                                 #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function ipsec_remove_tmp_files() {
+	local rCode=$exit_fail
+	rm -f "$IPSEC_CONF_DIR/*.tmp" &> /dev/null && rCode=$exit_sucs
+	return $rCode
+}
+
+############################################################################################################################
+# function ipsec_backup();                                                                                                 #
+#                                                                                                                          #
+# Create a tar.gz archive ipsec_backup.tar.gz containing all *racoon.conf, psk.txt and setkey.conf files under /etc/racoon #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function ipsec_backup() {
+	local rCode=$exit_sucs
+	
+	rm -f "$IPSEC_CONF_DIR/ipsec_backup.tar.gz" &> /dev/null || rCode=$exit_fail
+	tar -czf "$IPSEC_CONF_DIR/ipsec_backup.tar.gz" $IPSEC_CONF_DIR/*racoon.conf "$IPSEC_CONF_DIR/$IPSEC_PSK_FILE" "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE" &> /dev/null || rCode=$exit_fail
+	
+	return $rCode
+}
+
+############################################################################################################################
+# function ipsec_restore();                                                                                                #
+#                                                                                                                          #
+# Check for the tar.gz archive ipsec_backup.tar.gz in /etc/racoon and extract it to restore previously saved IPSec         #
+# configuration files                                                                                                      #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function ipsec_restore() {
+	local rCode=$exit_fail
+	
+	if [ -f "$IPSEC_CONF_DIR/ipsec_backup.tar.gz" ] ; then
+		tar -xzf "$IPSEC_CONF_DIR/ipsec_backup.tar.gz" -C / &> /dev/null && rCode=$exit_sucs
+	fi
+	
+	return $rCode
+}
+
+############################################################################################################################
+# function ipsec_remove_backup();                                                                                          #
+#                                                                                                                          #
+# Remove the tar.gz archive ipsec_backup.tar.gz from /etc/racoon                                                           #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function ipsec_remove_backup() {
+	local rCode=$exit_fail
+	rm -f "$IPSEC_CONF_DIR/ipsec_backup.tar.gz" &> /dev/null && rCode=$exit_sucs
+	return $rCode
+}
+
+############################################################################################################################
+# function ipsec_remove_policy($policyname,$cfg_file);                                                                     #
+#                                                                                                                          #
+# Remove an IPSec policy from the temporary copy of setkey.conf passed as $cfg_file                                        #
+#                                                                                                                          #
+# Arguments:                                                                                                               #
+# - $policyname name of the IPSec policy to remove                                                                         #
+# - $cfg_file absolute path and filename of a temporary copy of setkey.conf                                                #
+#                                                                                                                          #
+# Return value:                                                                                                            #
+# IP address of the remote host for which the IPSec policy is defined                                                      #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function ipsec_remove_policy() {
+	local rCode=$exit_fail
+	
+	local policyname="$1"
+	local cfg_file="$2"
+	
+	local rh_ipaddress=$($CMD_GREP -E -A 1 "^\#POLICY_NAME=$policyname$" "$cfg_file" | $CMD_GREP "spdadd" | $CMD_SED "s|.*\s\(\([0-9]\{1,3\}\.\)\{3\}[0-9]\{1,3\}\).*|\1|" )
+	#ipsec_remove_in_out_policy "$policyname" "$cfg_file"
+	echo $rh_ipaddress
+	
+	rCode=$exit_sucs
+	return $rCode
+}
+
+############################################################################################################################
+# function ipsec_remove_gateway_policy($policyname,$cfg_file);                                                             #
+#                                                                                                                          #
+# Remove an IPSec policy from the temporary copy of setkey.conf passed as $cfg_file                                        #
+#                                                                                                                          #
+# Arguments:                                                                                                               #
+# - $policyname name of the IPSec policy to remove                                                                         #
+# - $cfg_file absolute path and filename of a temporary copy of setkey.conf                                                #
+#                                                                                                                          #
+# Return value:                                                                                                            #
+# gateway IP address of the remote host for which the IPSec policy is defined                                              #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function ipsec_remove_gateway_policy() {
+    local rCode=$exit_fail
+    local policyname="$1"
+    local cfg_file="$2"
+    local gw_ipaddress=$($CMD_GREP -E -A 2 "^\#POLICY_NAME=$policyname$" "$cfg_file" | $CMD_GREP "tunnel" | $CMD_CUT -d "-" -f2 | $CMD_CUT -d "/" -f1)
+    echo $gw_ipaddress
+	rCode=$exit_sucs
+	return $rCode
+}
+
+############################################################################################################################
+# function ipsec_remove_in_out_policy($policyname,$cfg_file);                                                              #
+#                                                                                                                          #
+# Remove an IPSec policy from the temporary copy of setkey.conf passed as $cfg_file (helper function)                      #
+#                                                                                                                          #
+# Arguments:                                                                                                               #
+# - $policyname name of the IPSec policy to remove                                                                         #
+# - $cfg_file absolute path and filename of a temporary copy of setkey.conf                                                #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function ipsec_remove_in_out_policy() {
+	local rCode=$exit_fail
+	
+	local policyname="$1"
+	local cfg_file="$2"
+	local policyname_line=$($CMD_GREP -nE "^\#POLICY_NAME=$policyname$" "$cfg_file")
+	local policyname_line_components=(${policyname_line//":"/ })
+	local policyname_line_number=${policyname_line_components[0]}
+
+	local cfg_file_lines=$($CMD_WC -l "$cfg_file" | $CMD_AWK '{ print $1 }')
+	local lastline_has_newline=$($CMD_CAT "$cfg_file" | tail -n -1 | $CMD_WC -l)
+	if [ $lastline_has_newline -eq 0 ] ; then
+		(( cfg_file_lines = $cfg_file_lines + 1 ))
+	fi
+	local lines_to_read
+	(( lines_to_read = $cfg_file_lines - $policyname_line_number ))
+	local colon_line=$(tail -n "-$lines_to_read" "$cfg_file" | $CMD_GREP -n ";" | $CMD_HEAD -6 | tail -n -1)
+	local colon_line_components=(${colon_line//":"/ })
+	local colon_line_number
+	(( colon_line_number = ${colon_line_components[0]} + $policyname_line_number ))
+
+	$CMD_SED -i $policyname_line_number","$colon_line_number"d" "$cfg_file"
+	$CMD_SED -i '/./!d' "$cfg_file"
+	
+	rCode=$exit_sucs
+	return $rCode
+}
+# END functions "stolen" by ipsec_commons
+
+# _____________________ _____________________
+#|    _ _   _  .  _    |    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |   | ) ) (_| | | )   |
+#|_____________________|_____________________|
+# Here begins the "main" function...
+
+
+# Set the interpreter to exit if a non-initialized variable is used.
+set -u
+
+# Log the parameters in the system log
+log "START: <$0 $*>"
+
+if is_vAPG; then
+  console_print "$exit_virtual_arch_string"
+  console_print ""
+else
+  #sanity check to see if things are in place
+  sanity_check
+
+  # parse the command-line paramters
+  parse_args $*
+
+  # invoke the command
+  invoke
+fi
+
+log "END: <$0 $*>"
+
+# the script returns the status of the last invoked function
+exit $exit_sucs
+

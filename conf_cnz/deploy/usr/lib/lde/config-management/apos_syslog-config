@@ -1,0 +1,332 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       apos_syslog-config
+# Description:
+#       A script to produce the rsyslog or syslog-ng configuration file.
+# Note:
+#	This script is intended to be deployed to the
+#	/usr/lib/lde/config-management/ directory.
+#
+#	It relies on the /opt/ap/apos/conf/apos_common.sh library.
+##
+# Changelog:
+# - Wed Jul 13 2022 - P S Soumya(zpsxsou)
+#       Changes Related to apg-log-stream-template.conf file for mml syslog handling 
+# - Mon Jul 26 2021 - Pravalika P(zprapxx)
+#       RSYSLOG Feature impacts: Fetching the MEID from lde-NMEID file if IMM is down
+# - Fri Jul 16 2021 - Dharma Gondu (xdhatej)
+#       Fix for deploying 10-apg-rsyslog-rule
+# - Fri Jun 18 2021 - Dharma Theja (xdhatej)
+#       Fix for TR HZ10718
+# - Fri Jun 11 2021 - Suryanarayana Pammi (xpamsur)
+#	Transferring the updated template_lde_streaming_messages.conf file 
+#	for streaming of messages, as a part of APG Syslog Adaptation feature.
+# - Tue Mar 26 2019 - Pravalika P(zprapxx),Paolo Palmieri(epaopal) 
+#       As part of ANSII Linux file permissions requirement,Modified the create_fifos function 
+#       Also included few extra sanity checks in create_fifos function to make the code more robust 
+# - Fri Feb 19 2016 - Francesco Rainone (efrarai), Fabio Ronca (efabron)
+# Fix to cover maiden installation case.
+# - Fri Feb 19 2016 - Paola Mazzone (xpaomaz) Cuono Crimaldi (xcuocri) Massimo Di Napoli (xmadina)
+#	Syslog-ng conf file section removed. Added Rsyslog configuration file management from template
+# - Wed Feb 10 2016 - Fabio Ronca (efabron)
+#	Fix on symbolic links creation
+# - Wed Jan 20 2016 - Franco D'Ambrosio (efradam)
+#	Added creation of fifos and symbolic links
+# - Tue Mar 03 2015 - Nazeema Begum (xnazbeg)
+#	Added filter for syslog-ng startup event
+# - Mon Apr 22 2013 - Francesco Rainone (efrarai)
+#	Added log to catch failed logins in ALOG.
+# - Fri Apr 05 2013 - Francesco Rainone (efrarai)
+#	Added filter and log for ldapsearch hardening.
+# - Mon Dec 03 2012 - Francesco Rainone (efrarai)
+#	Log dir/file group and permissions updated.
+# - Tue Jan 10 2012 - Francesco Rainone (efrarai)
+#	First version.
+# - Fri Apr 20 2012 - ealfatt (new info for usa application)
+##
+# LDE_deployment:
+# 	type:		config
+# 	priority:	530
+##
+
+##
+# libraries -------------------------------------------------------------- BEGIN
+if [ -r /opt/ap/apos/conf/apos_common.sh ]; then
+	. /opt/ap/apos/conf/apos_common.sh
+else
+	echo '/opt/ap/apos/conf/apos_common.sh not found or not readable!' >&2
+	exit 1
+fi
+# libraries ---------------------------------------------------------------- END
+##
+
+
+##
+# functions -------------------------------------------------------------- BEGIN
+function usage(){
+	cat << HEREDOC
+Usage: $0 <action> <phase> [<etc_root>]
+where:
+	<action> can be "start" or "stop" or "config"
+	<phase> can be "init" or "reload"
+	<etc_root> (optional) specifies the base folder where the configuration
+	           will be generated (/etc by default)
+HEREDOC
+}
+
+function create_dir(){
+  # Create the directory /var/run/ap
+  local storage_fifo='/var/run/ap'
+  if [ ! -d $storage_fifo ]; then
+    mkdir -p -m 0755 $storage_fifo || apos_abort "Failure while creating $storage_fifo"
+  fi
+  return $TRUE
+}
+
+function create_fifos(){
+  # Create fifos in the directory /var/run/ap
+
+  local storage_fifo='/var/run/ap'
+
+  local LIST_FIFO="acs_aehfifo
+  acs_alhfifo
+  acs_alogmainfifo
+  acs_prcevmaxfifo
+  acs_usafifo"
+
+  for FIFO in $LIST_FIFO; do
+    if [ ! -p $storage_fifo/$FIFO ]; then
+    #Introduced -R option to remove any directories with reserved name
+      rm -Rf $storage_fifo/$FIFO &>/dev/null || apos_abort "Failure while removing $storage_fifo/$FIFO"
+    elif [ `stat -c %a $storage_fifo/$FIFO` -ne "644" ]; then 
+    #This condition will hit if the pipes are already present, but with wrong permissions
+      chmod 0644 $storage_fifo/$FIFO || apos_abort "Failure while changing permissions on $storage_fifo/$FIFO"
+    fi
+    if [ ! -e $storage_fifo/$FIFO ]; then
+      mkfifo -m 0644 $storage_fifo/$FIFO || apos_abort "Failure while creating $storage_fifo/$FIFO"
+    fi
+  done
+  return $TRUE
+}
+
+function create_symlinks(){
+  # Create symbolic links to /var/log/messages
+  local LIST_LOG="ssh_log
+  cron_log
+  daemon_log
+  syslog_log
+  telnet_log
+  user_log"
+
+  for HN in $(cat /etc/cluster/nodes/all/*/hostname); do
+    if [ ! -d /var/log/${HN} ]; then
+      mkdir -p /var/log/${HN} || apos_abort "Failure while creating /var/log/$HN"
+    fi
+    for LOG in $LIST_LOG; do
+      if [ -e /var/log/${HN}/${LOG} -o -h /var/log/${HN}/${LOG} ]; then
+        if [ ! -h /var/log/${HN}/${LOG} ]; then
+          apos_log "Warning! /var/log/${HN}/${LOG} is not a symbolic link"
+        fi
+      else
+        ln -s /var/log/${HN}/messages /var/log/${HN}/${LOG} || apos_abort "Failure while creating symbolic link var/log/${HN}/${LOG}"
+      fi
+    done
+  done
+  return $TRUE
+}
+
+function do_start(){
+	# TO-DO: implement the start phase if needed.
+	return
+}
+
+function do_stop(){
+	# TO-DO: implement the stop phase if needed.
+	return
+}
+
+function do_config(){
+  local SRC_APG_RSYS_RULE=/opt/ap/apos/etc/deploy/etc/10-apg-rsyslog-rule
+  local ETC_APG_RSYS_RULE=/etc/logrot.d/10-apg-rsyslog-rule
+  local CONF_DIR='/opt/ap/apos/conf'
+  local VERSION=$(lde-info  | grep -i Numeric | awk -F ' ' '{print $3}' | awk -F '.' '{print $1"."$2}')
+  # Create the directory /var/run/ap
+  create_dir
+  # Create fifos in the directory /var/run/ap
+  create_fifos
+  # Create symbolic links to /var/log/messages
+  create_symlinks
+  
+  ####XPAMSUR-Change1: Changes related to RSYSLOG Adaptation feature Start######
+  ### This global template is triggered and replaces rsyslog.conf file ####
+  ### when IMM command is used to change the node MEID and during node restore##
+  SYSLOG_CONFIG_TEMPLATE="/usr/lib/lde/syslog-config/templates/rsyslog"
+  NODE_APOS_CONFIG_PATH="/opt/ap/apos/conf"
+
+  if  [ -f $SYSLOG_CONFIG_TEMPLATE/lde-rsyslog-global-template.conf ] ; then
+	/usr/bin/cp $NODE_APOS_CONFIG_PATH/apg_rsyslog_global_template.conf $SYSLOG_CONFIG_TEMPLATE/lde-rsyslog-global-template.conf
+  else
+        apos_abort 'lde-rsyslog-global-template.conf file not found'
+  fi
+  if  [ -f $SYSLOG_CONFIG_TEMPLATE/lde-log-stream-template.conf ] ; then
+        /usr/bin/cp $NODE_APOS_CONFIG_PATH/apg-log-stream-template.conf $SYSLOG_CONFIG_TEMPLATE/lde-log-stream-template.conf
+  else
+        apos_abort 'apg-log-stream-template.conf file not found'
+  fi
+
+  ###########################Change1 End###############################################
+
+  # Create /etc/rsyslog.conf (if rsyslog bin exists)		
+  if [ -x /sbin/rsyslogd ]; then
+    item_list='
+    <this_address>|/etc/cluster/nodes/this/networks/internal/primary/address
+    <peer_address>|/etc/cluster/nodes/peer/networks/internal/primary/address
+    '
+    /usr/bin/cp /opt/ap/apos/conf/template_rsyslog.conf $ETC_ROOT/rsyslog.conf
+    for item in $item_list; do
+      placeholder=''
+      source=''
+      value=''
+      placeholder=$(echo $item | awk -F'|' '{print $1}'|tr -d [[:space:]])
+      source=$(echo $item | awk -F'|' '{print $2}'|tr -d [[:space:]])
+
+      if [ -f "$source" ]; then
+        value=$(<$source)
+      fi
+      
+      # the following checks is added to cover the case when node b isn't
+      # available in the cluster (e.g. during GEP1/GEP2 maiden installation).
+      if [ -z "$value" ]; then
+        sed -i -r "/^#ifdef[[:space:]]+$placeholder\$/,/^#endif[[:space:]]+$placeholder\$/d" $ETC_ROOT/rsyslog.conf
+       
+	 ####XPAMSUR-Change1: Changes related to RSYSLOG Adaptation feature Start######
+	 # To replace string <this_address> with internal IP Address 
+	sed -i -r "/^#ifdef[[:space:]]+$placeholder\$/,/^#endif[[:space:]]+$placeholder\$/d" $SYSLOG_CONFIG_TEMPLATE/lde-rsyslog-global-template.conf
+	#####################################End#######################################
+      else
+        sed -i -r -e "s@^#ifdef[[:space:]]+$placeholder\$@@g" -e "s@^#endif[[:space:]]+$placeholder\$@@g" $ETC_ROOT/rsyslog.conf
+        sed -i "s/$placeholder/$value/g" $ETC_ROOT/rsyslog.conf
+         ####XPAMSUR-Change1: Changes related to RSYSLOG Adaptation feature Start######
+	 # To replace string <peer_address> with internal IP Address 
+	sed -i -r -e "s@^#ifdef[[:space:]]+$placeholder\$@@g" -e "s@^#endif[[:space:]]+$placeholder\$@@g" $SYSLOG_CONFIG_TEMPLATE/lde-rsyslog-global-template.conf
+        sed -i "s/$placeholder/$value/g" $SYSLOG_CONFIG_TEMPLATE/lde-rsyslog-global-template.conf
+	####################################End#######################################
+      fi
+    done
+      
+      ####XPAMSUR-Change2: Changes related to RSYSLOG Adaptation feature Start######
+      # Commenting the template, so as to reflect the same in rsyslog.d/99-lde-streaming-message.conf##
+      ### for APG defined D & T format in messages only #####
+      if  [ -f $SYSLOG_CONFIG_TEMPLATE/lde-streaming-messages-template.conf ] ; then 
+             /usr/bin/cp $NODE_APOS_CONFIG_PATH/template_lde_streaming_messages.conf $SYSLOG_CONFIG_TEMPLATE/lde-streaming-messages-template.conf
+      else
+	     apos_abort 'lde-streaming-messages-template.conf file not found'
+      fi
+
+      if  [ -f $SYSLOG_CONFIG_TEMPLATE/lde-streaming-auth-template.conf ] ; then
+             /usr/bin/cp $NODE_APOS_CONFIG_PATH/template_lde_streaming_auth.conf $SYSLOG_CONFIG_TEMPLATE/lde-streaming-auth-template.conf
+      else
+             apos_abort 'lde-streaming-auth-template.conf file not found'
+      fi
+     
+      if  [ -f $SYSLOG_CONFIG_TEMPLATE/lde-streaming-kernel-template.conf ] ; then
+             /usr/bin/cp $NODE_APOS_CONFIG_PATH/template_lde_streaming_kernel.conf $SYSLOG_CONFIG_TEMPLATE/lde-streaming-kernel-template.conf
+      else
+         apos_abort 'lde-streaming-kernel-template.conf file not found'
+      fi
+      #################################Change2 End#######################################
+      
+      ########XPAMSUR-Change3: Changes related to RSYSLOG Adaptation feature Start#########
+      ####Introducing MEID in rsyslog.conf file to display as SC-2-1.tp206ap1 #######
+      #####  or SC-2-1.VAPZ056 in security_audit after MI & UP##
+      NMEID_FILE=/boot/lde-configuration/lde-log-controller/lde-NMEID 
+      
+      #Collect Managed element name
+      me_name=$(immlist managedElementId=1|grep "networkManagedElementId" 2>/dev/null | awk -F' ' '{print $3}')
+      #In case IMM is not available yet, using info by LDE
+      if [[ -z "$me_name" && -e $NMEID_FILE  ]]; then
+           me_name=$(cat $NMEID_FILE)
+           apos_log "Fetching the Managed element ID from lde-NMEID file"
+      fi
+      if [ ! -z "$me_name" ]; then
+           sed -i   "s/\$hostname.*/\$hostname \& \".$me_name\";/" $ETC_ROOT/rsyslog.conf;
+      else
+           apos_log "Unable to fetch the Managed element ID"
+      fi
+      ###################################END##############################################
+  else
+    apos_abort "/sbin/rsyslogd not found"
+  fi
+
+  # Setup symbolic links to local log files
+  if [ -z "$DEBUG" ]; then
+    for LOG in kernel auth messages; do
+      ln -sf $(<$ETC_ROOT/cluster/nodes/this/hostname)/$LOG /var/log/$LOG
+    done
+  fi
+#Deploying APG customized rule for logrotation
+ if [ -r "${SRC_APG_RSYS_RULE}" ]; then
+   ${CONF_DIR}/apos_deploy.sh --from "${SRC_APG_RSYS_RULE}" --to "${ETC_APG_RSYS_RULE}"
+   if [ $? -ne 0 ]; then
+     apos_abort "failure when deploying ${SRC_APG_RSYS_RULE} to ${ETC_APG_RSYS_RULE}"
+   fi
+ fi
+# restart logrotd service
+apos_servicemgmt restart lde-logrot.service &> /dev/null || apos_abort "failure while restarting lde-logrot service"
+}
+# functions ---------------------------------------------------------------- END
+##
+
+##
+# variables -------------------------------------------------------------- BEGIN
+
+# variables ---------------------------------------------------------------- END
+##
+
+##
+# main ------------------------------------------------------------------- BEGIN
+##
+# LDE config scripts called with the following:
+# param 1: action - start, stop or config
+# param 2: generate phase - init or reload
+# param 3: root path where config should be generated
+
+apos_intro $0
+
+if [ $# -lt 2 ]; then
+	usage
+	apos_abort 'missing parameter'
+fi
+
+if [ $(</etc/cluster/nodes/this/type) != 'control' ]; then
+	apos_abort 'this script must be run ONLY in control nodes'
+fi
+
+ACTION="$1"
+PHASE="$2"
+ETC_ROOT=${3:-"/etc"}
+
+case "$ACTION" in
+  start)
+    do_start
+  ;;
+  stop)
+    do_stop
+  ;;
+  config)
+    do_config
+  ;;
+  *)
+    usage
+  ;;
+esac
+
+apos_outro
+exit $TRUE
+# main --------------------------------------------------------------------- END
+##

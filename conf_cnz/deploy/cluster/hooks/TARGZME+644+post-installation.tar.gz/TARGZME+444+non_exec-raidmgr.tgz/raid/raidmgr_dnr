@@ -1,0 +1,1773 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       raidmgr_dnr
+# Description:
+#   A script to handle the DRBD resource drbd1 in APG43L.
+##
+# Usage:
+#       call: raidmgr_dnr --help
+##
+# Changelog:
+# - Fri Feb 11 2022 -Dharma Teja (XDHATEJ)
+#   - added fix for TR HZ60448 DNDR failing in GEP5 and GEP7 when raid structure is wrong.
+# - Thu May 10 2018 - Furquan Ullah(xfurull)
+# Fix for TR HW69872 
+# - Fri 23 Mar 2018 - Pratap Reddy Uppada (xpraupp)
+#     Fix for TR HW73269: volume group size truncated
+# - Thu January 04 2018  Raghavendra Koduri (XKODRAG)
+#   - SLES12 sp2 impacts
+#   - Introduced new --yes in pvcreate and lvcreate commands
+# - Tue October 04 2017  Raghavendra Koduri (XKODRAG)
+#   Impacts due GEP7 hardware
+# - Mon Mar 07 2016 - Baratam Swetha(xswebar)
+# Updated TR HU63316 (snrinit needs to be handled for spare board replacement for GEP5)
+# - Wed Nov 18 2015 - Nazeema Begum (xnazbeg)
+#       Added support to handle GEP5-64-1200 hardware
+# - Fri May 23 2014 - Pratap Reddy (xpraupp)
+#       Updated to create appropriate LVM structure
+# - Fri Mar 22 2013 - Malangsha Shaik (xmalsha)
+#       First version.
+##
+
+set -x
+
+# command-set
+CMD_FDISK=''
+CMD_LOGGER=''
+CMD_RM=''
+CMD_CAT=''
+CMD_GETOPT=''
+CMD_GREP=''
+CMD_WC=''
+CMD_TR=''
+CMD_SED=''
+CMD_MKFS_EXT3=''
+CMD_AWK=''
+CMD_MOUNT=''
+CMD_UMOUNT=''
+CMD_MKDIR=''
+CMD_LS=''
+CMD_FUSER=''
+CMD_PS=''
+CMD_TAIL=''
+CMD_FIND=''
+CMD_HWTYPE=''
+CMD_DIRNAME=''
+CMD_DD=''
+CMD_PARTPROBE=''
+CMD_BLOCKDEV=''
+CMD_UDEVADM=''
+CMD_DRBDADM=''
+CMD_PING=''
+
+
+# global variable-set
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+DRBD_RESOURCE='drbd1'
+DRBD_DEVICE=''
+PROC_DRBD='/proc/drbd'
+MOUNT_POINT='/data'
+DRBD_DISK=''
+DRBD_PARTITIONS=''
+SYSTM_DISK='/dev/eri_disk'
+PARTBLE_DISKS=''
+DUBLE_PART_DISK=''
+SNGLE_PART_DISK=''
+DRBD_DATA_DISKS=''
+DRBD_META_DISK=''
+META_SIZE_MB=''
+DRBD_DISKS_VERBOSE=''
+ETC_DIR='/etc'
+STAT_FILE="/proc/drbd"
+OUT_TMP=''
+ERR_TMP=''
+SCRIPT_NAME='raidmgr_dnr'
+SCRIPT_OPTS=''
+ROOT_USER=$FALSE
+LOG_TAG='-t raidmgr_dnr'
+NODE_ONE=1
+NODE_TWO=2
+FILE_SYS='ext3'
+PART_DATA_LV='/dev/eri-data-vg/eri-data-lv'
+PART_META_SLINK='/dev/eri-meta-part'
+FSTAB_OPTIONS='rw,grpjquota=aquota.group,jqfmt=vfsv0'
+FSTAB_LINE="$DRBD_DEVICE $MOUNT_POINT ext3 $FSTAB_OPTIONS 0 0"
+SYSTM_DISK='/dev/eri_disk'
+PEER_HOSTNAME=$(</etc/cluster/nodes/peer/hostname)
+
+# drbd1 resource variables
+DRBD_CONF=$ETC_DIR/drbd.conf
+DRBD_CONF_DIR=$ETC_DIR/drbd.d
+RES_CONF=$DRBD_CONF_DIR/${DRBD_RESOURCE}.res
+SYNC_TYPE=''
+DRBD_VERSION=$(/sbin/drbdadm -V | grep DRBDADM_VERSION= | cut -d = -f 2)
+CMD_DRBD_STATUS='/opt/ap/apos/conf/apos_drbd_status'
+
+
+# Option variable set
+FULL_OPT_LIST=''
+OPT_CONFIG=$FALSE;
+OPT_CONFIG_ARG=''
+OPT_FOLDER=$FALSE
+OPT_ACTIVATE=$FALSE
+OPT_DISABLE=$FALSE
+OPT_FORMAT=$FALSE
+OPT_FORCE=$FALSE
+OPT_LVM=$FALSE
+OPT_HELP=$FALSE
+OPT_MOUNT=$FALSE
+OPT_PART=$FALSE
+OPT_PART_ARG=''
+OPT_STATUS=$FALSE
+OPT_DEACTIVATE=$FALSE
+OPT_UNMOUNT=$FALSE
+OPT_VERBOSE=$FALSE
+CMPTBLE_OPTS=$TRUE
+
+# exit codes set
+exit_sucs=0
+exit_fail=1
+exit_usge=2
+exit_cmnd_abrt=3
+
+# do_status
+exit_stat_conf=8
+exit_stat_drbd=9
+
+# do_part
+exit_part_conf=10
+exit_part_disb=11
+exit_part_invd=12
+exit_part_part=13
+exit_part_ddxx=14
+exit_part_fdsk=15
+exit_part_upxx=16
+exit_part_labl=17
+exit_part_prm1=18
+exit_part_prm2=19
+
+# do_remove
+exit_asmb_eror=20
+exit_conf_eror=21
+exit_role_conf=22
+exit_role_role=23
+exit_role_eror=24
+
+# create_md
+exit_cret_mdxx=25
+
+
+# do_unmount
+exit_umnt_bsyf=26
+
+# do_mount
+exit_mntx_fail=27
+
+# do_activate
+exit_actv_upxx=32
+exit_actv_sync=33
+
+# do_fomat
+exit_frmt_conf=28
+exit_frmt_prim=29
+exit_frmt_fail=30
+exit_frmt_mntx=31
+
+# general exit codes
+exit_dskf_gepx=32
+exit_cdsk_part=33
+exit_slnk_part=34
+exit_manf_eror=35
+exit_hwtp_eror=36
+
+# do_disable
+exit_disb_conf=37
+exit_disb_forc=38
+exit_disb_scon=39
+
+
+#do_lvm
+exit_lvmx_eror=40
+exit_dsfk_eror=41
+exit_rmlv_eror=42
+
+# Function definitions start from here =====>>
+# ------------------------------------------------------------------------
+# The function will return $TRUE if the --verbose option has been specified,
+# $FALSE otherwise.
+function is_verbose(){
+        if [ $OPT_VERBOSE -eq $TRUE ]; then
+                        return $TRUE
+                else
+                        return $FALSE
+        fi
+}
+
+# ------------------------------------------------------------------------
+function is_traceon(){
+        # trace option is only available for root-user for now.
+        local TRACE_FILE='/tmp/raidmgr.trace'
+        if [ -f $TRACE_FILE ]; then
+                return $TRUE
+        else
+                return $FALSE
+        fi
+}
+
+# ------------------------------------------------------------------------
+function log(){
+    local PRIO='-p user.notice'
+    local MESSAGE="${*:-notice}"
+    $CMD_LOGGER $PRIO $LOG_TAG "$MESSAGE" >$OUT_TMP 2>$ERR_TMP
+        is_verbose && echo -e "$MESSAGE"
+}
+
+# ------------------------------------------------------------------------
+# The function will log an error message in the system log. If the --verbose
+# option has been specified, it will print the same message on stderr too.
+function log_error(){
+    local PRIO='-p user.err'
+    local MESSAGE="${*:-error}"
+    $CMD_LOGGER $PRIO $LOG_TAG "$MESSAGE" >$OUT_TMP 2>$ERR_TMP
+}
+
+# ------------------------------------------------------------------------
+# The function will log the function start and the parameter list only
+# if the --verbose option have been specified.
+function trace_enter(){
+        is_traceon && echo -e "(TRACE:) START: [$*]"
+}
+
+# ------------------------------------------------------------------------
+# The function will log the function end only if the --verbose option
+# have been specified.
+function trace_leave(){
+        is_traceon && echo -e "(TRACE:) END: [$1]"
+}
+
+# ------------------------------------------------------------------------
+function console_print(){
+    echo -e
+    echo -e "$1"
+    echo -e
+}
+
+# ------------------------------------------------------------------------
+function abort(){
+                console_print "$1"
+                is_traceon && {
+                        echo -e "(TRACE:)"
+                        $CMD_CAT $ERR_TMP
+                }
+                log_error "ABORTING: <"$1">"
+                exit $2
+}
+
+# ------------------------------------------------------------------------
+function abort_v1(){
+                abort "$@"
+}
+
+# ------------------------------------------------------------------------
+function abort_v2(){
+                console_print "Error when executing (general fault)"
+                log_error "ABORTING: <"$1">"
+                exit $exit_fail
+}
+
+# ------------------------------------------------------------------------
+function get_hook_path() {
+  local FOLDER="${HOOKS_DIR}"
+  if [ "${FOLDER}" == "" ]; then
+    FOLDER="/tmp/hooks_execute_dir"
+    if [ -d ${FOLDER} ]; then
+      echo "${FOLDER}"
+    else
+      echo "ERROR: The hook path is not configured by LOTC!"; echo "Aborting"; echo ""; exit 1
+    fi
+  else
+    if [ -d ${FOLDER} ]; then
+      echo "${FOLDER}"
+    else
+      echo "ERROR: The hook path is wrongly provided by LOTC!"; echo "Aborting"; echo ""; exit 1
+    fi
+  fi
+}
+
+# ------------------------------------------------------------------------
+function sanity_check(){
+    OUT_TMP=$(mktemp --tmpdir raidmgr_log_XXXXX)
+    ERR_TMP=$OUT_TMP
+    HOOK_PATH=$( get_hook_path )
+
+    # command-section
+    CMD_LOGGER='/bin/logger'
+    CMD_RM='/bin/rm'
+    CMD_CAT='/bin/cat'
+    CMD_GETOPT='/usr/bin/getopt'
+    CMD_GREP='/usr/bin/grep'
+    CMD_WC='/usr/bin/wc'
+    CMD_TR='/usr/bin/tr'
+    CMD_SED='/usr/bin/sed'
+    CMD_MKFS_EXT3='/sbin/mkfs.ext3'
+    CMD_AWK='/usr/bin/awk'
+    CMD_MOUNT='/bin/mount'
+    CMD_UMOUNT='/bin/umount'
+    CMD_MKDIR='/bin/mkdir'
+    CMD_LS='/bin/ls'
+    CMD_FUSER='/bin/fuser'
+    CMD_PS='/bin/ps'
+    CMD_TAIL='/usr/bin/tail'
+    CMD_FIND='/usr/bin/find'
+    CMD_DIRNAME='/usr/bin/dirname'
+    CMD_DD='/bin/dd'
+    CMD_PARTED='/usr/sbin/parted'
+    CMD_PARTPROBE='/usr/sbin/partprobe'
+    CMD_BLOCKDEV='/sbin/blockdev'
+    CMD_UDEVADM='/sbin/udevadm'
+    CMD_DRBDADM='/sbin/drbdadm'
+    CMD_PING='/bin/ping'
+    CMD_PARTED='/usr/sbin/parted'
+    CMD_PVCREATE='/sbin/pvcreate'
+    CMD_PVS='/sbin/pvs'
+    CMD_VGS='/sbin/vgs'
+    CMD_LVS='/sbin/lvs'
+    CMD_VGCREATE='/sbin/vgcreate'
+    CMD_DMSETUP='/sbin/dmsetup'
+    CMD_LVCREATE='/sbin/lvcreate'
+    CMD_BLKID='/sbin/blkid'
+    CMD_LVCHANGE='/sbin/lvchange'
+    CMD_VGREMOVE='/sbin/vgremove'
+    CMD_PVREMOVE='/sbin/pvremove'
+    CMD_LVREMOVE='/sbin/lvremove'
+
+    # General checks
+    [ ! -d $ETC_DIR ] && abort_v2 "folder $ETC_DIR not found!"
+        [ ! -d $MOUNT_POINT ] && {
+                $CMD_MKDIR -p $MOUNT_POINT >$OUT_TMP 2>$ERR_TMP
+        [ $? -ne $TRUE ] && abort_v2 "failure while creating the mount point $MOUNT_POINT"
+        log "created folder: \"$MOUNT_POINT\""
+    }
+
+    DRBD_DEVICE=$( $CMD_DRBDADM sh-dev $DRBD_RESOURCE)
+    NODE_ID=$(</etc/cluster/nodes/this/id)
+    [ -z $NODE_ID ] && abort_v2 "NODE_ID received null,exiting..."
+
+	echo $SYSTM_DISK
+        if [ ! -b $SYSTM_DISK ];then
+                SYSTM_DISK="$( readlink -f $SYSTM_DISK)"
+                echo "System disk symlink: $SYSTM_DISK"
+        fi
+         [ -z $SYSTM_DISK ] && echo "system disk not found"
+  #  else
+  #      echo "failure while fetching system disk $SYSTM_DISK"
+  #  fi
+
+
+}
+
+# ------------------------------------------------------------------------
+# This function, prints the command usage if the user invoked is
+# ts/root user on the stdout.
+function usage_ruser(){
+    $CMD_CAT << HEREDOC
+
+Usage:
+        $SCRIPT_NAME --configure|-c [--part|-p ] [--lvm|-l ] [ --activate|-t ][--force|-f] [--verbose|-v]
+        $SCRIPT_NAME --format|-F [--mount|-m][--force|-f] [--verbose|-v]
+        $SCRIPT_NAME --disable|-d [--unmount|-u] [--verbose|-v]
+        $SCRIPT_NAME --activate|-t [--force|-f] [--verbose|-v]
+        $SCRIPT_NAME --status|-s [--verbose|-v]
+        $SCRIPT_NAME --help|-h
+
+HEREDOC
+
+        # If  help option is invoked, exit command with success code.
+        [[ $OPT_HELP -eq $TRUE && $CMPTBLE_OPTS -eq $TRUE ]] && exit $exit_sucs
+
+
+        # If not, exit_usage exit code.
+        exit $exit_usge
+}
+
+# ------------------------------------------------------------------------
+# The function invokes the right parse_cmdline function based on the user
+# access
+function parse_cmdline(){
+
+        local rCode=$FALSE
+
+        # check if the command is invoked with-out any parameter.
+        [ $# -eq 0 ] && {
+                echo -e "Incorrect Usage!"
+                usage_ruser
+        }
+
+
+        local PARAMETERS=$*
+        local rCode
+        local OPTIONS='c d F f h m p:: s u v t l'
+        local LONG_OPTIONS='configure activate disable format force help lvm mount status part:: unmount verbose'
+
+        $CMD_GETOPT --quiet --quiet-output --longoptions="$LONG_OPTIONS" --options="$OPTIONS" -- "$@"
+        rCode=$?
+        [ $rCode -ne $TRUE ] && {
+                echo -e "Incorrect Usage!"
+                usage_ruser
+        }
+
+        local ARGS="$@"
+        eval set -- "$ARGS"
+
+
+        # Make sure to handle the cases for all the options listed in OPTIONS
+        # and LONG_OPTIONS and to fill up the right script-wide variables.
+        while [ $# -gt 0 ]; do
+                case "$1" in
+                        --configure|-c)
+                                OPT_CONFIG=$TRUE
+                                FULL_OPT_LIST="${FULL_OPT_LIST}configure "
+                        ;;
+                        --disable|-d)
+                                OPT_DISABLE=$TRUE
+                                FULL_OPT_LIST="${FULL_OPT_LIST}disable "
+                        ;;
+                        --lvm|-l)
+                                OPT_LVM=$TRUE
+                                FULL_OPT_LIST="${FULL_OPT_LIST}lvm "
+            ;;
+                        --format|-F)
+                                OPT_FORMAT=$TRUE
+                                FULL_OPT_LIST="${FULL_OPT_LIST}format "
+                        ;;
+                        --force|-f)
+                                OPT_FORCE=$TRUE
+                                FULL_OPT_LIST="${FULL_OPT_LIST}force "
+                        ;;
+                        --help|-h)
+                                OPT_HELP=$TRUE
+                                FULL_OPT_LIST="${FULL_OPT_LIST}help "
+                        ;;
+                        --mount|-m)
+                                OPT_MOUNT=$TRUE
+                                FULL_OPT_LIST="${FULL_OPT_LIST}mount "
+                        ;;
+                        --part|-p)
+                                OPT_PART=$TRUE
+                                if [[ $# -gt 1 && -n "$2" && ! $2 =~ ^-.*$ ]]; then
+                                        OPT_PART_ARG=${2:-''}
+                                        OPT_PART_ARG=$( echo "$OPT_PART_ARG" | $CMD_TR '[:lower:]' '[:upper:]')
+                                        shift
+                                fi
+                                FULL_OPT_LIST="${FULL_OPT_LIST}part "
+                        ;;
+                        --status|-s)
+                                OPT_STATUS=$TRUE
+                                FULL_OPT_LIST="${FULL_OPT_LIST}status "
+                        ;;
+                        --unmount|-u)
+                                OPT_UNMOUNT=$TRUE
+                                FULL_OPT_LIST="${FULL_OPT_LIST}unmount "
+                        ;;
+                        --verbose|-v)
+                                OPT_VERBOSE=$TRUE
+                                FULL_OPT_LIST="${FULL_OPT_LIST}verbose "
+                        ;;
+                        --activate|-t)
+                                OPT_ACTIVATE=$TRUE
+                                FULL_OPT_LIST="${FULL_OPT_LIST}activate "
+            ;;
+                        --)
+                                shift
+                                break
+                        ;;
+                        *)
+                                echo -e "Incorrect Usage!"
+                                usage_ruser
+                        ;;
+                esac
+                shift
+        done
+
+
+        options_check_ruser
+        return $?
+}
+
+# ------------------------------------------------------------------------
+# This function checks if the options provided by the ts-user or root user
+# are mutually exclusive.
+function options_check_ruser(){
+
+        local FULL_OPT_NUMBER=$( echo $FULL_OPT_LIST | $CMD_WC -w 2>$ERR_TMP )
+        is_traceon && echo -e "(TRACE:) recognized options: [$FULL_OPT_LIST]"
+        local OPTION
+        local COMPATIBLE_OPTIONS=''
+
+        # raidmgr_dnr --configure|-c [ --part|-p ][--force|-f] [--verbose|-v]
+        if [ $OPT_CONFIG -eq $TRUE ]; then
+                COMPATIBLE_OPTIONS='activate part lvm force verbose'
+                OPTION='configure'
+                check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+        fi
+        if [ $OPT_LVM -eq $TRUE ]; then
+                COMPATIBLE_OPTIONS='part configure activate force verbose'
+                OPTION='lvm'
+        check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+        fi
+        # raidmgr_dnr --disable|-d [--unmount|-u] [--force|-f] [--verbose|-v]
+        if [ $OPT_DISABLE -eq $TRUE ]; then
+                COMPATIBLE_OPTIONS='unmount force verbose'
+                OPTION='disable'
+                check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+        fi
+        # raidmgr_dnr --format|-f  [--mount|-m] [--force|-f] [--verbose|-v]
+        if [ $OPT_FORMAT -eq $TRUE ]; then
+                COMPATIBLE_OPTIONS='mount force verbose'
+                OPTION='format'
+                check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+        fi
+        # raidmgr_dnr --help|-h
+        if [ $OPT_HELP -eq $TRUE ]; then
+                COMPATIBLE_OPTIONS=''
+                OPTION='help'
+                check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+        fi
+        # raidmgr_dnr --activate|-t [--verbose|-v] [--force|-f]
+    if [ $OPT_ACTIVATE -eq $TRUE ]; then
+        COMPATIBLE_OPTIONS='configure verbose force lvm part'
+        OPTION='activate'
+        check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+    fi
+        # raidmgr_dnr --status|-s [--verbose|-v]
+        if [ $OPT_STATUS -eq $TRUE ]; then
+                COMPATIBLE_OPTIONS='verbose'
+                OPTION='status'
+                check_options_compatibility "$OPTION" "$COMPATIBLE_OPTIONS" "$FULL_OPT_LIST"
+        fi
+
+        # things are good-to-go so-far. launch invoker to process the options
+        invoker
+}
+
+# ------------------------------------------------------------------------
+# The function is used to check if the $DRBD_RESOURCE is configured
+function is_configured(){
+	trace_enter $FUNCNAME $*
+	local rCode=$FALSE
+        $CMD_DRBDADM status $DRBD_RESOURCE >$OUT_TMP 2>$ERR_TMP
+	[ $? -eq 0 ] &&	rCode=$TRUE
+	trace_leave $FUNCNAME
+	return $rCode
+}
+
+# ------------------------------------------------------------------------
+# The function return $TRUE if the drbd configured on the local node is
+# primary, $FALSE otherwise.
+function is_primary(){
+        local DRBD_ROLE=$(show_role role $DRBD_RESOURCE local)
+        [ "$DRBD_ROLE" == 'Primary' ] && return $TRUE
+        return $FALSE
+}
+
+# ------------------------------------------------------------------------
+# The function returns the physical identifiers where to find the datadisks
+# on the hardware specified as parameter.
+function get_valid_phy(){
+        [ $# -lt 2 ] && abort_v2 "function \"$FUNCNAME\": missing parameter"
+        [[ ! $1 =~ ^LEFT$|^RIGHT$ ]] && abort_v2 "function \"$FUNCNAME\": parameter \"$1\" in the wrong format"
+        local PHY=''
+        case "$2" in
+                GEP2)
+                        [ "$1" == 'LEFT'  ] && PHY=7
+                        [ "$1" == 'RIGHT' ] && PHY=3
+                ;;
+                GEP1)
+                        [ "$1" == 'LEFT'  ] && PHY=0
+                        [ "$1" == 'RIGHT' ] && PHY=4
+                ;;
+                VM)
+                        [ "$1" == 'LEFT'  ] && PHY=0
+                        [ "$1" == 'RIGHT' ] && PHY=1
+                ;;
+                *)
+                        abort_v2 "function \"$FUNCNAME\": parameter \"$2\" in the wrong format"
+        esac
+        echo $PHY
+}
+
+# ------------------------------------------------------------------------
+function do_force(){
+        OPT_FORCE=$TRUE
+}
+
+# ------------------------------------------------------------------------
+function do_check(){
+        trace_enter $FUNCNAME $*
+        local rCode=$FALSE
+        [ ! -b  "$1" ] && rCode=$TRUE
+        # extra needed checks will be added later-on
+        trace_enter $FUNCNAME
+        return $rCode
+}
+
+
+# ------------------------------------------------------------------------
+function do_lvm() {
+    trace_enter $FUNCNAME $*
+    local PART_DATA=''
+    local VG_SIZE_GB=''
+    local VG_SIZE_MB=''
+        local LVM_SIZE=''
+        local VG_X=''
+        local LV_X=''
+    # To define volume group and logical volume names
+    local LV_X=(eri-data-lv)
+    local VG_X=(eri-data-vg)
+    local PART_DATA=$PART_DATA_LV
+    [ -z $DRBD_DATA_DISKS ] && disk_finder
+
+        ${CMD_LVS} $PART_DATA >$OUT_TMP 2>>$ERR_TMP
+        if [ $? -eq 0 ]; then
+        ${CMD_DMSETUP} remove $PART_DATA --force >$OUT_TMP 2>>$ERR_TMP
+        ${CMD_LVREMOVE} -f $PART_DATA >$OUT_TMP 2>>$ERR_TMP
+        ${CMD_VGREMOVE} -f $VG_X >$OUT_TMP 2>>$ERR_TMP
+        for PV in $DRBD_DATA_DISKS;do
+                ${CMD_PVREMOVE} -f $PV >$OUT_TMP 2>>$ERR_TMP
+        done
+        else
+        MESSAGE="No LVM layout found..Creating LVM layout"
+        log "$MESSAGE"
+        echo -e "$MESSAGE"
+        fi
+
+        # Partitions sdc1/sdd1/sdb1 are created. First check
+        # if partitioned disk is labled as physical volume.
+        # If not create physical volumes by using pvcreate command.
+        for D in $DRBD_DATA_DISKS;do
+                MESSAGE="Creating physical volume structure..."
+                ${CMD_PVCREATE} -ff --yes $D >$OUT_TMP 2>$ERR_TMP
+                [ $? -ne 0 ] && abort "failed to create physical volume" $exit_lvmx_eror
+                MESSAGE="$MESSAGE success"
+                log "$MESSAGE"
+                echo -e "$MESSAGE"
+        done
+
+        # Create Volume groups using "vgcreate" command.Already we
+        # have one or two PV's, we can create a volume group(VG).
+        # first check if volume group is exist, If not create VG.
+        MESSAGE="Creating volume group structure..."
+        ${CMD_VGCREATE} $VG_X $DRBD_DATA_DISKS >$OUT_TMP 2>$ERR_TMP
+        [ $? -ne 0 ] && abort "failed to create volume group" $exit_lvmx_eror
+        MESSAGE="$MESSAGE success"
+        log "$MESSAGE"
+        echo -e "$MESSAGE"
+
+        # claculating volume group size to create LVM
+        # vg size will be in GB. and converting into MB
+        # 1GB =1073741824bytes= 1048576MB
+        ##### BEGIN TR FIX HW73269
+        VG_SIZE=$( ${CMD_VGS} | grep $VG_X | ${CMD_AWK} '{print $6}' )
+        if echo $VG_SIZE | grep -q 'g'; then
+          VG_SIZE_GB=$( echo $VG_SIZE | grep 'g')
+          VG_SIZE_GB=$(echo $VG_SIZE_GB | ${CMD_AWK} -F"." '{print $1}')
+          # convert vg size to MiB
+          LVM_SIZE="$( expr $VG_SIZE_GB \* 1073741824 / 1048576 - 10 )M"
+        elif echo $VG_SIZE | grep -q  't'; then
+          VG_SIZE_TB=$( echo $VG_SIZE | grep 't')
+          # This check to maintain the old behaviour for the node already
+          # deployed and ensure the backward compatibility
+          if [[ $HW_TYPE == 'GEP5_1200' || $HW_TYPE == 'GEP5_64_1200' ]]; then
+            VG_SIZE_TB=$(echo $VG_SIZE_TB | ${CMD_AWK} -F"." '{print $1}')
+            ((VG_SIZE_GB=$VG_SIZE_TB * 1024))
+            # convert vg size to MiB
+            LVM_SIZE="$( expr $VG_SIZE_GB \* 1073741824 / 1048576 - 10 )M"
+          else
+            VG_SIZE_TB=$(echo $VG_SIZE | tr -d 't')
+            VG_SIZE_GB=$(echo "$VG_SIZE_TB * 1024" | bc)
+            # convert vg size to MiB
+            VG_SIZE_MB=$(echo "$VG_SIZE_GB * 1073741824 / 1048576 - 10" | bc)
+            LVM_SIZE="$(echo $VG_SIZE_MB | ${CMD_AWK} -F"." '{print $1}')M"
+          fi
+        else
+          abort "VGS size type unknown" $exit_lvmx_eror
+        fi
+        # Create Logical Volume/s using "lvcreate" command.
+        MESSAGE="Creating logical volume structure..."
+        is_verbose && echo -n "$MESSAGE"
+        ${CMD_LVCREATE} --size ${LVM_SIZE} --name $LV_X $VG_X --yes >$OUT_TMP 2>$ERR_TMP
+        [ $? -ne 0 ] && abort "failed to create lvm $LV_X" $exit_lvmx_eror
+        ##### END TR FIX: HW73269
+        MESSAGE="$MESSAGE success"
+        log "$MESSAGE"
+        echo -e "$MESSAGE"
+
+
+        ${CMD_LVS} $PART_DATA >$OUT_TMP 2>$ERR_TMP
+        [ $? -eq 0 ] && {
+                ${CMD_LVCHANGE} --available y $PART_DATA >$OUT_TMP 2>$ERR_TMP
+                [ $? -ne 0 ] && abort "failed to create lvm" $exit_lvmx_eror
+        }
+
+        # check if label created on newly created lvm.
+        # Create Filesystem on Logical Volume/s using "mkfs" command
+        ${CMD_BLKID} -o value -s LABEL $PART_DATA | grep eri-data >$OUT_TMP 2>$ERR_TMP
+        [ $? -ne 0 ] && {
+                MESSAGE="Creating File system on Logical Volume..."
+                $CMD_MKFS_EXT3 -F -j -L eri-data $PART_DATA >$OUT_TMP 2>$ERR_TMP
+                [ $? -ne 0 ] && abort "failed to create label on lvm $LV_X" $exit_lvmx_eror
+                MESSAGE="$MESSAGE success"
+                log "$MESSAGE"
+                ! is_verbose && echo -e "$MESSAGE"
+        }
+
+        # trigger udev, to create symlinks part_meta1/2
+        check_symlinks
+
+        trace_leave $FUNCNAME
+        return $exit_sucs
+}
+
+# ------------------------------------------------------------------------
+function do_part(){
+    trace_enter $FUNCNAME $*
+    local MESSAGE=''
+    local DISK=''
+    local PART=''
+    local SNGLE_PART=''
+    local DISK_SIZE_KB=''
+    local DISK_SIZE_MB=''
+    local DATA_SIZE_MB=''
+
+
+    disk_finder
+    for PART in $PARTBLE_DISKS;do
+        do_check $PART
+        if [[ $? -eq $FALSE && $OPT_FORCE -eq $FALSE ]]; then
+            abort "The device \"$PART\" already has partition \"$DRBD_DATA_DISKS\", use the --force switch to force the partitioning" $exit_part_part
+        fi
+    done
+    # Partitioning of single data disk
+    # For single disk PARTBLE_DISKS are sdc/sdd/sdb.
+    [ -n  "$DUBLE_PART_DISK" ] && {
+        for DISK in $DUBLE_PART_DISK;do
+            MESSAGE="Performing disk partitioning..."
+            echo -n "$MESSAGE"
+            # Remove the existing partitions
+            $CMD_PARTED --script $DISK rm 1 >$OUT_TMP 2>$ERR_TMP
+            $CMD_PARTED --script $DISK rm 2 >$OUT_TMP 2>$ERR_TMP
+            # Find the data disk size in KB and MB's
+            ((DISK_SIZE_KB=$($CMD_BLOCKDEV --getsize64 $DISK)/ 1000 ))
+            ((DISK_SIZE_MB=$($CMD_BLOCKDEV --getsize64 $DISK)/1000/1000))
+            ((DATA_SIZE_MB=DISK_SIZE_MB - META_SIZE_MB))
+
+            # Clear the data disk partition table and data
+            $CMD_DD if=/dev/zero of=$DISK bs=$DISK_SIZE_KB count=1 >$OUT_TMP 2>$ERR_TMP
+            [ $? -ne 0 ] && {
+                    echo " falied"
+                    abort "Failure while erasing the partition table of the disk \"$DISK\"" $exit_part_ddxx
+            }
+            # Create label with the gpt format And check if,
+            # gpt partition table is created.
+            $CMD_PARTED --script $DISK mklabel gpt >$OUT_TMP 2>$ERR_TMP
+            if [ $($CMD_PARTED --script $DISK -ms print | grep :gpt: | wc -l) -ne 1 ];then
+                    echo " failed"
+                    abort "Failure while applying lable to the disk \"$DISK\"" $exit_part_labl
+            fi
+            # create primary partition And check if partition is created
+            $CMD_PARTED --script --align optimal $DISK unit MB mkpart primary 1 $DATA_SIZE_MB >$OUT_TMP 2>$ERR_TMP
+            if [ $($CMD_PARTED --script $DISK -m print | grep ^1 | wc -l ) -ne 1 ];then
+                    echo " failed"
+                    abort "Failure while creating primary partiton of the disk \"$DISK\"" $exit_part_prm1
+            fi
+            # Create second primary partition for only GEP1/2
+            $CMD_PARTED --script --align optimal $DISK unit MB mkpart primary $DATA_SIZE_MB $DISK_SIZE_MB >$OUT_TMP 2>$ERR_TMP
+            if [ $($CMD_PARTED --script $DISK -m print | grep ^2 | wc -l ) -ne 1 ];then
+                    echo " failed"
+                    abort "Failure while creating second primary partiton of the disk \"$DISK\"" $exit_part_prm2
+            fi
+        done
+    }
+    # Partitioning of Multiple disks in case of GEP4/5
+    # For multi disk PARTBLE_DISKS are sdc and sdd.
+    # Here partitioning will be sdc1 and sdd1
+    [ ! -z "$SNGLE_PART_DISK" ] && {
+        for SNGLE_PART in $SNGLE_PART_DISK;do
+            MESSAGE="Performing disk partitioning..."
+            echo -n "$MESSAGE"
+            # Remove the existing partitions
+            $CMD_PARTED --script $SNGLE_PART rm 1 >$OUT_TMP 2>$ERR_TMP
+            
+            # Find the data disk size in KB and MB's
+            ((DISK_SIZE_KB=$($CMD_BLOCKDEV --getsize64 $SNGLE_PART)/ 1000 ))
+            ((DISK_SIZE_MB=$($CMD_BLOCKDEV --getsize64 $SNGLE_PART)/1000/1000))
+            
+            
+            # Clear the data disk partition table and data
+            $CMD_DD if=/dev/zero of=$SNGLE_PART bs=$DISK_SIZE_KB count=1 >$OUT_TMP 2>$ERR_TMP
+            [ $? -ne 0 ] && {
+                echo " failed"
+                abort "Failure while erasing the partition table of the disk \"$SNGLE_PART\"" $exit_part_ddxx
+            }
+            # Create label with the gpt format And check if,
+            # gpt partition table is created.
+            $CMD_PARTED --script $SNGLE_PART mklabel gpt >$OUT_TMP 2>$ERR_TMP
+            if [ $($CMD_PARTED --script $SNGLE_PART -ms print | grep :gpt: | wc -l) -ne 1 ];then
+                echo " failed"
+                abort "Failure while applying lable to the disk \"$SNGLE_PART\"" $exit_part_labl
+            fi
+            # create primary partition And check if partition is created
+            $CMD_PARTED --script --align optimal $SNGLE_PART unit MB mkpart primary 1 $DATA_SIZE_MB >$OUT_TMP 2>$ERR_TMP
+            if [ $($CMD_PARTED --script $SNGLE_PART -m print | grep ^1 | wc -l ) -ne 1 ];then
+                echo " failed"
+                abort "Failure while creating primary partiton of the disk \"$SNGLE_PART\"" $exit_part_prm1
+            fi
+        done
+    }
+    MESSAGE=" success"
+    ! is_verbose && echo "$MESSAGE"
+    $CMD_PARTPROBE $DISK >$OUT_TMP 2>$ERR_TMP
+    sync >$OUT_TMP 2>$ERR_TMP
+    $CMD_BLOCKDEV --rereadpt $DISK >$OUT_TMP 2>$ERR_TMP
+
+    trace_leave $FUNCNAME
+    return $exit_sucs
+}
+
+# ------------------------------------------------------------------------
+function do_activate(){
+    trace_enter $FUNCNAME $*
+    local MESSAGE=''
+    # check if the resource is already-active
+    is_configured
+    [ $? -eq 0 ] && {
+        # check the connection status, try conneting peer if it is StandAlone.
+        L_CSTATE=$(/sbin/drbdsetup status drbd1 --verbose | grep connection | awk -F connection: '{print $2}' | awk '{print $1}')
+        [ "$L_CSTATE" == "StandAlone" ] && $CMD_DRBDADM connect $DRBD_RESOURCE >$OUT_TMP 2>$ERR_TMP
+        L_CSTATE=$(/sbin/drbdsetup status drbd1 --verbose | grep connection | awk -F connection: '{print $2}' | awk '{print $1}')
+	[[ "$L_CSTATE" == "PausedSyncS"  || "$L_CSTATE" == "PausedSyncT" ]] && {
+            OPT_SYNC_ARG='RESUME'
+            do_sync
+            [ $? -ne 0 ]  && {
+                abort "DRBD Resource [$DRBD_RESOURCE] activated, but failed to start the synchronization process" $exit_actv_sync
+            }
+        }
+        MESSAGE="DRBD Resource [$DRBD_RESOURCE] is already active"
+        log "$MESSAGE"
+        ! is_verbose && echo -e "$MESSAGE"
+        trace_leave $FUNCNAME
+        return $exit_sucs
+    }
+
+    # launch drbdadm to activate $DRBD_RESOURCE
+    $CMD_DRBDADM up $DRBD_RESOURCE >$OUT_TMP 2>$ERR_TMP
+    [ $? -ne 0 ] && {
+        abort "Activating DRBD Resource [$DRBD_RESOURCE]... failed" $exit_actv_upxx
+    }
+
+    # check the connection status, try conneting peer if it is StandAlone.
+    L_CSTATE=$(/sbin/drbdsetup status drbd1 --verbose | grep connection | awk -F connection: '{print $2}' | awk '{print $1}')
+    [ "$L_CSTATE" == "StandAlone" ] && $CMD_DRBDADM connect $DRBD_RESOURCE >$OUT_TMP 2>$ERR_TMP
+    L_CSTATE=$(/sbin/drbdsetup status drbd1 --verbose | grep connection | awk -F connection: '{print $2}' | awk '{print $1}')
+    [[ "$L_CSTATE" == "PausedSyncS" || "$L_CSTATE" == "PausedSyncT" ]] && {
+        OPT_SYNC_ARG='RESUME'
+        do_sync
+        [ $? -ne 0 ]  && {
+            abort "DRBD Resource [$DRBD_RESOURCE] activated, but failed to start the synchronization process" $exit_actv_sync
+        }
+    }
+    MESSAGE="Activating DRBD Resource [$DRBD_RESOURCE]... success"
+    log "$MESSAGE"
+          ! is_verbose && echo -e "$MESSAGE"
+    trace_leave $FUNCNAME
+}
+
+# ------------------------------------------------------------------------
+function create_md(){
+        trace_enter $FUNCNAME $*
+        local MESSAGE="Creating the md device after partitioning..."
+        $CMD_DRBDADM create-md $DRBD_RESOURCE >$OUT_TMP 2>$ERR_TMP << COMMANDS
+yes
+yes
+COMMANDS
+        [ $? -ne 0 ] && abort "$MESSAGE failed" $exit_cret_mdxx
+        MESSAGE="$MESSAGE success"
+        log "$MESSAGE"
+        ! is_verbose && echo -e "$MESSAGE"
+        trace_leave $FUNCNAME
+}
+
+# ------------------------------------------------------------------------
+function do_role(){
+        trace_enter $FUNCNAME
+        local rCode
+        local OPTS=''
+        local MESSAGE=''
+
+        # check if drbd resource drbd1 is configured.
+        ! is_configured && abort "DRBD Resource [$DRBD_RESOURCE] is not configured" $exit_role_conf
+
+        if [ "$OPT_ROLE_ARG" == 'PRIMARY' ]; then
+                OPTS='primary'
+                [ $OPT_FORCE -eq $TRUE ] && OPTS="${OPTS} --force"
+                MESSAGE="Promotion of DRBD Resource [$DRBD_RESOURCE]..."
+        else
+                OPTS='secondary'
+                MESSAGE="Demotion of DRBD Resource [$DRBD_RESOURCE]..."
+        fi
+        # Get the current role
+        local ROLE=$(show_role role $DRBD_RESOURCE local)
+
+        #check the role with given user role
+        if [ "$ROLE" == "$OPT_ROLE_ARG" ] && [ "$OPT_ROLE_ARG" == 'PRIMARY' ]; then
+                abort "DRBD Resource [$DRBD_RESOURCE] is already primary" $exit_role_eror
+        elif [ "$ROLE" == "$OPT_ROLE_ARG" ]; then
+                abort "DRBD Resource [$DRBD_RESOURCE] is already secondary" $exit_role_eror
+        fi
+
+        # check if the local disk state is healthy
+        local DSTATE=$(show_dstate dstate $DRBD_RESOURCE local)
+        [ -z "$DSTATE" ] && abort "Local disk of DRBD Resource [$DRBD_RESOURCE] is not found" $exit_role_dste
+
+        # If the local disk state is in valid state, then we are allowed
+        # to promote/demote the drbd1 role
+        local HEALTHY_DSTATE="Attaching Negotiating Inconsistent Consistent UpToDate"
+        local IS_HEALTHY=$FALSE
+        for L_DSTATE in $HEALTHY_DSTATE
+                do
+                        if [ "$L_DSTATE" == "$DSTATE" ]; then
+                                IS_HEALTHY=$TRUE
+                                break
+                        fi
+        done
+
+        [ $IS_HEALTHY -eq $FALSE ] &&
+        abort "$MESSAGE not allowed" $exit_role_invd
+
+
+        $CMD_DRBDADM $OPTS $DRBD_RESOURCE  >$OUT_TMP 2>$ERR_TMP
+        rCode=$?
+        [ $rCode -ne 0 ] && abort "$MESSAGE failed " $exit_role_role
+        local MESSAGE="$MESSAGE success"
+        log "$MESSAGE"
+        ! is_verbose && echo -e "$MESSAGE"
+        trace_leave $FUNCNAME
+        return $exit_sucs
+}
+
+# ------------------------------------------------------------------------
+function do_format(){
+        trace_enter $FUNCNAME $*
+        local MESSAGE=''
+        ! is_configured && abort "DRBD Resource [$DRBD_RESOURCE] not configured." $exit_frmt_conf
+
+        # FIXME: Assuming that Maiden-Installation happens on SC-2-1 first
+        #                and SC-2-2 later. so force SC-2-1 to take the primary role.
+        #            However, this mignt not be the final solution. As DRBD works in
+        #                disconnected mode, there is no way to findout, primary exists
+        #                in the cluster. This shal be fixed.
+        OPT_ROLE_ARG='SECONDARY'
+        local NODE_ID=$(</etc/cluster/nodes/this/id)
+        [ -z $NODE_ID ] && abort_v2 "NODE_ID received null,exiting..."
+
+        [[ $NODE_ID -eq $NODE_ONE || $OPT_CREATE -eq $TRUE ]] && {
+                # clear the bitmap as necessary and do not worry abt the return code.
+                $CMD_DRBDADM new-current-uuid --clear-bitmap $DRBD_RESOURCE >$OUT_TMP 2>$ERR_TMP
+                MESSAGE="Clearing new-current-uuid bitmap..success"
+                log "$MESSAGE"
+                ! is_verbose && echo -e "$MESSAGE"
+
+                # mark the drbd to primary if it is only the resource configured yet.
+                # Also, mark the OPT_FORCE indicator to true for the force primary role setup.
+                OPT_FORCE=$TRUE
+                OPT_ROLE_ARG='PRIMARY'
+        }
+        # set the drbd role
+        do_role
+
+        is_primary
+        [ $? -eq $FALSE ] && abort "Format not allowed on de-activated DRBD Resource [$DRBD_RESOURCE]" $exit_frmt_prim
+
+        if ! is_mounted; then
+                MESSAGE='Formatting in progress...'
+                log "$MESSAGE"
+                ! is_verbose && echo -e "$MESSAGE"
+                local OPT='-q -E nodiscard'
+                is_verbose && OPT=''
+                $CMD_MKFS_EXT3 $OPT $DRBD_DEVICE 2>$ERR_TMP << COMMANDS
+y
+COMMANDS
+                [ $? -ne $TRUE ] && abort 'Formatting failed' $exit_frmt_fail
+                MESSAGE='Formatting done'
+                is_verbose && log "$MESSAGE"
+                ! is_verbose && echo -e "$MESSAGE"
+        else
+        abort "DRBD device is already mounted, formatting not allowed." $exit_frmt_mntx
+        fi
+        trace_leave $FUNCNAME
+        return $exit_sucs
+
+}
+
+# ------------------------------------------------------------------------
+# This function mounts the DRBD_DEVICE if not already mounted
+function do_mount(){
+        trace_enter $FUNCNAME
+        local MESSAGE=''
+        if ! is_mounted; then
+                $CMD_MOUNT -o "$FSTAB_OPTIONS" -t "$FILE_SYS" "$DRBD_DEVICE" "$MOUNT_POINT" >$OUT_TMP 2>$ERR_TMP
+                [ $? -ne $TRUE ] && abort 'Mount failed' $exit_mntx_fail
+                MESSAGE="Device $DRBD_DEVICE successfully mounted to $MOUNT_POINT"
+                log "$MESSAGE"
+                ! is_verbose && echo -e "$MESSAGE"
+        else
+                MESSAGE="Device $DRBD_DEVICE already mounted to $MOUNT_POINT"
+                log "$MESSAGE"
+                ! is_verbose && echo -e "$MESSAGE"
+        fi
+
+
+        trace_leave $FUNCNAME
+        return $exit_sucs
+}
+
+# ------------------------------------------------------------------------
+# This function unmounts the DRBD_DEVICE if not already un-mounted.
+function do_unmount(){
+        trace_enter $FUNCNAME
+        if is_mounted; then
+                $CMD_UMOUNT "$MOUNT_POINT" >$OUT_TMP 2>$ERR_TMP
+                if [ $? -ne 0 ]; then
+                        local PIDS="$(get_pids)"
+                        log "here a list of pids:commands having open handles on the drbd1 device:"
+                        while read P; do
+                                log "$P"
+                        done < <(echo "$PIDS")
+                        abort "Umount failed! Busy filesystem?" $exit_umnt_bsyf
+                fi
+                echo "$DRBD_DEVICE unmounted"
+        else
+                echo "$DRBD_DEVICE already unmounted"
+        fi
+        trace_leave $FUNCNAME
+        return $exit_sucs
+}
+
+# ------------------------------------------------------------------------
+# This function, lists the active users of the mount $MOUNT_POINT of
+# DRBD_DEVICE
+function get_pids(){
+        local PIDS=''
+        PIDS=$($CMD_FUSER -m $MOUNT_POINT $DRBD_DEVICE 2>$ERR_TMP)
+        if [ -n "$PIDS" ]; then
+                PIDS="$(echo $PIDS | $CMD_TR '[:space:]' '\n' | $CMD_AWK ' !x[$0]++')"
+                for P in $PIDS; do
+                        echo -e "$P:\"$($CMD_PS -p $P -o cmd h)\""
+                done
+        fi
+}
+
+# ------------------------------------------------------------------------
+function do_disable(){
+        trace_enter $FUNCNAME $*
+        local MESSAGE=''
+        local rCode
+
+        # check if the resource is already disabled
+        ! is_configured && abort "DRBD Resource [$DRBD_RESOURCE] is not configured" $exit_disb_conf
+
+
+        is_primary
+        rCode=$?
+        [ $rCode -eq $TRUE ] && {
+                is_mounted && {
+                        [ $OPT_FORCE -eq $FALSE ] && abort "$DRBD_DEVICE is mounted, use the --force switch to force disable" $exit_disb_forc
+                        do_unmount
+                }
+                # demote the DRBD_RESOURCE now
+                $CMD_DRBDADM secondary $DRBD_RESOURCE >$OUT_TMP 2>$ERR_TMP
+                if [ $? -ne 0 ]; then
+                        abort "Unable to disable DRBD Resource [$DRBD_RESOURCE] " $exit_disb_scon
+                fi
+        }
+
+        MESSAGE="Disabling DRBD Resource [$DRBD_RESOURCE]... success"
+        log "$MESSAGE"
+        ! is_verbose && echo -e "$MESSAGE"
+        trace_leave $FUNCNAME
+        return $exit_sucs
+}
+
+# ------------------------------------------------------------------------
+# The function will return $TRUE if $DRBD_DEVICE is found mounted. $FALSE
+# otherwise.
+function is_mounted(){
+    local EXIT_CODE=$TRUE
+    local MESSAGE=''
+    if [ -z "$( $CMD_MOUNT | $CMD_GREP -E ^$DRBD_DEVICE\ on\ $MOUNT_POINT )" ]; then
+        EXIT_CODE=$FALSE
+    fi
+    return $EXIT_CODE
+}
+
+# ------------------------------------------------------------------------
+function do_help(){
+        trace_enter $FUNCNAME $*
+        usage_ruser
+        trace_leave $FUNCNAME
+}
+
+# ------------------------------------------------------------------------
+function do_status(){
+        trace_enter $FUNCNAME $*
+        local DRBD_ROLE_HEALTHY=$FALSE
+        local DRBD_DSTATE_HEALTHY=$FALSE
+        local DRBD_DSTATE_FAULTY=$FALSE
+        local LOCAL_DRBD_ROLE=''
+        local PEER_DRBD_ROLE=''
+        local LOCAL_DRBD_DISK=''
+        local PEER_DRBD_DISK=''
+        local DRBD_CSTATE=''
+        local FDISK=''
+        local DRBD_STATUS='UP'
+        local REBUILD=''
+
+        is_configured
+        rCode=$?
+        [ $rCode -eq $FALSE ] && {
+                DRBD_STATUS='DOWN'
+                ! is_verbose && abort "$DRBD_STATUS" $exit_stat_conf
+        }
+        { # fetching role
+                LOCAL_DRBD_ROLE=$(show_role role $DRBD_RESOURCE local)
+                PEER_DRBD_ROLE=$(show_role role $DRBD_RESOURCE peer)
+                # if local node drbd role is not primary, we can conclude DRBD is DOWN
+                [ "$LOCAL_DRBD_ROLE" != 'Primary' ] && {
+                        # DRBD role is not primary on the local node
+                        DRBD_STATUS='DOWN'
+                }
+        }
+        { # fetching dstate
+                local HEALTHY_DSTATE="Attaching Consistent UpToDate"
+                local FAULTY_DSTATE="Diskless Failed Negotiating DUnknown Outdated Inconsistent"
+                LOCAL_DRBD_DISK=$(show_dstate dstate $DRBD_RESOURCE local)
+                PEER_DRBD_DISK=$(show_dstate dstate $DRBD_RESOURCE peer)
+                local NODE_ID=$(</etc/cluster/nodes/this/id)
+                [ -z $NODE_ID ] && abort_v2 "NODE_ID received null,exiting..."
+
+                for DSTATE in $HEALTHY_DSTATE
+                do
+                        if [ "$DSTATE" == "$LOCAL_DRBD_DISK" ]; then
+                                DRBD_DSTATE_HEALTHY=$TRUE
+                                break
+                        fi
+                done
+
+                [ $DRBD_DSTATE_HEALTHY -eq $FALSE ] && {
+                        [ $DRBD_DSTATE_FAULTY -eq $FALSE ] && DRBD_STATUS='DOWN'
+                }
+        }
+
+        is_verbose && printout_all
+        [ $DRBD_STATUS == 'DOWN' ] && {
+                is_verbose && abort "DRBD Status: $DRBD_STATUS" $exit_stat_drbd
+                ! is_verbose && abort "$DRBD_STATUS" $exit_stat_drbd
+        }
+        [ $DRBD_STATUS == 'UP' ] && {
+                is_verbose && console_print "DRBD Status: $DRBD_STATUS"
+                ! is_verbose && console_print "$DRBD_STATUS"
+        }
+
+
+
+        trace_leave $FUNCNAME
+        return $exit_sucs
+}
+
+# ------------------------------------------------------------------------
+function do_sync(){
+        trace_enter $FUNCNAME $*
+        local rCode
+
+        ! is_configured && abort "Resource is not configured." $exit_sync_conf
+        [ "$OPT_SYNC_ARG" == 'RESUME' ] && {
+                # check if the sync is in already sync-state
+                local L_CSTATE=$( $CMD_DRBD_STATUS cstate $DRBD_RESOURCE 2>$ERR_TMP)
+                local FLAG=$FALSE
+                local ALLOWED="PausedSyncS PausedSyncT SyncSource SyncTarget"
+                for CSTATE in $ALLOWED; do
+                        [ "$CSTATE" == "$L_CSTATE" ] && FLAG=$TRUE
+                done
+                [ $FLAG -eq $FALSE ] && abort "Resource synchronization process is completed" $exit_sync_resm
+                [[ "$L_CSTATE" == 'SyncSource' || "$L_CSTATE" == 'SyncTarget' ]] && abort "Resource synchronization is already in progress" $exit_sync_csrs
+                [ "$L_CSTATE" == 'PausedSyncT' ] && {
+                        local RHOST=$(</etc/cluster/nodes/peer/hostname)
+                        [ -z $RHOST ] && abort_v2 "RHOST received null,exiting..."
+                        local OPTS="-S resume"
+                        [ $OPT_FORCE -eq $TRUE ] && OPTS="${OPTS} -f"
+                        is_verbose && OPTS="${OPTS} -v"
+                        $CMD_SSH $RHOST $CMD_DRBDMGR $OPTS >$OUT_TMP 2>$ERR_TMP
+                        [ $? -ne 0 ] && abort "Starting the synchronization process... failed" $exit_sync_resm
+                        console_print "Synchronization process on Resource started"
+                        trace_leave $FUNCNAME
+                        return $exit_sucs
+                }
+
+                # initiate resume-sync
+                $CMD_DRBDADM resume-sync $DRBD_RESOURCE  >$OUT_TMP 2>$ERR_TMP
+                 rCode=$?
+                [ $rCode -ne 0 ] && abort "Starting the synchronization process... failed" $exit_sync_resm
+                console_print "Synchronization process on Resource started"
+        }
+
+        [ "$OPT_SYNC_ARG" == 'PAUSE' ] && {
+                # check if the sync is in already paused-state
+                L_CSTATE=$( $CMD_DRBD_STATUS cstate $DRBD_RESOURCE 2>$ERR_TMP)
+                local FLAG=$FALSE
+                local ALLOWED="PausedSyncS PausedSyncT SyncSource SyncTarget"
+                for CSTATE in $ALLOWED; do
+                        [ "$CSTATE" == "$L_CSTATE" ] && FLAG=$TRUE
+                done
+                [ $FLAG -eq $FALSE ] && abort "Resource synchronization process is not active" $exit_sync_resm
+                [[ "$L_CSTATE" == 'PausedSyncS' || "$L_CSTATE" == 'PausedSyncT' ]] && abort "Resource synchronization is already paused" $exit_sync_cspa
+                [ "$L_CSTATE" == 'SyncTarget' ] && {
+                        local RHOST=$(</etc/cluster/nodes/peer/hostname)
+                        [ -z $RHOST ] && abort_v2 "RHOST received null,exiting..."
+                        local OPTS="-S pause"
+                        [ $OPT_FORCE -eq $TRUE ] && OPTS="${OPTS} -f"
+                        is_verbose && OPTS="${OPTS} -v"
+                        $CMD_SSH $RHOST $CMD_DRBDMGR $OPTS >$OUT_TMP 2>$ERR_TMP
+                        [ $? -ne 0 ] && abort "Stopping the synchronization process on Resource... failed" $exit_sync_resm
+                        console_print "Stopping the synchronization process on Resource... success"
+                        trace_leave $FUNCNAME
+                        return $exit_sucs
+                }
+
+                # initiate pause-sync
+                $CMD_DRBDADM pause-sync $DRBD_RESOURCE  >$OUT_TMP 2>$ERR_TMP
+                rCode=$?
+                [ $rCode -ne 0 ] && abort "Stopping the synchronization process on Resource... failed" $exit_sync_paus
+                console_print "Stopping the synchronization process on Resource... success"
+        }
+        trace_leave $FUNCNAME
+        return $exit_sucs
+}
+
+# ------------------------------------------------------------------------
+# check_options_compatibility <option> <compatible_options> <specified_options>
+function check_options_compatibility(){
+    local OPTION=$1
+    local COMPATIBLE=$2
+    local SPECIFIED=$3
+    for SPE in $SPECIFIED; do
+        CHECK=$FALSE
+        if [ $SPE != $OPTION ]; then
+            for COMP in $COMPATIBLE; do
+                if [ $COMP == $SPE ]; then
+                    CHECK=$TRUE
+                    break
+                fi
+            done
+            [ $CHECK -eq $FALSE ] && {
+                        CMPTBLE_OPTS=$FALSE
+                        echo -e "Incorrect Usage!"
+                        usage_ruser
+                }
+        fi
+    done
+    return $TRUE
+}
+
+# ------------------------------------------------------------------------
+# The function retrieves the device linked to the specified directory
+# structure.
+function dir_to_device(){
+        [ $# -lt 1 ] && abort_v2 "${FUNCNAME}: missing parameter"
+        local DIR="$($CMD_DIRNAME $1)"
+        [ ! -d "$DIR" ] && abort_v2 "${FUNCNAME}: $DIR is not valid"
+        local BASEDIR=$(echo "$DIR" | sed  's@\/sas_device\/.*$@@g')
+        local DEVICE=$($CMD_FIND ${BASEDIR}/target*/*/block/sd? -maxdepth 0 -type d | awk -F'/' '{print $NF}')
+        if [[ ! -z ${DEVICE} && -b "/dev/${DEVICE}" ]]; then
+                echo "/dev/${DEVICE}"
+                return $TRUE
+        fi
+        return $FALSE
+}
+
+# ------------------------------------------------------------------------
+# The function retrieves the available disks in Node
+function _disk_finder_1() {
+        [ $NODE_ID -eq $NODE_ONE ] && SLOT=$(get_valid_phy LEFT $HW_TYPE)
+        [ $NODE_ID -eq $NODE_TWO ] && SLOT=$(get_valid_phy RIGHT $HW_TYPE)
+        for DIR in $($CMD_FIND /sys/devices | grep -E '/sys/devices/.*/host.*/port-.*/end_device-.*/sas_device/end_device-.*/phy_identifier$'); do
+                local PHY=$(<${DIR})
+                case "$PHY" in
+                        $SLOT)
+                                        PARTBLE_DISKS="$(dir_to_device ${DIR})"
+                        ;;
+            esac
+    done
+    DUBLE_PART_DISK="${PARTBLE_DISKS}"
+    DRBD_DATA_DISKS="${PARTBLE_DISKS}1"
+    DRBD_META_DISK="${PARTBLE_DISKS}2"
+    return $TRUE
+}
+
+# ------------------------------------------------------------------------
+function _disk_finder_2() {
+        # In GEP4/5 and GEP7L_400  single disk case, sdb is partitioned to multiple
+        # partitions and sdb6 and sdb7 are agreed to allot for DRBD META
+        # and DATA DISKS
+
+        PARTBLE_DISKS=''
+        SYSTM_DISK="$( readlink -f $SYSTM_DISK)"
+        echo $SYSTM_DISK
+        if [ ! -b $SYSTM_DISK ];then
+                local DIR=$($CMD_FIND /sys/devices | grep -E '/sys/devices/.*/host.*/port-.*/end_device-.*/sas_device/end_device-.*/phy_identifier$')
+                local DIRNAME=$(/usr/bin/dirname $DIR)
+                local BASEDIR=$(echo "$DIRNAME" | sed  's@\/sas_device\/.*$@@g')
+                local DEVICE=$($CMD_FIND ${BASEDIR}/target*/*/block/sd? -maxdepth 0 -type d | awk '{n=split($0,a,"/"); print a[n]}')
+                if [[ ! -z ${DEVICE} && -b "/dev/${DEVICE}" ]]; then
+                        SYSTM_DISK = "/dev/${DEVICE}"
+                fi
+        fi
+        DRBD_DATA_DISKS="${SYSTM_DISK}7"
+        DRBD_META_DISK="${SYSTM_DISK}6"
+        return $TRUE
+}
+
+# ------------------------------------------------------------------------
+function _disk_finder_3() {
+        # In GEP4/5 multi disk case, DATA DISKS are sdb, sdc and sdd.
+        # Followng partitions will takes place in case of multi disks.
+        # 1.sdb8 for DRBD DATA and sdb7 for META DATA
+        # 2.sdc1 for DRBD DATA
+        # 3.sdd1 for DRBD DATA
+        # Now DRDB_DATA_DISKS='/dev/sdb8 /dev/sdc1 /dev/sdd1'
+        local DISK=''
+        _disk_finder_2
+        if [[ $HW_TYPE == 'GEP5_64_1200' ]] ; then
+                local diskC=$(readlink /dev/disk/by-path/pci-0000:03:00.0-sas-phy1-0x4433221101000000-lun-0 | cut -d / -f3)
+                local diskD=$(readlink /dev/disk/by-path/pci-0000:03:00.0-sas-phy2-0x4433221102000000-lun-0 | cut -d / -f3)
+        else
+                local diskC=$(readlink /dev/disk/by-path/pci-0000:03:00.0-sas-phy1-0x4433221101000000-lun-0 | cut -d / -f3)
+                local diskD=$(readlink /dev/disk/by-path/pci-0000:03:00.0-sas-phy3-0x4433221103000000-lun-0 | cut -d / -f3)
+        fi
+        PARTBLE_DISKS="/dev/$diskC /dev/$diskD"
+        SNGLE_PART_DISK="{PARTBLE_DISKS}"
+        for DISK in $PARTBLE_DISKS;do
+                DRBD_DATA_DISKS="$DRBD_DATA_DISKS ${DISK}1"
+        done
+        return $TRUE
+}
+
+# ------------------------------------------------------------------------
+function _disk_finder_4() {
+    # In ATLAS/ECM, DATA VOLUMES are attached to VM instance.
+    # Here vd[bc]1 for DATA PART and vd[bc]2 for META PART
+    # To avoid more impacts on raidmgr command, here SYSTEM_DISK
+    # is used as DATA_DISK(i.e SYSTM_DISK=DATA_DISK) 
+    DUBLE_PART_DISK="${SYSTM_DISK}"
+    DRBD_DATA_DISKS="${SYSTM_DISK}1"
+    DRBD_META_DISK="${SYSTM_DISK}2"
+
+    return $TRUE
+}
+
+# ------------------------------------------------------------------------
+function _disk_finder_5() {
+    # In GEP7L_1600  and GEP7-128-1600 multi disk case, DATA DISKS are sdb and sdc.
+    # Followng partitions will takes place in case of multi disks.
+    # 1.sdb8 for DRBD DATA and sdb7 for META DATA
+    # 2.sdc1 for DRBD DATA
+    # Now DRDB_DATA_DISKS='/dev/sdb8 /dev/sdc1'
+    local DISK=''
+    _disk_finder_2
+    local diskC=$(readlink /dev/disk/by-path/pci-0000:06:00.0-sas-phy1-0x4433221101000000-lun-0 | cut -d / -f3)
+    PARTBLE_DISKS="/dev/$diskC"
+    SNGLE_PART_DISK="${PARTBLE_DISKS}"
+    for DISK in $PARTBLE_DISKS;do
+        DRBD_DATA_DISKS="$DRBD_DATA_DISKS ${DISK}1"
+    done
+    return $TRUE
+}
+
+# ------------------------------------------------------------------------
+# This is the only function allowed to define the content of the $DRBD_DISKS and
+# $DRBD_DISKS_COUNT. This function is expected to populate disk info across the
+# the hardware platforms.
+function disk_finder(){
+    if [[ $HW_TYPE == 'GEP1' || $HW_TYPE == 'GEP2' ]] ;then
+        _disk_finder_1
+        META_SIZE_MB=130 # roundedOff to 128MB by parted
+    elif [[ $HW_TYPE == 'GEP5' || $HW_TYPE == 'GEP5_400' || $HW_TYPE == 'GEP7L_400' ]]; then
+        _disk_finder_2
+        META_SIZE_MB=256
+    elif [[ $HW_TYPE == 'GEP4_1600' || $HW_TYPE == 'GEP5_1200' || $HW_TYPE == 'GEP5_64_1200' ]]; then
+        _disk_finder_3
+        META_SIZE_MB=256
+        [ -z "$PARTBLE_DISKS" ] && abort "No Disks Found" $exit_dsfk_eror
+    elif [[ $HW_TYPE == 'GEP7L_1600' || $HW_TYPE == 'GEP7_128_1600'  ]]; then
+        _disk_finder_5
+        META_SIZE_MB=256
+        [ -z "$PARTBLE_DISKS" ] && abort "No Disks Found" $exit_dsfk_eror
+    elif [[ $HW_TYPE == 'VM' ]]; then
+        _disk_finder_4
+        META_SIZE_MB=256
+    fi
+
+    # _disk_finder_x is supposted to populate PARTBLE_DISKS and
+    # DRBD_DATA_DISKS and DRBD_META_DISK, if these are empty, bail-out
+    [[ -z "$DRBD_DATA_DISKS" ||  -z "$DRBD_META_DISK" ]] && abort "No Disks Found" $exit_dsfk_eror
+
+    check_disks
+    return $TRUE
+}
+# ------------------------------------------------------------------------
+function trigger_udev() {
+    $CMD_UDEVADM trigger --subsystem-match='block' >$OUT_TMP 2>$ERR_TMP
+    $CMD_UDEVADM settle >$OUT_TMP 2>$ERR_TMP
+}
+
+# ------------------------------------------------------------------------
+# The function checks for the $DRBD_DISKS to be valid block-devices.
+function check_disks(){
+
+        local DISK=''
+        local PART=''
+
+        for DISK in $PARTBLE_DISKS;do
+                [ ! -b "$DISK" ] && trigger_udev
+                [ ! -b "$DISK" ] && abort "The expected partition \"$DISK\" have not been found" $exit_cdsk_part
+        done
+
+        if [ $OPT_PART -eq $FALSE ]; then
+                for PART in $DRBD_DATA_DISKS;do
+                        [ ! -b "$PART" ] && trigger_udev
+                        [ ! -b "$PART" ] && abort "The expected partition \"$PART\" have not been found" $exit_cdsk_part
+                done
+                [ ! -b "$DRBD_META_DISK" ] && abort "The expected partition \"$DRBD_META_DISK\" have not been found" $exit_cdsk_part
+        fi
+        return $TRUE
+}
+
+# ------------------------------------------------------------------------
+# The function checks if the symlinks for the partitions are created by udev.
+function check_symlinks(){
+      local PART_META=$PART_META_SLINK
+        #[ $NODE_ID -eq $NODE_ONE ] && PART_META=$PART_META1_SLINK
+        #[ $NODE_ID -eq $NODE_TWO ] && PART_META=$PART_META2_SLINK
+        [ ! -b "$PART_META" ] && abort "The expected symlinks \"$PART_META\" have not been found" $exit_slnk_part
+        return $TRUE
+}
+
+# ------------------------------------------------------------------------
+# This function invokes functions based on the options specified.
+function invoker(){
+        trace_enter $FUNCNAME
+        [ $OPT_LVM              -eq $TRUE ] && do_lvm
+        [ $OPT_PART             -eq $TRUE ] && do_part
+        [ $OPT_CONFIG           -eq $TRUE ] && do_configure
+        [ $OPT_FORMAT           -eq $TRUE ] && do_format
+        [ $OPT_ACTIVATE         -eq $TRUE ] && do_activate
+        [ $OPT_FORCE            -eq $TRUE ] && do_force
+        [ $OPT_MOUNT            -eq $TRUE ] && do_mount
+        [ $OPT_UNMOUNT          -eq $TRUE ] && do_unmount
+        [ $OPT_DISABLE          -eq $TRUE ] && do_disable
+        [ $OPT_HELP             -eq $TRUE ] && do_help
+        [ $OPT_STATUS           -eq $TRUE ] && do_status
+        trace_leave $FUNCNAME
+        return $exit_sucs
+}
+
+# ------------------------------------------------------------------------
+# This function is used to configure drbd1 resource
+function do_configure(){
+
+        [ -z $DRBD_META_DISK ] && disk_finder
+
+        # check symlinks
+        check_symlinks
+
+
+        # Generate drbd resource 1 configuration
+        generate_config
+
+        # Zeroing the meta_part using dd command
+        $CMD_DD if=/dev/zero of=$DRBD_META_DISK bs=4096 count=1 >$OUT_TMP 2>$ERR_TMP
+        [ $? -ne 0 ] && {
+                echo " falied"
+                abort "Failure while erasing the partition table of the disk \"$DRBD_META_DISK\"" $exit_part_ddxx
+        }
+
+        # Create MD device
+        create_md
+
+        echo -e "Configuring drbd1 resource... success"
+}
+
+# ------------------------------------------------------------------------
+# This function is used to determine the synchronization type.
+function determine_sync_type() {
+    # Variable sync type is introduced in 8.3.10 and is default in 8.4 onwards
+    # syncer section is not available in 8.4
+    OLD_DRBD_VERSION=8.3.9
+    COMPARE_VERSIONS=$(echo -e "$DRBD_VERSION\n$OLD_DRBD_VERSION" | sort --version-sort | head -1)
+
+    if [ "$DRBD_VERSION" == "$OLD_DRBD_VERSION" -o "$DRBD_VERSION" == "$COMPARE_VERSIONS" ]; then
+        echo fixed
+    else
+        echo variable
+    fi
+}
+
+# ------------------------------------------------------------------------
+# This function is used to generate the drbd1.res for
+# configuring DRBD resource 1.
+function generate_config() {
+    local TYPE='control'
+    local THIS_HOSTNAME=$(hostname)
+    local THIS_IP_ADDRESS=169.254.208.1
+    local PEER_HOSTNAME='dummy'
+    local PEER_IP_ADDRESS=169.254.208.2
+    local PORT=7790
+    local DRBD_RES='drbd1'
+    local DETACHED_MODE_PORT=7791
+    local SYNC_TYPE=$(determine_sync_type)
+    local THIS_NODE_ID=''
+    local PEER_NODE_ID=''
+    local NODE1=1
+    local NODE2=2
+
+        if [[ -f /etc/cluster/nodes/this/type ]]; then
+        TYPE=$( cat /etc/cluster/nodes/this/type)
+    elif [[ -f /etc/cluster/options/type ]]; then
+        TYPE=$(cat /etc/cluster/options/type)
+        # This will generally only happen during installation
+        if [[ "$TYPE" == "install" || "$TYPE" == "repair" ]]; then
+                TYPE='control'
+        fi
+    else
+        TYPE='undef'
+    fi
+
+    local THIS_NODE_ID=$(</etc/cluster/nodes/this/id)
+    if [ $THIS_NODE_ID -eq $NODE1 ]; then
+        PEER_NODE_ID=$NODE2
+    else
+        PEER_NODE_ID=$NODE1
+    fi
+
+    if [ -d $ETC_DIR/cluster/nodes/this ]; then
+            THIS_HOSTNAME=$(<$ETC_DIR/cluster/nodes/this/hostname)
+            if [ "$NETWORK_BW" == '10G' ]; then
+			    if [ "$HW_TYPE" == 'VM' ]; then
+				    THIS_IP_ADDRESS=$(<$ETC_DIR/cluster/nodes/this/networks/internal/primary/address)
+                else
+				     THIS_IP_ADDRESS=$(<$ETC_DIR/cluster/nodes/this/networks/internal_10g/primary/address)
+                fi 	
+            else
+                THIS_IP_ADDRESS=$(<$ETC_DIR/cluster/nodes/this/networks/internal/primary/address)
+            fi
+    fi
+
+    if [[ -d $ETC_DIR/cluster/nodes/peer && "$TYPE" == "control" ]]; then
+            PEER_HOSTNAME=$(<$ETC_DIR/cluster/nodes/peer/hostname)
+            if [ "$NETWORK_BW" == '10G' ]; then
+			    if [ "$HW_TYPE" == 'VM' ]; then
+				    PEER_IP_ADDRESS=$(<$ETC_DIR/cluster/nodes/peer/networks/internal/primary/address)
+                else
+				    PEER_IP_ADDRESS=$(<$ETC_DIR/cluster/nodes/peer/networks/internal_10g/primary/address)
+                fi 				
+            else
+                PEER_IP_ADDRESS=$(<$ETC_DIR/cluster/nodes/peer/networks/internal/primary/address)
+            fi
+        elif [ "$TYPE" == "detached" ]; then
+            PEER_IP_ADDRESS=192.0.2.1  # Dummy address, see RFC3330
+    fi
+
+        if [ "$TYPE" == "detached" ]; then
+                PORT=$DETACHED_MODE_PORT
+        fi
+
+    # Create /etc/drbd.d/$DRBD_RES.res
+    (
+        echo "#"
+        echo "# $ETC_DIR/drbd.d/$DRBD_RES.res: $DRBD_RES resource configuration"
+        echo "#"
+        echo ""
+        echo "resource $DRBD_RES {"
+        echo ""
+        echo "        startup {"
+        echo "                wfc-timeout       20;"
+        echo "                degr-wfc-timeout  10;"
+        echo "        }"
+        echo ""
+        if [ "$SYNC_TYPE" == "fixed" ]; then
+            echo "        syncer {"
+            echo "                rate              8M;"
+            echo "        }"
+            echo ""
+        fi
+        echo "        disk {"
+        echo "                on-io-error       detach;"
+        if [ "$SYNC_TYPE" == "variable" ]; then
+            if [ "$NETWORK_BW" == '10G' ]; then
+                echo "                c-plan-ahead      20;"
+                echo "                resync-rate       1024M;"
+                echo "                c-min-rate        0;"
+                echo "                c-max-rate        3072M;"
+                echo "                c-fill-target     50M;"
+            else
+                echo "                resync-rate       33M;"
+                echo "                c-plan-ahead      20;"
+                echo "                c-min-rate        11M;"
+                echo "                c-max-rate        110M;"
+            fi
+        fi
+        echo "        }"
+        echo ""
+        echo "        net {"
+        echo "                timeout           30;"
+        if [ "$NETWORK_BW" == '10G' ]; then
+            echo "                max-epoch-size    20000;"
+            echo "                max-buffers       60000;"
+        else
+            echo "                max-epoch-size    4096;"
+            echo "                max-buffers       12288;"
+        fi
+        echo "                sndbuf-size       0;"
+        echo "                connect-int       6;"
+        echo "                ping-int          6;"
+        echo "                after-sb-0pri discard-zero-changes;"
+        echo "                after-sb-1pri discard-secondary;"
+        echo "                after-sb-2pri disconnect;"
+		echo "                protocol                  C;"
+		echo "                always-asbp      yes;"
+		echo "                allow-two-primaries no;"
+        echo "        }"
+        echo ""
+        echo "        on $THIS_HOSTNAME {"
+	if [ "$THIS_HOSTNAME" == "SC-2-1" ]; then
+        echo "                node-id           0; "
+        elif [ "$THIS_HOSTNAME" == "SC-2-2" ]; then
+        echo "                node-id           1; "
+        fi
+        echo "                device            /dev/$DRBD_RES;"
+        echo "                disk              /dev/eri-data-vg/eri-data-lv;"
+        echo "                meta-disk         /dev/eri-meta-part [0];"
+        echo "                address           $THIS_IP_ADDRESS:$PORT;"
+        echo "        }"
+        echo ""
+        echo "        on $PEER_HOSTNAME {"
+	if [ "$PEER_HOSTNAME" == "SC-2-1" ]; then
+        echo "                node-id           0; "
+        elif [ "$PEER_HOSTNAME" == "SC-2-2" ]; then
+        echo "                node-id           1; "
+        fi
+        echo "                device            /dev/$DRBD_RES;"
+        echo "                disk              /dev/eri-data-vg/eri-data-lv;"
+        echo "                meta-disk         /dev/eri-meta-part [0];"
+        echo "                address           $PEER_IP_ADDRESS:$PORT;"
+        echo "        }"
+	echo "          connection-mesh {"
+        if [ "$THIS_HOSTNAME" == "SC-2-1" ]; then
+        echo "                  hosts SC-2-1 SC-2-2;"
+        elif [ "$THIS_HOSTNAME" == "SC-2-2" ]; then
+        echo "                  hosts SC-2-2 SC-2-1;"
+        fi
+        echo "          }"
+        echo "}"
+        echo ""
+        echo "# End of file"
+        ) > $RES_CONF
+}
+
+# ------------------------------------------------------------------------
+# The function, in the case of a clean termination, will do a system
+# cleanup to remove all the unneeded files/structures.
+function cleanup(){
+    [ -f "$OUT_TMP" ] && $CMD_RM $OUT_TMP >/dev/null 2>&1
+    [ -f "$ERR_TMP" ] && $CMD_RM $ERR_TMP >/dev/null 2>&1
+}
+
+# ------------------------------------------------------------------------
+
+#This function displays role for local and peer node in a drbd resource
+function show_role(){
+  local own_role=""
+  local peer_role=""
+  if [ $3 == "local" ]; then
+    own_role=$($CMD_DRBDADM status $2 | $CMD_GREP -w "$2 $1" | $CMD_AWK -F : '{print $2}' | $CMD_AWK '{print $1}')
+    if [ "$own_role" == "" ]; then
+      abort "Failed to fetch role of local node for $2" $exit_fail
+    fi
+    echo $own_role
+  elif [ $3 == "peer" ]; then
+    peer_role=$($CMD_DRBDADM status $2 | $CMD_GREP -w "$PEER_HOSTNAME $1" | $CMD_AWK -F : '{print $2}' | $CMD_AWK '{print $1}')
+    if [ "$peer_role" == "" ]; then
+      abort "Failed to fetch role of peer node for $2" $exit_fail
+    fi
+    echo $peer_role
+  else
+    #show_help
+    abort "Invalid argument $3" $exit_usge
+  fi
+}
+
+# ------------------------------------------------------------------------
+
+#This function displays dstate for local and peer node in a drbd resource
+function show_dstate(){
+  local own_dstate=""
+  local peer_dstate=""
+  if [ $3 == "local" ]; then
+    own_dstate=$($CMD_DRBDADM status $2 | $CMD_GREP -w " disk" | $CMD_AWK -F : '{print $2}' | $CMD_AWK '{print $1}')
+    if [ "$own_dstate" == "" ]; then
+      abort "Failed to fetch dstate of local node for $2" $exit_fail
+    fi
+    echo $own_dstate
+  elif [ $3 == "peer" ]; then
+    peer_dstate=$($CMD_DRBDADM status $2 | $CMD_GREP -w "peer-disk" | $CMD_AWK -F 'peer-disk:' '{print $2}'| $CMD_AWK '{print $1}')
+    if [ "$peer_dstate" == "" ]; then
+      abort "Failed to fetch dstate of peer node for $2" $exit_fail
+    fi
+    echo $peer_dstate
+  else
+    #show_help
+    abort "Invalid argument $3" $exit_usge
+  fi
+}
+
+# ------------------------------------------------------------------------
+
+# Function definitions end here =====>>
+
+# _____________________
+#|    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |
+#|_____________________|
+# Here begins the "main" function...
+
+# Set the interpreter to exit if a non-initialized variable is used.
+set -u
+
+# sanity check to see if things are in place
+sanity_check
+
+# parse the command-line and invoke main functionality
+parse_cmdline $@
+
+# perform necessary clean-up
+cleanup
+
+# if we are here, command executed successfully.
+exit $TRUE
+
+

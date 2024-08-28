@@ -1,0 +1,34 @@
+#!/bin/bash
+##
+
+# Load the apos common functions.
+. /opt/ap/apos/conf/apos_common.sh
+
+# Variables -------------------------------------------------------------- BEGIN
+COMMAND=''
+SUB_COMMAND=''
+export OPT_DEBUG=$FALSE
+
+export BASE_DIR="$(dirname $0)"
+export LIB_DIR="$BASE_DIR/lib"
+export LIB_COMMON_DIR="$LIB_DIR/common"
+export MAN_DIR="$LIB_COMMON_DIR/man"
+# Variables ---------------------------------------------------------------- END
+
+apos_intro $0
+apos_log "parameters: $*"
+
+#                                              __    __   _______   _   __    _
+#                                             |  \  /  | |  ___  | | | |  \  | |
+#                                             |   \/   | | |___| | | | |   \ | |
+#                                             | |\  /| | |  ___  | | | | |\ \| |
+#                                             | | \/ | | | |   | | | | | | \   |
+#                                             |_|    |_| |_|   |_| |_| |_|  \__|
+#
+apos_servicemgmt $*
+EXIT_CODE=$?
+
+apos_outro $0
+
+exit $EXIT_CODE
+# End of file

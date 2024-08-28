@@ -1,0 +1,42 @@
+#!ipxe
+
+:retry_dhcp
+imgfree
+prompt --key 0x02 --timeout 2000 Press Ctrl-B for the iPXE command line... && shell ||
+
+set idx:int32 0
+:loop isset ${net${idx}/mac} || goto retry_dhcp
+  ifconf --configurator dhcp net${idx} || inc idx
+  isset ${net${idx}/ip} || goto loop
+ 
+  set lastbyte:int32 0
+  :inner_loop iseq ${lastbyte} 255 || inc lastbyte
+   iseq ${net${idx}/ip} 192.168.169.${lastbyte} && goto loop_done ||
+   iseq ${lastbyte} 255 && inc idx && goto loop ||
+   goto inner_loop
+  :inner_loop_done
+
+:loop_done
+
+set tftp-address 192.168.169.33 
+
+isset ${uuid} || goto fetch_from_mac_folder
+
+:fetch_from_uuid_folder
+imgfetch tftp://${tftp-address}/compute/${uuid}/boot.ipxe || goto fetch_from_mac_folder
+goto execute_boot
+
+:fetch_from_mac_folder
+imgfetch tftp://${tftp-address}/compute/${net${idx}/mac:hexhyp}/boot.ipxe || goto fetch_from_default_folder
+goto execute_boot
+
+:fetch_from_default_folder
+imgfetch  tftp://${tftp-address}/default/boot.ipxe || goto failure
+
+:execute_boot
+chain boot.ipxe
+
+:failure
+goto retry_dhcp
+
+

@@ -1,0 +1,10 @@
+[Unit]
+Description=APG clearance of CHIPSET_WDOG_TIMEOUT_FOUND bit
+
+[Service]
+ExecStart=/usr/lib/systemd/scripts/apg-clearchipwdog.sh
+Type=oneshot
+
+[Install]
+WantedBy=lde-servicestart.target
+

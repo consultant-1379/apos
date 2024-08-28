@@ -1,0 +1,133 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2017 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#   apg-defaults
+##
+# Description:
+#   A script to override LDE default script with APG customized script
+##
+# Changelog:
+# - Mon Apr 09 2018 - Pratap Reddy Uppada (xpraupp)
+#   Skip the lock-out mechanism if just one node is running and also 
+#   added logic to disable the feature in case of emergency situation
+# - Fri Jun 16 2017 - Pratap Reddy Uppada (xpraupp)
+#   First version.
+##
+. /opt/ap/apos/conf/apos_common.sh
+
+SKIP_RCODE='254'
+DISK_LOCKOUT_FILE='/boot/failoverd_disk_lockout'
+DISK_HEALTH_OFF_FILE='/var/home/ts_users/bin/.disk_health_off'
+
+function is_disk_faulty() {
+  local rCode=$FALSE
+  if [ -x /usr/bin/aehevls ]; then
+    if /usr/bin/aehevls | /usr/bin/grep -q 'SYSTEM DISK FAULTY'; then 
+      rCode=$TRUE
+    fi
+  else
+    apos_log user.crit "aehevls command not found or not executable"
+    exit $FALSE
+  fi
+  return $rCode
+}
+
+# '/var/home/ts_users/.disk_health_off' file which disables the
+# HSS feature.It is not cluster wide lock file. So, user can
+# choose to turn off the monitoring for single node as well
+function is_disk_health_disabled() {
+  local rCode=$FALSE
+  local temp_file=$(find /tmp -mindepth 1 -maxdepth 1 -name 'hss_disable.*' 2>/dev/null)
+  if [ -f "$DISK_HEALTH_OFF_FILE" ]; then
+    if [ ! -f "$temp_file" ]; then
+      apos_log user.info "Hardening shared storage(i.e disk health monitoring) feature is disbaled by user"
+      temp_file=$(mktemp -t hss_disable.XXXXXX)
+    fi
+    rCode=$TRUE
+  elif [ -f "$temp_file" ]; then
+    apos_log user.info "Hardening shared storage(i.e disk health monitoring) feature is enabled"
+    rm -f $temp_file
+  fi
+  return $rCode
+}
+
+function is_peer_disk_locked() {
+  local rCode=$FALSE
+  local peer_id=$(</etc/cluster/nodes/peer/id)
+  local peer_ip=$(</etc/cluster/nodes/all/$peer_id/networks/internal/primary/address)
+ 
+  # If peer pinging, then check for lock file 
+  if $(/usr/bin/ping -c 1 -W 1 $peer_ip &> /dev/null); then
+    if /usr/bin/ssh $peer_ip test -f "$DISK_LOCKOUT_FILE" 2>/dev/null ; then
+      rCode=$TRUE
+    fi
+  fi 
+  return $rCode
+}
+
+function is_active() {
+  local rCode=$FALSE
+  if [ ! -x /usr/bin/raidmgr ]; then
+    apos_log user.crit "raidmgr command not found or not executable"
+    exit $SKIP_RCODE
+  fi
+  
+  CMD_RESULT=$(/usr/bin/raidmgr -s)
+  if [ $? -ne $TRUE ]; then
+    exit $SKIP_RCODE
+  else
+    if ! echo "${CMD_RESULT}" | grep -Pq '^DOWN$' ; then 
+      rCode=$TRUE
+    fi
+  fi
+  return $rCode
+}
+
+SCRIPT_NAME=$(basename $0)
+OPERATION=$1
+
+case $OPERATION in
+  disk-health)
+    disk_state='good'
+    if is_disk_health_disabled; then
+      # After disk health is disabled; check for failoverd_disk_lockout file
+      # if exists then removes the lock file in order to re-join disk to DRBD
+      if [ -f "$DISK_LOCKOUT_FILE" ]; then 
+        rm -f "$DISK_LOCKOUT_FILE" || exit $SKIP_RCODE
+      fi 
+      exit $SKIP_RCODE
+    else
+      # system disk health check
+      if is_disk_faulty; then
+        if is_peer_disk_locked; then
+          exit $SKIP_RCODE
+        else
+          disk_state='bad'
+        fi 
+      fi
+    fi 
+    echo "$disk_state"
+    exit $TRUE
+  ;;
+  split-brain-input)
+    role='secondary'
+    # To assign primary role to node during split brain situation 
+    # depends on the Active role from APG point of view. 
+    if is_active; then
+      role='primary'
+    fi
+    echo "$role"
+    exit $TRUE
+  ;;
+  *)
+    echo "Usage: ${SCRIPT_NAME} disk-health"
+    echo "       ${SCRIPT_NAME} split-brain-input"
+    exit $FALSE
+  ;;
+esac
+
+exit $TRUE

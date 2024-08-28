@@ -1,0 +1,1385 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       psdef
+# Description:
+#       This script is to define a network for physical separation interface eth2(DEBUG)
+##
+# Usage:
+#       psdef -a addra -b addrb -c addrc -m subnetmask -g gwaddr -d destnetwork -s destnetmask [-f]
+#       psdef -g gwaddr -d destnetwork -s destnetmask [-f]
+#
+# Output:
+#      psdef command successfully executed
+#
+##
+# Changelog:
+# - Mon 31 Mar 2014 - Dharma Teja (XDHATEJ)
+#       TR HT59535: Netmask 255.255.255.254 unusable when configuring physical separation 
+# - Mon 14 Nov 2016 - Swapnika Baradi (XSWAPBA)
+#       Fix for TR HV10245(removed -r option for grep command)
+# - Mon 13 Jun 2016 - Luca De Simone (XLUDESI)
+#       Minor changes
+# - Fri 11 Mar 2016 - Antonio Giusto (XANTGIU)
+#        Updated to inhibit psdef command in SMX architecture
+# - Thu 27 Nov 2014 - Madhu Muthyala (XMADMUT)
+#	Updated to inhibit psdef command in virtualized architecture
+#   PC5 4 September 2014 - Torgny Wilhelmsson (xtorwil)
+#        missed change in cbless re-inserted (immcfg)
+#   PC4 22 August 2014 - Torgny Wilhelmsson (xtorwil)
+#       TR HS87578: APG43L AXE15A-LSV30: Not Possible to define a 2nd Destination using same GW with command psdef
+#       Update of clusterconf command to modify without reload
+#           and to do the reload in end of procedure
+#   PC3 29 Apr 2014 by Gianluigi Crispino (xgiacri)
+#	Support of "apos_common.sh"
+#   PC2 29 Apr 2014 by Fabio Imperato (xfabimp)
+#	Changed "exit_CableLessDefined_string" string
+# -  PC1 28 Apr 2014 - Torgny Wilhelmsson (xtorwil)
+#        Introduction of CheckCableLess
+# - 22 April - Torgny Wilhelmsson (XTORWIL)
+#       Update of Error Printouts
+# - 1 - 4 April - Torgny Wilhelmsson (XTORWIL)
+#       TR HS40129: LSV25: If Public IP addresses used for interfaces in command 'psdef' it falsely returns success
+#       TR HS40128  LSV25: Command 'psdef' does not check and translate parameters properly.
+# - Mon 31 Mar 2014 - Torgny Wilhelmsson (XTORWIL)
+#       TR HS40131: Removed "psdef command successfully executed" from Exits due to error.
+#       Added \003 to confirm question printout (same as psrm),
+#          due to prompt issue for some terminal clients.
+# - Thu Jul 04 2013 - Furquan Ullah (XFURULL)
+#       1. Fix provided for TR HR37476 
+# - Thu Apr 18 2013 - Furquan Ullah (XFURULL)
+#       Minor changes
+# - Tue Mar 04 2013 - Pratap Reddy (xpraupp)
+#       Removed priorty option
+# - Tue Dec 18 2011 - Satya Deepthi (XSATDEE)
+#       Second version.
+# - Fri Sep 23 2011 - Madhu Aravabhumi (XMADARA)
+#       First version.
+##
+
+# paths and files variables
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+
+# LOAD APOS COMMON FUNCTION
+APOS_COMMON="${AP_HOME:-/opt/ap}/apos/conf/apos_common.sh"
+source $APOS_COMMON
+
+LOG_TAG='psdef'
+LOG_DIR=/tmp
+LOG_FILE=psdef.log
+
+# command-list
+CMD_IMMCFG=/usr/bin/immcfg
+CMD_IMMFIND=/usr/bin/immfind
+CMD_GREP=/usr/bin/grep
+CMD_AWK=/usr/bin/awk
+CMD_CLUSTER_CONF=/opt/ap/apos/bin/clusterconf/clusterconf
+CMD_CAT=/bin/cat
+CMD_LOGGER=/bin/logger
+CMD_RM=/bin/rm
+CMD_GETOPT=/usr/bin/getopt
+CMD_SED=/usr/bin/sed
+CMD_HEAD=/usr/bin/head
+
+
+# Functions
+# error-code flags
+exit_success=0
+exit_sucs=0
+exit_fail=1
+exit_fail_msg="Error when executing (general fault)"
+exit_usage=2
+exit_abort_msg="Command aborted by user"
+exit_illegal_option_msg="Illegal option"
+
+exit_adapter_state=3
+exit_adapter_state_msg="Invalid Adapter State"
+exit_ip_outside_network=4
+exit_ip_outside_network_msg="IP Addresses not in same subnet"
+exit_duplicateIP=5
+exit_duplicateIP_msg="Duplicated IP Addresses"
+exit_dest_arg_err=6
+exit_dest_arg_err_msg="Destination and destination netmask are not consistent"
+exit_ps_not_conf=7
+# exit_ps_not_conf_msg="PS function results not configured \n 
+# Please configure it first"
+exit_GWynotinPS=8
+exit_GWynotinPS_msg="Gateway is not in the PS subnet"
+#exit_gw_conflict=36
+#exit_gw_conflict_msg="Given gateway IP does not belong to the source network"
+exit_ures_valu=10
+# Unreasonable value <values>
+exit_ps_already_conf=11
+exit_ps_already_conf_msg="Physical Separation is already Configured"
+exit_routeExist=12
+exit_routeExist_msg="Route already defined"
+exit_subnetmask=22
+exit_subnetmask_msg="Invalid Subnetmask IP address"
+
+
+exit_not_unique_network=31
+exit_not_unique_network_msg="Network definition conflict: < Network configuration is not compatible with another already defined network >"
+exit_not_unique_IP=32
+exit_not_unique_IP_msg="Network definition conflict: < Network IPs conflict with already defined IPs >"
+exit_not_unique_gateway=33
+exit_not_unique_gateway_msg="Network definition conflict: < Gateway IP conflicts with already defined IPs >"
+exit_not_unique_dest_network=34
+exit_not_unique_dest_network_msg="Network definition conflict: < Destination network conflicts with another already defined network >"
+#
+exit_dest_conflict=38
+exit_dest_conflict_msg="Given destination network conflicts with the source network"
+
+exit_immlist_failure=41
+exit_immlist_failure_msg="Error when executing < immlist fault >"
+exit_immfind_failure=42
+exit_immfind_failure_msg="Error when executing < immfind fault >"
+exit_CableLessDefined=43
+exit_CableLessDefined_string="Illegal command in this system configuration"
+exit_virtual_arch=44
+
+
+## Undocumented Exit strings
+#   echo -e "Error when executing (immlist unreasonable value)\n"
+
+
+
+
+
+
+
+# script-wide variables
+CLUS_MGMT_OPTS='mgmt --cluster'
+
+##############################################################################################
+# New functions for TRs HS40128 and HS40129 "borrowed" from NETDEF command
+
+##############################################################################################
+#                                  LOGGING UTILITIES                                         #
+##############################################################################################
+
+##############################################################################################
+# function INFO($msg);                                                                       #
+#                                                                                            #
+# Adds a timestamped entry to the log file.                                                  #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to add to the log                                                           #
+##############################################################################################
+function INFO() {
+    echo "[$(date --utc +'%Y-%m-%d %H:%M:%S')] $@" >>$LOG_DIR/$LOG_FILE
+}
+
+##############################################################################################
+# function log($msg);                                                                        #
+#                                                                                            #
+# Adds a notice message to the log file.                                                     #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to add to the log                                                           #
+##############################################################################################
+function log() {
+    local PRIO='-p user.notice'
+    local MESSAGE="${*:-notice}"
+    ${CMD_LOGGER} $PRIO $LOG_TAG "$MESSAGE"
+}
+
+##############################################################################################
+# function log_error($msg);                                                                  #
+#                                                                                            #
+# Adds an error message to the log file.                                                     #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to add to the log                                                           #
+##############################################################################################
+function log_error() {
+    local PRIO='-p user.err'
+    local MESSAGE="${*:-error}"
+    ${CMD_LOGGER} $PRIO $LOG_TAG "$MESSAGE"
+    INFO "$MESSAGE"
+}
+
+##############################################################################################
+# function TRACE_ENTER($msg);                                                                #
+#                                                                                            #
+# Adds a message to the log file followed by "() >>"                                         #
+# Note: it is useful to log the entry point of a function e.g. TRACE_ENTER $FUNCNAME         #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to print                                                                    #
+##############################################################################################
+function TRACE_ENTER(){
+    INFO "$1() >>"
+}
+
+##############################################################################################
+# function TRACE_LEAVE($msg);                                                                #
+#                                                                                            #
+# Adds a message to the log file followed by "() <<"                                         #
+# Note: it is useful to log the end point of a function e.g. TRACE_LEAVE $FUNCNAME           #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to print                                                                    #
+##############################################################################################
+function TRACE_LEAVE(){
+    INFO "$1() <<"
+}
+
+##############################################################################################
+#                                MESSAGE AND EXIT FUNCTIONS                                  #
+##############################################################################################
+
+##############################################################################################
+# function console_print($msg);                                                              #
+#                                                                                            #
+# Prints a message.                                                                          #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to print                                                                    #
+##############################################################################################
+function console_print() {
+    echo -e "$1"
+}
+
+##############################################################################################
+# function abort($msg);                                                                      #
+#                                                                                            #
+# Adds an error message to the log file and exits with                                       #
+# "Error when executing (general fault)"                                                     #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to add to the log                                                           #
+#                                                                                            #
+# Exits:                                                                                     #
+# - "Error when executing (general fault)"                                                   #
+##############################################################################################
+function abort() {
+    console_print "Error when executing (general fault)"
+    log_error "ABORTING: <"$1">"
+    exit $exit_fail
+}
+
+##############################################################################################
+# function console_abort($msg,$exit_code);                                                   #
+#                                                                                            #
+# Prints an error message and exits.                                                         #
+# Cancels any current operation on the cluster.conf file                                     #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to print                                                                    #
+# - $exit_code numeric exit code to use                                                      #
+##############################################################################################
+function console_abort() {
+    console_print "$1"
+    echo -e
+ #   ${CMD_CLUSTER_CONF} $CLUS_MGMT_OPTS --abort &>/dev/null
+    exit $2
+}
+
+
+##############################################################################################
+# function CIDR_to_subnet_mask($cidr);                                                       #
+#                                                                                            #
+# Convert from CIDR notation in a subnet mask                                                #
+# Example: 19 in 255.255.224.0                                                               #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $cidr CIDR number to convert                                                             #
+#                                                                                            #
+# Return value:                                                                              #
+# Subnet mask corresponding to $cidr                                                         #
+#                                                                                            #
+# Return codes:                                                                              #
+# - SUCCESS (0)                                                                              #
+# - FAILURE (1) in case $cidr is not a valid CIDR number                                     #
+##############################################################################################
+function CIDR_to_subnet_mask() {
+    TRACE_ENTER $FUNCNAME
+    local rCode=$exit_fail
+
+    local cidr="$1"
+    local error=$FALSE
+
+    CIDR_subnet_masks=("0.0.0.0" "128.0.0.0" "192.0.0.0" "224.0.0.0" "240.0.0.0" "248.0.0.0" "252.0.0.0" "254.0.0.0" "255.0.0.0" "255.128.0.0" "255.192.0.0" "255.224.0.0" "255.240.0.0" "255.248.0.0" "255.252.0.0" "255.254.0.0" "255.255.0.0" "255.255.128.0" "255.255.192.0" "255.255.224.0" "255.255.240.0" "255.255.248.0" "255.255.252.0" "255.255.254.0" "255.255.255.0" "255.255.255.128" "255.255.255.192" "255.255.255.224" "255.255.255.240" "255.255.255.248" "255.255.255.252" "255.255.255.254" "255.255.255.255")
+
+    if [ $cidr -ge 0 ] && [ $cidr -le 32 ] ; then
+        local subnet_mask="${CIDR_subnet_masks[$cidr]}"
+        echo $subnet_mask
+        rCode=$exit_sucs
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+    return $rCode
+}
+
+##############################################################################################
+# function compute_network($ip_address,$subnet_mask);                                        #
+#                                                                                            #
+# Given an IP address and a subnet mask returns the subnet id in CIDR format                 #
+# Example: given 192.168.23.45 and 255.255.255.252 returns 192.168.23.44/30                  #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $ip_address valid IP address                                                             #
+# - $subnet_mask valid CIDR subnet_mask                                                      #
+#                                                                                            #
+# Return value:                                                                              #
+# Subnet id in CIDR format                                                                   #
+#                                                                                            #
+# Return codes:                                                                              #
+# - SUCCESS (0)                                                                              #
+# - FAILURE (1) in case $subnet_mask is not a valid CIDR subnet mask                         #
+##############################################################################################
+function compute_network() {
+    TRACE_ENTER $FUNCNAME
+    local rCode=$exit_fail
+
+    local ip_address="$1"
+    local subnet_mask="$2"
+
+    local cidr_subnet_mask=$(subnet_mask_to_CIDR "$subnet_mask")
+    if [ "$cidr_subnet_mask" != "" ] ; then
+        local ip_address_component=(${ip_address//./ })
+        local subnet_mask_component=(${subnet_mask//./ })
+
+        local subnet_id_A=`echo $((${ip_address_component[0]} & ${subnet_mask_component[0]}))`
+        local subnet_id_B=`echo $((${ip_address_component[1]} & ${subnet_mask_component[1]}))`
+        local subnet_id_C=`echo $((${ip_address_component[2]} & ${subnet_mask_component[2]}))`
+        local subnet_id_D=`echo $((${ip_address_component[3]} & ${subnet_mask_component[3]}))`
+
+        echo "$subnet_id_A.$subnet_id_B.$subnet_id_C.$subnet_id_D/$cidr_subnet_mask"
+        rCode=$exit_sucs
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+    return $rCode
+}
+
+##############################################################################################
+# function compute_broadcast_address($network_id);                                           #
+#                                                                                            #
+# Given a network id in CIDR notation (e.g 10.35.13.0/24) returns the broadcast IP address   #
+# Example: given 10.35.13.0/24 returns 10.35.13.255                                          #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $network_id valid network id in CIDR notation                                            #
+#                                                                                            #
+# Return value:                                                                              #
+# Broadcast IP address                                                                       #
+#                                                                                            #
+# Return codes:                                                                              #
+# - SUCCESS (0)                                                                              #
+# - FAILURE (1) in case $network_id is not a valid network id                                #
+##############################################################################################
+function compute_broadcast_address() {
+	local rCode=$exit_sucs
+	
+	local network_id="$1"
+	
+	local network_ip="$(echo "$network_id" | $CMD_AWK -F'/' '{ print $1 }')"
+	local network_cidr="$(echo "$network_id" | $CMD_AWK -F'/' '{ print $2 }')"
+	local network_subnet_mask="$(CIDR_to_subnet_mask $network_cidr)"
+	
+	if [ "$network_subnet_mask" != "" ] ; then
+		local network_ip_components=(${network_ip//./ })
+		local network_subnet_mask_components=(${network_subnet_mask//./ })
+		
+		(( a = ~${network_subnet_mask_components[0]} + 256 ))
+		(( b = ~${network_subnet_mask_components[1]} + 256 ))
+		(( c = ~${network_subnet_mask_components[2]} + 256 ))
+		(( d = ~${network_subnet_mask_components[3]} + 256))
+		
+		local broadcast_ip_A=`echo $((${network_ip_components[0]} | $a))`
+		local broadcast_ip_B=`echo $((${network_ip_components[1]} | $b))`
+		local broadcast_ip_C=`echo $((${network_ip_components[2]} | $c))`
+		local broadcast_ip_D=`echo $((${network_ip_components[3]} | $d))`
+		
+		echo "$broadcast_ip_A.$broadcast_ip_B.$broadcast_ip_C.$broadcast_ip_D"
+		rCode=$exit_sucs
+	fi
+	
+	return $rCode
+}
+
+##############################################################################################
+# function dec_to_bin($dec,$pad = 8);                                                        #
+#                                                                                            #
+# Convert an unsigned decimal integer in the corresponding binary string                     #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $dec unsigned decimal integer to convert                                                 #
+# - $pad (optional) minimun length of the resulting binary string                            #
+#                                                                                            #
+# Return value:                                                                              #
+# Binary string corresponding to $dec                                                        #
+#                                                                                            #
+# Return codes:                                                                              #
+# - SUCCESS (0)                                                                              #
+# - FAILURE (0) in case $dec is not an unsigned decimal integer                              #
+##############################################################################################
+function dec_to_bin() {
+    TRACE_ENTER $FUNCNAME
+    local rCode=$exit_fail
+
+    local dec="$1"
+    local pad=$2
+
+    [[ $pad =~ ^[0-9]+$ ]] || pad=8
+
+    if [[ $dec =~ ^[0-9]+$ ]] ; then
+        local bin=$(echo "obase=2;$dec" | bc)
+        printf "%0*d\n" $pad $bin
+
+        rCode=$exit_sucs
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+    return $rCode
+}
+
+##############################################################################################
+# function ip_to_bin($ip);                                                                   #
+#                                                                                            #
+# Convert an IP address in the corresponding binary string                                   #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $ip IP address to convert                                                                #
+#                                                                                            #
+# Return value:                                                                              #
+# Binary string corresponding to $ip                                                         #
+#                                                                                            #
+# Return codes:                                                                              #
+# - SUCCESS (0)                                                                              #
+# - FAILURE (0) in case $ip is not a valid IP address                                        #
+##############################################################################################
+function ip_to_bin() {
+    TRACE_ENTER $FUNCNAME
+    local rCode=$exit_sucs
+
+    local ip="$1"
+
+    local bin=""
+
+    local ip_components=(${ip//./ })
+    local ip_component
+    local ip_component_bin
+    for ip_component in "${ip_components[@]}" ; do
+        ip_component_bin=$(dec_to_bin "$ip_component")
+        if [ "$ip_component_bin" == "" ] ; then
+            rCode=$exit_fail
+            break;
+        fi
+        bin="$bin$ip_component_bin"
+    done
+
+    [[ rCode -eq $exit_sucs ]] && echo "$bin"
+
+    TRACE_LEAVE $FUNCNAME
+    return $rCode
+}
+
+##############################################################################################
+# function is_IP_unique($ip_address,$networks_to_ignore);                                    #
+#                                                                                            #
+# Given an IP address verify that it isn't already assigned to another network or gateway    #
+# (it looks at the "ip", "mip" and "route" rules in cluster.conf)                            #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $ip_address IP address to verify                                                         #
+# - $networks_to_ignore network name (or regex) to exclude from the comparison               #
+# Note:                                                                                      #
+#  The parameter $networks_to_ignore can be used to exclude from the comparison the network  #
+#  that is currently being redefined or the destination networks of its additional routes.   #
+#  If, for example the network to redefine is the "public" one, we have to ignore:           #
+#  - the "public" network name                                                               #
+#  - all the networks with names "public_gw1", "public_gw2" etc.                             #
+#   (because not-compliant gateways will be removed)                                         #
+#  So, we have to pass this networks_to_ignore="public|public_gw([0-9])([0-9])*"             #
+#                                                                                            #
+# Returns:                                                                                   #
+# - SUCCESS (0) in case $ip_address is unique                                                #
+# - FAILURE (1) in case $ip_address is not unique                                            #
+##############################################################################################
+function is_IP_unique() {
+    TRACE_ENTER $FUNCNAME
+    local rCode=$exit_sucs
+
+    local ip_address="$1"
+    local networks_to_ignore="$2"
+
+    local networks_to_ignore_regex="\s\s*($networks_to_ignore)\s\s*"
+
+    local other_IPs=$($CMD_CLUSTER_CONF ip -D | $CMD_GREP -Ev "$networks_to_ignore_regex" | tail -n +2 | $CMD_AWK '{ print $6 }' | tr '\n' '*')
+
+    local other_IP
+    IFS=$'*'
+    for other_IP in $other_IPs ; do
+        if [ "$other_IP" == "$ip_address" ] ; then
+            rCode=$exit_fail
+            break
+        fi
+    done
+    unset IFS
+
+    if [ $rCode -ne $exit_fail ] ; then
+        local other_gateways=$($CMD_CLUSTER_CONF route -D | $CMD_GREP -Ev "$networks_to_ignore_regex" | tail -n +2 | $CMD_AWK '{ print $6 }' | tr '\n' '*')
+
+        local other_gateway
+        IFS=$'*'
+        for other_gateway in $other_gateways ; do
+            if [ "$other_gateway" == "$ip_address" ] ; then
+                rCode=$exit_fail
+                break
+            fi
+        done
+        unset IFS
+    fi
+
+    if [ $rCode -ne $exit_fail ] ; then
+        local other_mips=$($CMD_CLUSTER_CONF mip -D | $CMD_GREP -Ev "$networks_to_ignore_regex" | tail -n +2 | $CMD_AWK '{ print $7 }' | tr '\n' '*')
+
+        local other_mip
+        IFS=$'*'
+        for other_mip in $other_mips ; do
+            if [ "$other_mip" == "$ip_address" ] ; then
+                rCode=$exit_fail
+                break
+            fi
+        done
+        unset IFS
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+    return $rCode
+}
+
+##############################################################################################
+# function is_network_unique($subnet_id,$networks_to_ignore);                                #
+#                                                                                            #
+# Given a subnet id (example 192.168.23.44/30) verify that it isn't already assigned to      #
+# another network (it looks at the "network" rules in cluster.conf                           #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $subnet_id subnet id to verify                                                           #
+# - $networks_to_ignore network name (or regex) to exclude from the comparison               #
+# Note:                                                                                      #
+#  The parameter $networks_to_ignore can be used to exclude from the comparison the network  #
+#  that is currently being redefined or the destination networks of its additional routes.   #
+#  If, for example the network to redefine is the "public" one, we have to ignore:           #
+#  - the "public" network name                                                               #
+#  - all the networks with names "public_gw1", "public_gw2" etc.                             #
+#   (because not-compliant gateways will be removed)                                         #
+#  So, we have to pass this networks_to_ignore="public|public_gw([0-9])([0-9])*"             #
+#                                                                                            #
+# Returns:                                                                                   #
+# - SUCCESS (0) in case $subnet_id is unique                                                 #
+# - FAILURE (1) in case $subnet_id is not unique                                             #
+##############################################################################################
+function is_network_unique() {
+    TRACE_ENTER $FUNCNAME
+    local rCode=$exit_sucs
+
+    local subnet_id="$1"
+    local networks_to_ignore="$2"
+
+    local networks_to_ignore_regex="\s\s*($networks_to_ignore)\s\s*"
+
+    local other_networks=$($CMD_CLUSTER_CONF network -D | $CMD_GREP -Ev "$networks_to_ignore_regex" | tail -n +2 | $CMD_AWK '{ print $4 }' | tr '\n' '*')
+
+    local other_id
+    IFS=$'*'
+    for other_id in $other_networks ; do
+        if [ "$other_id" == "$subnet_id" ] ; then
+            rCode=$exit_fail
+            break
+        fi
+    done
+    unset IFS
+
+    TRACE_LEAVE $FUNCNAME
+    return $rCode
+}
+
+##############################################################################################
+# function is_subnet_of($subnetA_id,$subnetB_id);                                            #
+#                                                                                            #
+# Given two subnet ids, returns TRUE if $subnetA_id is a subnet of $subnetB_id.              #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $subnetA_id subnet id in CIDR notation                                                   #
+# - $subnetB_id subnet id in CIDR notation                                                   #
+#                                                                                            #
+# Return codes:                                                                              #
+# - SUCCESS (0) in case $subnetA_id is a subnet of $subnetB_id                               #
+# - FAILURE (0) in case $subnetA_id is not a subnet of $subnetB_id                           #
+##############################################################################################
+function is_subnet_of() {
+    TRACE_ENTER $FUNCNAME
+    local rCode=$exit_fail
+
+    local subnetA_id="$1"
+    local subnetB_id="$2"
+
+    local subnetA_ip="$(echo "$subnetA_id" | $CMD_AWK -F'/' '{ print $1 }')"
+    local subnetB_ip="$(echo "$subnetB_id" | $CMD_AWK -F'/' '{ print $1 }')"
+
+    local subnetA_cidr=$(echo "$subnetA_id" | $CMD_AWK -F'/' '{ print $2 }')
+    local subnetB_cidr=$(echo "$subnetB_id" | $CMD_AWK -F'/' '{ print $2 }')
+
+    if [ $subnetA_cidr -ge $subnetB_cidr ] ; then
+        local subnetA_ip_binary=$(ip_to_bin "$subnetA_ip")
+        local subnetB_ip_binary=$(ip_to_bin "$subnetB_ip")
+
+        local subnetA_ip_firstBits=${subnetA_ip_binary:0:$subnetB_cidr}
+        local subnetB_ip_firstBits=${subnetB_ip_binary:0:$subnetB_cidr}
+
+        [[ "$subnetA_ip_firstBits" == "$subnetB_ip_firstBits" ]] && rCode=$exit_sucs
+    fi
+
+    TRACE_LEAVE $FUNCNAME
+    return $rCode
+}
+
+##############################################################################################
+# function is_valid_CIDR_subnet_mask($subnet_mask);                                          #
+#                                                                                            #
+# Checks if $subnet_mask is one of the useable CIDR subnet masks from the following table    #
+# Netmask              Netmask (binary)                 CIDR     Notes                       #
+# _____________________________________________________________________________              #
+# 255.255.255.255  11111111.11111111.11111111.11111111  /32  Host (single addr)              #
+# 255.255.255.254  11111111.11111111.11111111.11111110  /31    1  useable                    #
+# 255.255.255.252  11111111.11111111.11111111.11111100  /30    2  useable                    #
+# 255.255.255.248  11111111.11111111.11111111.11111000  /29    6  useable                    #
+# 255.255.255.240  11111111.11111111.11111111.11110000  /28   14  useable                    #
+# 255.255.255.224  11111111.11111111.11111111.11100000  /27   30  useable                    #
+# 255.255.255.192  11111111.11111111.11111111.11000000  /26   62  useable                    #
+# 255.255.255.128  11111111.11111111.11111111.10000000  /25  126  useable                    #
+# 255.255.255.0    11111111.11111111.11111111.00000000  /24 "Class C" 254 useable            #
+#                                                                                            #
+# 255.255.254.0    11111111.11111111.11111110.00000000  /23    2  Class C's                  #
+# 255.255.252.0    11111111.11111111.11111100.00000000  /22    4  Class C's                  #
+# 255.255.248.0    11111111.11111111.11111000.00000000  /21    8  Class C's                  #
+# 255.255.240.0    11111111.11111111.11110000.00000000  /20   16  Class C's                  #
+# 255.255.224.0    11111111.11111111.11100000.00000000  /19   32  Class C's                  #
+# 255.255.192.0    11111111.11111111.11000000.00000000  /18   64  Class C's                  #
+# 255.255.128.0    11111111.11111111.10000000.00000000  /17  128  Class C's                  #
+# 255.255.0.0      11111111.11111111.00000000.00000000  /16  "Class B"                       #
+#                                                                                            #
+# 255.254.0.0      11111111.11111110.00000000.00000000  /15    2  Class B's                  #
+# 255.252.0.0      11111111.11111100.00000000.00000000  /14    4  Class B's                  #
+# 255.248.0.0      11111111.11111000.00000000.00000000  /13    8  Class B's                  #
+# 255.240.0.0      11111111.11110000.00000000.00000000  /12   16  Class B's                  #
+# 255.224.0.0      11111111.11100000.00000000.00000000  /11   32  Class B's                  #
+# 255.192.0.0      11111111.11000000.00000000.00000000  /10   64  Class B's                  #
+# 255.128.0.0      11111111.10000000.00000000.00000000  /9   128  Class B's                  #
+# 255.0.0.0        11111111.00000000.00000000.00000000  /8   "Class A"                       #
+#                                                                                            #
+# 254.0.0.0        11111110.00000000.00000000.00000000  /7                                   #
+# 252.0.0.0        11111100.00000000.00000000.00000000  /6                                   #
+# 248.0.0.0        11111000.00000000.00000000.00000000  /5                                   #
+# 240.0.0.0        11110000.00000000.00000000.00000000  /4                                   #
+# 224.0.0.0        11100000.00000000.00000000.00000000  /3                                   #
+# 192.0.0.0        11000000.00000000.00000000.00000000  /2                                   #
+# 128.0.0.0        10000000.00000000.00000000.00000000  /1                                   #
+# 0.0.0.0          00000000.00000000.00000000.00000000  /0   IP space                        #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $subnet_mask subnet mask to validate                                                     #
+#                                                                                            #
+# Returns:                                                                                   #
+# - SUCCESS (0) if $subnet_mask is a valid CIDR subnet mask                                  #
+# - FAILURE (1) if $subnet_mask is not a valid CIDR subnet_mask                              #
+##############################################################################################
+function is_valid_CIDR_subnet_mask() {
+    TRACE_ENTER $FUNCNAME
+    local rCode=$exit_fail
+
+    local subnet_mask="$1"
+
+    local valid_subnet_masks=("255.255.255.255" "255.255.255.254" "255.255.255.252" "255.255.255.248" "255.255.255.240" "255.255.255.224" "255.255.255.192" "255.255.255.128" "255.255.255.0" "255.255.254.0" "255.255.252.0" "255.255.248.0" "255.255.240.0" "255.255.224.0" "255.255.192.0" "255.255.128.0" "255.255.0.0" "255.254.0.0" "255.252.0.0" "255.248.0.0" "255.240.0.0" "255.224.0.0" "255.192.0.0" "255.128.0.0" "255.0.0.0" "254.0.0.0" "252.0.0.0" "248.0.0.0" "240.0.0.0" "224.0.0.0" "192.0.0.0" "128.0.0.0" "0.0.0.0")
+
+    in_array "$subnet_mask" "${valid_subnet_masks[@]}" && rCode=$exit_success
+
+    TRACE_LEAVE $FUNCNAME
+    return $rCode
+}
+
+##############################################################################################
+# function in_array($needle,$haystack);                                                      #
+#                                                                                            #
+# Arguments:                                                                                 #
+# $needle string to search for in $haystack                                                  #
+# $haystack imploded array to search in (pass the array as "${haystack[@]}" )                #
+#                                                                                            #
+# Returns 0 if $needle is in $haystack, 1 otherwise                                          #
+##############################################################################################
+function in_array() {
+    local needle=$1
+    shift
+
+    local hay
+    for hay in "$@"; do
+        [[ "$hay" == "$needle" ]] && return 0
+    done
+    return 1
+}
+
+##############################################################################################
+# function subnet_mask_to_CIDR($subnet_mask);                                                #
+#                                                                                            #
+# Convert a subnet mask in CIDR notation                                                     #
+# Example: 255.255.224.0 in 19                                                               #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $subnet_mask subnet mask to convert                                                      #
+#                                                                                            #
+# Return value:                                                                              #
+# CIDR number corresponding to $subnet_mask                                                  #
+#                                                                                            #
+# Return codes:                                                                              #
+# - SUCCESS (0)                                                                              #
+# - FAILURE (1) in case $subnet_mask is not a valid CIDR subnet mask                         #
+##############################################################################################
+function subnet_mask_to_CIDR() {
+    TRACE_ENTER $FUNCNAME
+    local rCode=$exit_sucs
+
+    local subnet_mask="$1"
+    local error=$FALSE
+
+    local dec
+    local nbits=0
+    IFS=$'.'
+    for dec in $subnet_mask ; do
+        case $dec in
+        255)
+            let nbits+=8
+            ;;
+        254)
+            let nbits+=7
+            break
+            ;;
+        252)
+            let nbits+=6
+            break
+            ;;
+        248)
+            let nbits+=5
+            break
+            ;;
+        240)
+            let nbits+=4
+            break
+            ;;
+        224)
+            let nbits+=3
+            break
+            ;;
+        192)
+            let nbits+=2
+            break
+            ;;
+        128)
+            let nbits+=1
+            break
+            ;;
+        0)
+            ;;
+        *)
+            error=$TRUE
+            ;;
+            esac
+    done
+    unset IFS
+
+    [[ $error -eq $TRUE ]] && rCode=$exit_fail
+    [[ $error -eq $FALSE ]] && echo "$nbits"
+
+    TRACE_LEAVE $FUNCNAME
+    return $rCode
+}
+
+
+
+## Check that IP addresses given does not exist in the Cluster Configuration already
+## addr_a addr_b addr_c subnet gwaddr psdest psnetmask
+function Validate_Format1_againstClusterConf(){
+    TRACE_ENTER $FUNCNAME
+
+    local networks_to_ignore="no_networks_to_ignore_kept4compability"
+
+    # Validate Unique Local IP Addresses
+        is_IP_unique "$addr_a" "$networks_to_ignore" || console_abort "$exit_not_unique_IP_msg\n" $exit_not_unique_IP
+        is_IP_unique "$addr_b" "$networks_to_ignore" || console_abort "$exit_not_unique_IP_msg\n" $exit_not_unique_IP
+        is_IP_unique "$addr_c" "$networks_to_ignore" || console_abort "$exit_not_unique_IP_msg\n" $exit_not_unique_IP
+ 
+    # Validate subnet mask for own network
+        is_valid_CIDR_subnet_mask "$subnet" || console_abort "Unreasonable value < $subnet >\n" $exit_subnetmask
+
+    # Calculate own network address
+		local subnet_id_A=$(compute_network "$addr_a" "$subnet")
+		local subnet_id_B=$(compute_network "$addr_b" "$subnet")
+		subnet_id_Cluster=$(compute_network "$addr_c" "$subnet")
+	
+	[[ "$subnet_id_A" == "$subnet_id_Cluster" ]] || console_abort "$exit_ip_outside_network_msg\n" $exit_ip_outside_network
+	[[ "$subnet_id_B" == "$subnet_id_Cluster" ]] || console_abort "$exit_ip_outside_network_msg\n" $exit_ip_outside_network
+
+    # Validate IPs towards Network Addresses
+		local subnet_network_address="$(echo "$subnet_id_Cluster" | $CMD_AWK -F'/' '{ print $1 }')"
+		local subnet_broadcast_address="$(compute_broadcast_address "$subnet_id_Cluster")"
+		
+		[[ "$addr_a" == "$subnet_network_address" ]] && console_abort "Unreasonable value < $addr_a, $subnet >\n" $exit_ip_outside_network
+		[[ "$addr_b" == "$subnet_network_address" ]] && console_abort "Unreasonable value < $addr_b, $subnet >\n" $exit_ip_outside_network
+		[[ "$addr_c" == "$subnet_network_address" ]] && console_abort "Unreasonable value < $addr_c, $subnet >\n" $exit_ip_outside_network
+		[[ "$addr_a" == "$subnet_broadcast_address" ]] && console_abort "Unreasonable value < $addr_a, $subnet >\n" $exit_ip_outside_network
+		[[ "$addr_b" == "$subnet_broadcast_address" ]] && console_abort "Unreasonable value < $addr_b, $subnet >\n" $exit_ip_outside_network
+		[[ "$addr_c" == "$subnet_broadcast_address" ]] && console_abort "Unreasonable value < $addr_c, $subnet >\n" $exit_ip_outside_network
+
+	# Validate Unique own network
+        is_network_unique "$subnet_id_Cluster" "$networks_to_ignore" || console_abort "$exit_not_unique_network_msg\n" $exit_not_unique_network
+
+    # Retrieve Public network id 
+        local public_network_name="public"
+        local public_network_id=$($CMD_CLUSTER_CONF network -D | $CMD_GREP -w "$public_network_name" | $CMD_AWK '{ print $4 }')
+        is_subnet_of "$public_network_id" "$subnet_id_Cluster" && console_abort "$exit_not_unique_network_msg\n" $exit_not_unique_network
+
+
+	# Validate Unique GateWay Address
+        is_IP_unique "$gwaddr" "$networks_to_ignore" || console_abort "$exit_not_unique_gateway_msg\n" $exit_not_unique_gateway
+		
+    # Validate GWy vs Cluster
+        local source_subnet_id_GW=$(compute_network "$gwaddr" "$subnet")
+        [[ "$source_subnet_id_GW" != "$subnet_id_Cluster" ]] && console_abort "$exit_GWynotinPS_msg\n" $exit_GWynotinPS
+
+
+    # Calculate Destination network address
+        is_valid_CIDR_subnet_mask "$psnetmask" || console_abort "Unreasonable value < $psnetmask >\n" $exit_subnetmask
+
+    # Validate Destination network address
+        destination_network_id=""
+        destination_network_id=$(compute_network "$psdest" "$psnetmask")
+        is_subnet_of "$subnet_id_Cluster" "$destination_network_id" && console_abort "$exit_dest_conflict_msg\n" $exit_dest_conflict
+
+
+    # Validate Unique Destination network
+        is_network_unique "$destination_network_id" "$networks_to_ignore" || console_abort "$exit_not_unique_dest_network_msg\n" $exit_not_unique_dest_network
+
+    # Validate IPs towards Network Addresses
+		[[ "$gwaddr" == "$subnet_network_address" ]] && console_abort "$exit_GWynotinPS_msg\n" $exit_ip_outside_network
+		[[ "$gwaddr" == "$subnet_broadcast_address" ]] && console_abort "$exit_GWynotinPS_msg\n" $exit_ip_outside_network
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+## Check that IP addresses given does not exist in the Cluster Configuration already
+## gwaddr psdest psnetmask
+function Validate_Format2_againstClusterConf(){
+    TRACE_ENTER $FUNCNAME
+
+    # Validate Unique GateWay Address
+        local networks_to_ignore="physep|physep([0-9])([0-9])*"
+        is_IP_unique "$gwaddr" "$networks_to_ignore" || console_abort "$exit_not_unique_gateway_msg\n" $exit_not_unique_gateway
+
+    #Retrieve source network id and source network subnet mask
+        local source_network_name="public2"
+        local source_network_id=$($CMD_CLUSTER_CONF network -D | $CMD_GREP -w "$source_network_name" | $CMD_AWK '{ print $4 }')
+        local source_network_cidr=$(echo "$source_network_id" | $CMD_AWK -F'/' '{ print $2 }')
+        source_network_subnet_mask=$(CIDR_to_subnet_mask "$source_network_cidr")
+		
+    # Validate GWy vs Cluster
+        local source_subnet_id_GW=$(compute_network "$gwaddr" "$source_network_subnet_mask")
+        [[ "$source_subnet_id_GW" != "$source_network_id" ]] && console_abort "$exit_GWynotinPS_msg\n" $exit_GWynotinPS
+
+    # Calculate Destination network address
+        is_valid_CIDR_subnet_mask "$psnetmask" || console_abort "Unreasonable value < $psnetmask >\n" $exit_subnetmask
+
+    # Validate Destination network address
+        destination_network_id=""
+        destination_network_id=$(compute_network "$psdest" "$psnetmask")
+        is_subnet_of "$source_network_id" "$destination_network_id" && console_abort "$exit_dest_conflict_msg\n" $exit_dest_conflict
+
+    # Validate Unique Destination network
+        local networks_to_ignore="networks_really_needs_to_be_unique"
+        is_network_unique "$destination_network_id" "$networks_to_ignore" || console_abort "$exit_routeExist_msg\n" $exit_routeExist
+
+		
+    # Validate IPs towards Network Addresses
+		local subnet_network_address="$(echo "$source_network_id" | $CMD_AWK -F'/' '{ print $1 }')"
+		local subnet_broadcast_address="$(compute_broadcast_address "$source_network_id")"
+		[[ "$gwaddr" == "$subnet_network_address" ]] && console_abort "$exit_GWynotinPS_msg\n" $exit_GWynotinPS
+		[[ "$gwaddr" == "$subnet_broadcast_address" ]] && console_abort "$exit_GWynotinPS_msg\n" $exit_GWynotinPS
+
+    TRACE_LEAVE $FUNCNAME
+}
+
+
+############################
+# old functions
+############################
+
+function validate_cmd(){
+        exit_code=${!1}
+        if [ ! $exit_code == 0 ] ; then
+                echo -e "$exit_fail_msg\n"
+                exit $exit_fail
+        fi
+}
+function ps_imm_status(){
+        imm_class_name=$(immfind -c NorthBound)
+        if [ ! -z $imm_class_name ] ; then
+                ps_status=$(immlist $imm_class_name | grep physicalSeparationStatus | awk '{ print $3}')
+                if [ ! -z $ps_status ] ; then
+                        if [ $ps_status -eq 0 ] ; then
+                                echo "NOT CONFIGURED"
+                        elif [ $ps_status -eq 1 ] ; then
+                                echo "CONFIGURED"
+                        else
+                                echo -e "$exit_immlist_failure_msg\n"
+                                exit $exit_immlist_failure
+                        fi
+                else
+                        echo -e "$exit_immlist_failure_msg\n"
+                        exit $exit_immlist_failure
+                fi
+        else
+                echo -e "exit_immfind_failure_msg\n"
+                exit $exit_immfind_failure
+        fi
+}
+
+function ps_imm_set(){
+        imm_num=$1
+        imm_class_name=$(immfind -c NorthBound)
+        if [ ! -z $imm_class_name ] ; then
+                if ! immcfg -a physicalSeparationStatus=$imm_num $imm_class_name &> /dev/null ; then
+                        echo -e "Error when executing (general fault)\n"
+                        exit $exit_fail
+                fi
+        else
+                echo -e "Error when executing (general fault)\n"
+                exit $exit_fail
+        fi
+}
+
+#netdef_format_1 addr_a addr_b addr_c subnet gwaddr psdest psnetmask
+function psdef_format_1(){
+        addr_a1=${!1}
+        addr_b1=${!2}
+        addr_c1=${!3}
+        subnet1=${!4}
+        gwaddr1=${!5}
+        psdest1=${!6}
+        psnetmask1=${!7}
+
+	local rCode=$exit_sucs
+
+	$CMD_CLUSTER_CONF network --m_add public2 $subnet_id_Cluster &> /dev/null
+	$CMD_CLUSTER_CONF network --m_add physep $destination_network_id &> /dev/null
+	$CMD_CLUSTER_CONF mip --m_add control primary_ps $debug_interface:1 public2 $addr_c1 &> /dev/null
+	$CMD_CLUSTER_CONF ip --m_add 1 $debug_interface public2 $addr_a1 &> /dev/null
+	$CMD_CLUSTER_CONF ip --m_add 2 $debug_interface public2 $addr_b1 &> /dev/null
+	$CMD_CLUSTER_CONF route --m_add control physep gateway $gwaddr1 &> /dev/null
+
+	$CMD_CLUSTER_CONF $CLUS_MGMT_OPTS --verify &> /dev/null || rCode=$exit_fail
+	if [ $rCode -eq $exit_fail ]; then
+		# Something wrong. Fallback with older cluster config
+		$(${CMD_CLUSTER_CONF} $CLUS_MGMT_OPTS --abort) && abort "Cluster management verification failed"
+	fi
+
+	# Verify seems to be OK. Reload the cluster now.
+	$CMD_CLUSTER_CONF $CLUS_MGMT_OPTS --reload --verbose &>/dev/null || rCode=$exit_fail
+	if [ $rCode -eq $exit_fail ]; then
+		# Something wrong in reload. Fallback on older cluster config
+		$(${CMD_CLUSTER_CONF} $CLUS_MGMT_OPTS --abort) && abort "Cluster management reload failed"
+	fi
+
+	# Things seems to be OK so-far. Commit cluster configuration now.
+	$CMD_CLUSTER_CONF $CLUS_MGMT_OPTS --commit &>/dev/null || rCode=$exit_fail
+	if [ $rCode -eq $exit_fail ]; then
+		# Commit should not fail, as it involves only removing the
+		# back up file. anyway bail-out?
+		abort "Cluster Management commit failed"
+	fi
+
+}
+
+#netdef_format_2 gwaddr psdest psnetmask
+function psdef_format_2(){
+        gwaddr1=${!1}
+        psdest1=${!2}
+        psnetmask1=${!3}
+
+	local rCode=$exit_sucs
+
+        psword_old=`grep "network physep" /cluster/etc/cluster.conf | tail -n -1 | awk '{print $2}'`
+        if [ $psword_old == "physep" ] ; then
+                psword_new=physep1
+        else
+                num=`grep "network physep" /cluster/etc/cluster.conf | tail -n -1 | awk '{print $2}' | cut -c7-`
+                num=`expr $num + 1`
+                psword_new="physep$num"
+        fi
+
+	$CMD_CLUSTER_CONF network --m_add $psword_new $destination_network_id &> /dev/null
+	$CMD_CLUSTER_CONF route --m_add control $psword_new gateway $gwaddr1 &> /dev/null
+
+	$CMD_CLUSTER_CONF $CLUS_MGMT_OPTS --verify &> /dev/null || rCode=$exit_fail
+	if [ $rCode -eq $exit_fail ]; then
+		# Something wrong. Fallback with older cluster config
+		$(${CMD_CLUSTER_CONF} $CLUS_MGMT_OPTS --abort) && abort "Cluster management verification failed"
+	fi
+
+	# Verify seems to be OK. Reload the cluster now.
+	$CMD_CLUSTER_CONF $CLUS_MGMT_OPTS --reload --verbose &>/dev/null || rCode=$exit_fail
+	if [ $rCode -eq $exit_fail ]; then
+		# Something wrong in reload. Fallback on older cluster config
+		$(${CMD_CLUSTER_CONF} $CLUS_MGMT_OPTS --abort) && abort "Cluster management reload failed"
+	fi
+
+	# Things seems to be OK so-far. Commit cluster configuration now.
+	$CMD_CLUSTER_CONF $CLUS_MGMT_OPTS --commit &>/dev/null || rCode=$exit_fail
+	if [ $rCode -eq $exit_fail ]; then
+		# Commit should not fail, as it involves only removing the
+		# back up file. anyway bail-out?
+		abort "Cluster Management commit failed"
+	fi
+}
+
+function help(){
+        echo -e "Usage: psdef -a addra -b addrb -c addrc -m subnetmask -g gwaddr -d destnetwork -s destnetmask [-f]"
+        echo -e "Usage: psdef -g gwaddr -d destnetwork -s destnetmask [-f]\n "
+}
+
+
+#######
+# Main
+#######
+
+# Global Parameters
+CMD_CLUSTER_CONF=/opt/ap/apos/bin/clusterconf/clusterconf
+ps_file=/cluster/ap/apos/conf/ps/physep_status
+clu_config=/cluster/etc/cluster.conf
+IFCONFIG="/sbin/ifconfig"
+PING="/bin/ping"
+CAT="/bin/cat"
+ADDR_A=0
+ADDR_B=0
+ADDR_C=0
+SUBNET=0
+GWADDR=0
+PSDEST=0
+PSNETMASK=0
+FORCE=0
+format=0
+subnet_d_class=0
+pssubnet_d_class=0
+cnt=$#
+CLUS_MGMT_OPTS='mgmt --cluster'
+# Assuming eth2 is the debug port
+debug_interface="eth2"
+
+## New function for virtualization
+if [ $(get_shelf_architecture_attr) -eq 3 ]; then
+	console_abort "$exit_CableLessDefined_string" $exit_virtual_arch
+fi
+
+## New function for cable less APG and check to inhibit execution in SMX architecture
+if [[ $(get_oam_access_attr) -eq 1 || $(get_shelf_architecture_attr) -eq 4 ]]; then
+	console_abort "$exit_CableLessDefined_string" $exit_CableLessDefined
+fi
+
+# Format 1
+if [ ! $cnt -lt 14 ] && [ ! $cnt -gt 15 ]; then
+        while getopts a:b:c:m:g:d:s:f option 2>/dev/null
+        do
+                if  [ $cnt -lt 16 ]; then                       # For minimal options
+                        if [ $option != "a" ] && [ $option != 'b' ] && [ $option != 'c' ] && [ $option != 'm' ] && [ $option != 'g' ] && [ $option != 'd' ] && [ $option != 's' ] && [ $option != "f" ]; then
+                                echo -en "$exit_illegal_option_msg\n"
+                                help
+                                exit $exit_usage
+                        fi
+                fi
+
+                case $option in
+                        a)      ADDR_A=1 ; addr_a="$OPTARG" ;;
+                        b)      ADDR_B=1 ; addr_b="$OPTARG" ;;
+                        c)      ADDR_C=1 ; addr_c="$OPTARG" ;;
+                        m)      SUBNET=1 ; subnet="$OPTARG" ;;
+                        g)      GWADDR=1 ; gwaddr="$OPTARG" ;;
+                        d)      PSDEST=1 ; psdest="$OPTARG" ;;
+                        s)      PSNETMASK=1 ; psnetmask="$OPTARG" ;;
+                        f)      FORCE=1 ;;
+                esac
+        done
+        if [ $ADDR_A -ne 1 ] || [ $ADDR_B -ne 1 ] || [ $ADDR_C -ne 1 ] || [ $SUBNET -ne 1 ] || [ $GWADDR -ne 1 ] || [ $PSDEST -ne 1 ] || [ $PSNETMASK -ne 1 ] ; then
+                echo -en "$exit_illegal_option_msg\n"
+                help
+                exit $exit_usage
+        fi
+        format=1
+
+        # Format 2
+elif [ ! $cnt -lt 6 ] && [ ! $cnt -gt 7 ]; then
+        while getopts a:b:c:m:g:d:s:f option 2>/dev/null
+        do
+                if [ $cnt -lt 8 ]; then
+                        if [ $option != 'g' ] && [ $option != 'd' ] && [ $option != 's' ] && [ $option != 'f' ]; then
+                                echo -en "$exit_illegal_option_msg\n"
+                                help
+                                exit $exit_usage
+                        fi
+                fi
+
+                case $option in
+                        g)      GWADDR=1 ; gwaddr="$OPTARG" ;;
+                        d)      PSDEST=1 ; psdest="$OPTARG" ;;
+                        s)      PSNETMASK=1 ; psnetmask="$OPTARG" ;;
+                        f)      FORCE=1 ;;
+                esac
+        done
+        if [ $GWADDR -ne 1 ] || [ $PSDEST -ne 1 ] || [ $PSNETMASK -ne 1 ] ; then
+                echo -en "$exit_illegal_option_msg\n"
+                help
+                exit $exit_usage
+        fi
+        format=2
+else
+        echo -en "Incorrect usage\n"
+        help
+        exit $exit_usage
+fi
+
+
+# Validations
+# validate IP Addresses
+
+ip_format="\b(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\b"
+
+if [ $format == 1 ] ; then
+        chk=$(echo $addr_a | egrep $ip_format)
+        if [ $? -ne 0 ] ; then
+                echo -e "Unreasonable value < $addr_a >\n"
+                exit 22
+        fi
+
+        chk=$(echo $addr_b | egrep $ip_format)
+        if [ $? -ne 0 ] ; then
+                echo -e "Unreasonable value < $addr_b >\n"
+                exit 22
+        fi
+
+        chk=$(echo $addr_c | egrep $ip_format)
+        if [ $? -ne 0 ] ; then
+                echo -e "Unreasonable value < $addr_c >\n"
+                exit 22
+        fi
+
+
+        chk=$(echo $subnet | egrep $ip_format)
+        if [ $? -ne 0 ] ; then
+                echo -e "$exit_subnetmask_msg\n"
+                exit $exit_subnetmask
+        fi
+        # Condition for network class D
+        subnet_msb=$(echo $subnet | egrep $ip_format | cut -d . -f 4)
+        if [ $subnet_msb -ne 0 ] ; then
+                subnet_d_class=1
+        fi
+fi
+
+chk=$(echo $gwaddr | egrep $ip_format)
+if [ $? -ne 0 ] ; then
+        echo -e "Unreasonable value < $gwaddr >\n"
+        exit 22
+fi
+
+chk=$(echo $psdest | egrep $ip_format)
+if [ $? -ne 0 ] ; then
+        echo -e "Unreasonable value < $psdest >\n"
+        exit 22
+fi
+
+if [ "$psdest" == "0.0.0.0" ] ; then
+        echo -e "Unreasonable value < $psdest >\n"
+        exit 22
+fi
+
+# validate psnetmask
+chk=$(echo $psnetmask | egrep $ip_format)
+if [ $? -ne 0 ] ; then
+        echo -e "Unreasonable value < $psnetmask >\n"
+        exit $exit_subnetmask
+fi
+# Condition for network class D
+pssubnet_msb=$(echo $psnetmask | egrep $ip_format | cut -d . -f 4)
+if [ $pssubnet_msb -ne 0 ] ; then
+        pssubnet_d_class=1
+fi
+
+## Validate $subnet $gwaddr are consistent for format-1
+#if [ $format == 1 ] ; then
+#       first_octet=`echo $subnet $gwaddr | awk -F'[    .]' '{print 255-$5+$1"."255-$6+$2"."255-$7+$3"."255-$8+$4}' | cut -d "." -f1`
+#       sec_octet=`echo $subnet $gwaddr | awk -F'[    .]' '{print 255-$5+$1"."255-$6+$2"."255-$7+$3"."255-$8+$4}' | cut -d "." -f2`
+#       third_octet=`echo $subnet $gwaddr | awk -F'[    .]' '{print 255-$5+$1"."255-$6+$2"."255-$7+$3"."255-$8+$4}' | cut -d "." -f3`
+#       fouth_octet=`echo $subnet $gwaddr | awk -F'[    .]' '{print 255-$5+$1"."255-$6+$2"."255-$7+$3"."255-$8+$4}' | cut -d "." -f4`
+#       if [ $first_octet -gt 255 ] || [ $sec_octet -gt 255] || [ $third_octet -gt 255 ] || [ $fouth_octet -gt 255 ] ; then
+#               echo -n "Gateway and subnet are not consistent"
+#               help
+#               exit 6
+#       fi
+#fi
+
+# Validate Duplicated IP Addresses for format-1
+if [ $format == 1 ] ; then
+        if [ $(echo $addr_a) == $(echo $addr_b) ] || [ $(echo $addr_b) == $(echo $addr_c) ] || [ $(echo $addr_c) == $(echo $gwaddr) ] || [ $(echo $addr_a) == $(echo $addr_c) ] || [ $(echo $addr_a) == $(echo $gwaddr) ] || [ $(echo $addr_b) == $(echo $gwaddr) ]; then
+                echo -e "$exit_duplicateIP_msg\n"
+       #         help
+                exit $exit_duplicateIP
+        fi
+fi
+
+
+
+
+
+# Validate $psdest $psnetmask are consistent for both format-1 and format-2
+first_octet_dest=`echo $psdest $psnetmask | awk -F'[    .]' '{print 255-$5+$1"."255-$6+$2"."255-$7+$3"."255-$8+$4}' | cut -d "." -f1`
+sec_octet_dest=`echo $psdest $psnetmask | awk -F'[    .]' '{print 255-$5+$1"."255-$6+$2"."255-$7+$3"."255-$8+$4}' | cut -d "." -f2`
+third_octet_dest=`echo $psdest $psnetmask | awk -F'[    .]' '{print 255-$5+$1"."255-$6+$2"."255-$7+$3"."255-$8+$4}' | cut -d "." -f3`
+fouth_octet_dest=`echo $psdest $psnetmask | awk -F'[    .]' '{print 255-$5+$1"."255-$6+$2"."255-$7+$3"."255-$8+$4}' | cut -d "." -f4`
+if [ $first_octet_dest -gt 255 ] || [ $sec_octet_dest -gt 255 ] || [ $third_octet_dest -gt 255 ] || [ $fouth_octet_dest -gt 255 ] ; then
+        echo -e "$exit_dest_arg_err_msg\n"
+       # help
+        exit $exit_dest_arg_err
+fi
+
+
+# Checking the status of Debug port Adapter
+# Assuming eth2 is the Debug port
+grep "interface 1 $debug_interface ethernet" $clu_config &> /dev/null
+if [ ! $? == 0 ] ; then
+        echo -e "$exit_adapter_state_msg\n"
+        exit $exit_adapter_state
+fi
+grep "interface 2 $debug_interface ethernet" $clu_config &> /dev/null
+if [ ! $? == 0 ] ; then
+        echo -e "$exit_adapter_state_msg\n"
+        exit $exit_adapter_state
+fi
+if [ ! -d /etc/cluster/nodes/control/1/interfaces/$debug_interface ] || [ ! -d /etc/cluster/nodes/control/2/interfaces/$debug_interface ] ; then
+        echo -e "$exit_adapter_state_msg\n"
+        exit $exit_adapter_state
+fi
+
+# Validate priority
+# Validate priority function is invalid because
+# LOTC does not support priority option (i.e metric)
+#
+#if [ $PRIORITY -ne 0 ];
+#then
+#       num=$( echo $priority | grep -Eq "^[0-9]+$")
+#       chk_num=$?
+#       if [ $chk_num != 0 ]; then
+#               echo "Invalid Priority value"
+#               exit 3
+#       fi
+#fi
+
+
+if [ $FORCE -eq 0 ] ; then
+    echo -en "Are you sure you want to do these changes (y/n)\003:"
+        read ch
+        if [ "$ch" != "y" ] ; then
+        echo -e "$exit_abort_msg\n"
+        exit $exit_usage
+        else
+                :
+        fi
+fi
+
+# Checking the cluster configuration before PS configuration
+cluster config -v &> /dev/null
+if [ $? == 0 ] ; then
+        #echo -e "\nEstablishing Cluster connection \nCluster connection established"
+        echo -e "\nEstablishing connection with other node"
+        peer_name=$($CAT /etc/cluster/nodes/peer/hostname)
+        $PING $peer_name -c 1 &> /dev/null
+        if [ $? == 0 ]; then
+                echo -e "Connection to other node established"
+        else
+                echo -e "$exit_fail_msg\n"
+                exit $exit_fail
+        fi
+        echo -e "\nCheck if PS function is correctly configured"
+else
+        echo -e "$exit_fail_msg\n"
+        exit $exit_fail
+fi
+
+# validate the gateway and the three IP addresses in the same subnet
+if [ $format == 1 ] ; then
+        if [ "$(ps_imm_status)" == "NOT CONFIGURED" ] ; then
+                echo -e "PS function results not configured\n"
+                echo "Starting eth2 configuration on both nodes"
+                if [ $(echo $addr_a |  cut -d. -f1-3) == $(echo $addr_b |  cut -d. -f1-3) ] && [ $(echo $addr_b |  cut -d. -f1-3) == $(echo $addr_c |  cut -d. -f1-3) ] && [ $(echo $addr_c |  cut -d. -f1-3) == $(echo $gwaddr |  cut -d. -f1-3) ] ; then
+                        :
+                else
+                        echo -e "$exit_ip_outside_network_msg\n"
+                        exit $exit_ip_outside_network
+                fi
+        elif [ "$(ps_imm_status)" == "CONFIGURED" ] ; then
+                echo -e "$exit_ps_already_conf_msg\n"
+                #echo -e "psdef command successfully executed\n"
+                exit $exit_ps_already_conf
+        fi
+
+        Validate_Format1_againstClusterConf
+
+elif [ $format == 2 ] ; then
+        if [ "$(ps_imm_status)" == "CONFIGURED" ] ; then
+			Validate_Format2_againstClusterConf
+            #   gw_str=$(echo $gwaddr | cut -d. -f1-3)
+            #   grep -r "network public2 $gw_str.0" $clu_config &> /dev/null
+            #   if [ $? != 0 ] ; then
+            #           echo -e "$exit_GWynotinPS_msg\n"
+            #           #echo -e "\npsdef command successfully executed\n"
+            #           exit $exit_GWynotinPS
+            #   fi
+        else
+                echo "PS function results not configured"
+                echo -e "Please configure it first\n"
+                #echo -e "psdef command successfully executed\n"
+                exit $exit_ps_not_conf
+        fi
+
+        
+fi
+
+
+if  [ $format == 1 ] ; then
+        psdef_format_1 addr_a addr_b addr_c subnet gwaddr psdest psnetmask
+        echo -e "eth2 successfully configured on both nodes\n"
+        echo "Setting PS function state to CONFIGURED"
+        ps_imm_set 1
+        echo -e "PS function state successfully set to CONFIGURED\n"
+else
+        grep  $psdest $clu_config &> /dev/null
+        grep  "^network " $clu_config | grep "$psdest" &> /dev/null
+        if [ $? == 0 ] ; then
+                ps_route_name=$(grep "^network " $clu_config | grep "$psdest" | awk '{ print $2 }')
+                grep "^route " $clu_config | grep control | grep $ps_route_name | grep gateway | grep $gwaddr &> /dev/null
+                if [ $? == 0 ] ; then
+                        echo -e "Route already defined\n"
+                        #echo -e "psdef command successfully executed\n"
+                        exit 12
+                fi
+        fi
+        psdef_format_2 gwaddr psdest psnetmask
+        echo -e "PS function results configured\nNew destinations successfully added\n"
+fi
+echo -e "psdef command successfully executed\n"
+exit $exit_success
+

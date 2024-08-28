@@ -1,0 +1,28 @@
+Usage:  shelfmngr get productid [--verbose] [--help] <board>
+
+Retrieves the product ID of the specified board(s).
+
+<board>                 represents the board(s) the command will operate on. It
+                        can assume one of the following values:		
+		                all-slots
+		                all-boards
+		                <board_name>
+		                <slot_number>
+				
+<board_name>            can assume one of the following values (the supported
+                        logical names are found in lib/common/slot_by_name.dat
+                        under the shelfmngr root directory):
+	                        sc_a, sca
+		                sc_b, scb
+		                cpub_a, cpa
+		                cpub_b, cpb
+		                maub, mau
+		                apub_a, apa
+		                apub_b, apb
+		                ged_sasf_a, dda
+		                ged_sasf_b ddb
+		                ged_dvd dvd
+		                gea, gea
+
+<slot_number>           must be an unsigned integer.
+

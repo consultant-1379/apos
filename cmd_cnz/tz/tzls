@@ -1,0 +1,586 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       tzls
+# Description:
+#       A script to List All the supported timezones from COM-CLI in APG43L
+##
+# usage: tzls                        List timezones
+#        tzls -a                     List timezones in long format
+#        tzls [-a] -c                List the current timezone
+#        tzls [-a] -t min            List timezones that has an offset form given minutes to GMT
+#        tzls [-a] -d bias           List timezones with a given daylight bias(in minutes)
+#        tzls [-a] -t min -d bias    List timezones with offset from given minutes and daylight bias
+#        tzls -h                     To show help messages
+##
+# Output :tzls
+#	Display name
+#	---------------------------
+#	(GMT+00:00) Africa/Abidjan
+#	(GMT+00:00) Africa/Accra
+#	(GMT+03:00) Africa/Addis_Ababa
+#	(GMT+01:00) Africa/Algiers
+#	...
+#	Command executed successfully!"
+##
+# Changelog:
+# Fri Mar 11 2022 - Sowjanya GVL (XSOWGVL)
+#       changed -v to -V for zdump utility to list timezone information
+# - Fri Dec 26 2014 - Nazeema Begum (xnazbeg)
+#       Fix provided for the TR HT35659
+# - Sat Nov 08 2014 - Malangsha Shaik (xmalsha)
+# 	format fix
+# - Fri May 3 2013 - Furquan Ullah (xfurull)
+#       Added -c option to list current time zone on APG
+# - Wed Jul 4 2012 - Pratap Reddy (xpraupp)
+#	Modify Script to list all the existing timezones in LOTC
+# - Fri May 11 2012 - Satya Deepthi (xsatdee)
+#       Made command COM compliant and solved discrepancies in displaying error messages
+# - Wed Mar 10 2011 - Satya Deepthi (xsatdee)
+#       First version.
+##
+
+# variables for commands
+
+AWK="/usr/bin/awk"
+CUT="/usr/bin/cut"
+CAT="/bin/cat"
+DATE1="/bin/date"
+DATE="$DATE1 -u"
+GREP="/usr/bin/grep"
+TAIL="/usr/bin/tail"
+ZDUMP="/usr/sbin/zdump"
+
+
+# Global variables
+cluster_file="/cluster/etc/cluster.conf"
+tz_file="/usr/share/zoneinfo"
+curr_yr=$($DATE +%Y)
+nxt_yr=$(( $curr_yr + 1 ))
+
+
+# Error-code flags
+exit_success=0
+exit_failure=1
+exit_usage=2
+exit_illegal_option=20
+exit_illegal_use_option=22
+exit_illegal_operand=23
+
+# User defined functions
+# Validation for integer
+function validate_integer(){
+	num=${!1}
+       	if [ -z $num ] ; then
+        	return 2
+         else
+         	numbr=$( echo $num | $GREP -Eq "^[0-9]+$")
+               	chk_num=$?
+               	if [ $chk_num -eq 1 ] ; then
+               		return 2
+                fi	
+                if [ $num -lt 0 ] || [ $num -gt 1380 ]; then
+                        return 23
+                fi
+         	
+	fi
+        echo $num
+}
+
+# To convert a given time to seconds
+function convert_to_secs(){
+	dt=$*
+        secs=$( $DATE -d "$dt" +%s)
+        echo $secs
+}
+
+# Calculate offset
+function offset(){
+        gsec=$1
+        tsec=$2
+        diff=$(( $gsec - $tsec ))
+        offset=$(( $diff / 60 ))
+        echo $offset
+}
+
+# To display Usage of the command 'tzls'
+function usage(){
+
+echo -e "usage: tzls	                   List timezones"
+echo -e "       tzls -a                     List timezones in long format"
+echo -e "       tzls [-a] -c                List the current timezone" 
+echo -e "       tzls [-a] -t min            List timezones that has an offset from given minutes to GMT" 
+echo -e "       tzls [-a] -d bias           List timezones with a given daylight bias(in minutes)"
+echo -e "       tzls [-a] -t min -d bias    List timezones with offset from given minutes and daylight bias"
+echo -e "       tzls -h                     To show help messages"
+echo -e ""
+}
+
+# print in hr:min format
+function print(){
+        # Find difference b/n timezones and print in hr:min format
+        if [ $gmt_sec -gt $tz_sec ]
+        then
+                diff_secs=$(( $gmt_sec - $tz_sec))
+                time=$( echo $diff_secs | $AWK -v m=$diff_secs '{hr=int(m/3600); min=int((m%3600)/60); printf ("%02d:%02d", hr, min)}')
+                echo " (GMT-$time) $c"
+        else
+                diff_secs=$(( $tz_sec - $gmt_sec))
+                time=$( echo $diff_secs | $AWK -v m=$diff_secs '{hr=int(m/3600); min=int((m%3600)/60); printf ("%02d:%02d", hr, min)}')
+                echo " (GMT+$time) $c"
+        fi
+
+        if [ $type != "brief" ] && [ $type != "brief_only" ]
+        then
+        echo " Offset from GMT: $gmt_offset"
+	if [ "$daylight_offset" != 0 ]
+	then
+        	echo -e " Daylight bias: $daylight_offset"
+	        echo -e " DST Start Date/Time: $ds_start"
+        	echo -e " DST End Date/Time: $ds_end \n"
+	else	
+		echo -e " Daylight bias: Not defined\n"
+	fi
+        fi
+	}
+
+#to display current timezone
+function current_timezone(){
+        type=${!1}  #brief or long
+	c=$($CAT $cluster_file | $GREP -i "timezone" | $TAIL -n +2 | $AWK '{print $2}')
+	if [ $? -ne 0 ];then
+		echo -e "Error when executing (general fault)"
+		exit $exit_failure
+	else	
+                echo "Display name"
+                echo "---------------------------"
+		timeformat_in_GMT
+        	check_type
+	fi	
+        }
+# to list the countires time zones
+function display(){
+	type=${!1}	#brief or long
+	td=${!2}
+	val1=${!3} #time
+	val2=${!4} #daylight
+
+	#Below two lines are added as part of TR HP78009
+	echo "Display name"
+	echo "---------------------------"
+	for i in $(ls $tz_file)
+	do
+		if [ "$i" == "posix" ];then
+			break
+		else
+			for j in $(ls -F $tz_file/$i | tail -n +1| grep -v "$tz_file/$i")
+			do
+				if [ $(echo "$j" |sed -e "s/^.*\(.\)$/\1/") == "/" ];then
+					
+					for k in $(ls $tz_file/$i/$j)
+					do
+						c="$i/$j$k"
+						timeformat_in_GMT
+						check_type
+					done
+				else
+	
+					c="$i/$j"
+					timeformat_in_GMT
+					check_type
+				fi
+			done
+		fi
+	done
+
+}
+
+# To find the times in TZ and GMT, & convert them to seconds
+function timeformat_in_GMT(){
+		cnt=$( $ZDUMP -V $c -c $curr_yr,$nxt_yr 2>/dev/null | $GREP -c "isdst=0")
+		if [ $cnt == 0 ];then
+			time_tz=$( $ZDUMP $c 2>/dev/null | $AWK '{print $3,$4,$5}')
+	        	time_gmt=$( $ZDUMP GMT 2>/dev/null | $AWK '{print $3,$4,$5}')
+		else
+			d=$( $ZDUMP -V $c -c $curr_yr,$nxt_yr 2>/dev/null | $GREP "isdst=0" | $TAIL -n -1 )
+	        	time_gmt=$( echo $d | $AWK '{print $3,$4,$5}')
+        		time_tz=$( echo $d | $AWK '{print $10,$11,$12}')
+		fi
+
+		tz_sec=$(convert_to_secs $time_tz)
+	        gmt_sec=$(convert_to_secs $time_gmt)
+		gmt_offset=$(offset gmt_sec tz_sec)
+		if [ $type != "brief_only" ];then
+		# Find daylight bias for TZ and GMT
+	        	cnt=$( $ZDUMP -V $c -c $curr_yr,$nxt_yr 2>/dev/null | $GREP -c "isdst=1")
+       			if [ $cnt -gt 1 ];then
+				d=$( $ZDUMP -V $c -c $curr_yr,$nxt_yr 2>/dev/null | $GREP "isdst=1" | $TAIL -n -1 )
+			       	dl_gmt=$(echo $d | $AWK '{print $3,$4,$5}')
+			       	dl_tz=$(echo $d | $AWK '{print $10,$11,$12}')
+				yr_after=$(( $nxt_yr + 1 ))
+		               	var=$( $ZDUMP -V $c -c $curr_yr,$yr_after 2>/dev/null | cat -n | grep "isdst=1" | awk '{print $1}')
+				for x in $( seq 1 4)
+				do
+			 	      	v1=$(echo $var | awk -v v=$x '{print $v}')
+			        	y=$(( $x + 1 ))
+				       	v2=$(echo $var | awk -v v=$y '{print $v}')
+		        		v3=$(( $v2 - $v1))
+		        		if [ $v3 -eq 1 ];then
+		                		lin_num=$v1
+				       		break
+	        			fi
+				done
+				d=$( $ZDUMP -V $c -c $curr_yr,$yr_after 2>/dev/null | cat -n | grep isdst=1 | awk -v v=$lin_num '{if($1==v) print}')
+        	        	ds_start=$( echo $d | $AWK '{print $11,$12,$13,$14}')
+				nxt_lin=$(( $lin_num + 1 ))
+		
+				d=$( $ZDUMP -V $c -c $curr_yr,$yr_after 2>/dev/null | cat -n | grep isdst=1 | awk -v v=$nxt_lin '{if($1==v) print}')
+        	        	ds_end=$( echo $d | $AWK '{print $11,$12,$13,$14}')
+	 			
+		 		tzd_sec=$(convert_to_secs $dl_tz)
+		        	gmtd_sec=$(convert_to_secs $dl_gmt)
+				# Calculate offsets for GMT and daylight
+        			daylight_offset1=$(offset gmtd_sec tzd_sec)
+				daylight_offset=$(( $daylight_offset1 - $gmt_offset ))
+	
+			else
+				daylight_offset=0
+			fi
+		fi
+}
+
+# To call the print function		                
+function check_type(){
+							
+		if [ $type == "brief_only" ] || [ $type == "long_only" ];then
+       	                print
+		elif [ "$td" == "time" ];then
+                        if [ $gmt_offset == $val1 ] || [ $gmt_offset == -$val1 ];then
+                                print
+                        fi
+                elif [ "$td" == "daylight" ];then
+                        if [ $daylight_offset == $val1 ] || [ $daylight_offset == -$val1 ];then
+                                print
+                        fi
+                else
+                        if [ $gmt_offset == $val1 ] || [ $gmt_offset == -$val1 ];then
+                                if [ $daylight_offset == $val2 ] || [ $daylight_offset == -$val2 ];then
+	                                print
+                                fi
+                        fi
+		fi
+}
+			
+# To parse the command line arguments
+function parse_command(){
+	
+	if [ $# == 0 ];then
+		type="brief_only"
+        	display type
+                echo -e ""
+        	exit $exit_success
+	elif [ $1 == "-h" ];then
+		usage
+		exit $exit_success
+	fi
+	arg=$(echo "$1")
+	arg_char=$(echo ${arg:1:1})
+
+	case $# in
+
+        	1)
+                	if [ $1 == "-a" ];then
+				type="long_only"
+	                        display type
+	                elif [ $1 == "-d" ] || [ $1 == "-t" ];then
+				value=$2
+				if [ -z  $value ];then
+					echo -e "Incorrect usage"
+		                        usage 
+		                        exit $exit_usage
+				fi
+			elif [ $1 == "-c" ];then
+                                type="brief_only"
+				current_timezone type
+                                echo -e ""	
+                	else 
+                	   	 echo  -e "Incorrect usage"
+                       		 usage
+	                       	 exit $exit_usage
+        	        fi
+        	;;
+
+      		2)
+                        if [ $1 == "-a" ]; then
+                                if [ $2 == "-c" ]; then
+                                         type="long_only"
+                                         current_timezone type
+                                else
+                                   	 echo -e "Incorrect usage"
+                                         usage
+                                         exit $exit_usage   
+                                fi 
+	 	        elif [ $1 == "-d" ];then
+		                arg=$(echo "$2")
+		                arg_char_1=$(echo ${arg:1:1})
+		                value=$2
+	        	        type="brief"
+		                val=$(validate_integer value)
+        	        	if [ $? -ne 0 ];then
+	                        	echo -e "Bias value not in range. Possible Range: 0 - 1380\n"
+                	        	exit $exit_illegal_operand 
+                		fi
+ 
+				td="daylight"
+				display type td val
+       	 			echo -e ""
+	                elif [ $1 == "-t" ];then
+	                        value=$2
+	       		        type="brief"
+	                	val=$(validate_integer value)
+                        	if [ $? -ne 0 ];then
+                                	echo -e "Minutes value not in range. Possible Range: 0 - 1380\n"
+                                	exit $exit_illegal_operand
+                        	fi
+	
+        	          	td="time"
+				display type td val
+                      		echo -e ""
+	                elif [ $1 == "-a" ];then
+				if [ $2 == "-d" -o $2 == "-t" -o $2 != "-c" ];then
+		                        echo  -e "Incorrect usage"
+					usage
+                	        	exit $exit_usage
+				else
+					echo -e "Incorrect usage"
+					usage
+					exit $exit_usage
+				fi
+			else
+		                echo  -e "Incorrect usage"
+				usage
+				exit $exit_usage
+			
+	                fi
+        	;;
+
+        	3)     
+			value=$3
+			type="long"
+         		if [ $1 != "-a" ];then
+	                        echo  -e "Incorrect usage"
+	                        usage
+	                        exit $exit_usage
+        	        else
+                        	if [ $2 == "-d" ];then
+					td="daylight"
+                        		val=$(validate_integer value)
+                        		if [ $? -ne 0 ];then
+                                		echo -e "Bias value not in range. Possible Range: 0 - 1380\n"
+                        #        		usage
+                                		exit $exit_illegal_operand
+                        		fi
+					display type td val
+			       	 	echo -e ""
+#					echo -e "---------------------------------"
+                	        elif [ $2 == "-t" ];then
+					td="time"
+                        		val=$(validate_integer value)
+                        		if [ $? -ne 0 ];then
+                                		echo -e "Minutes value not in range. Possible Range: 0 - 1380\n"
+                                		exit $exit_illegal_operand
+                        		fi
+					display type td val
+       	 				echo -e ""
+#					echo -e "---------------------------------"
+        	                else
+                	                echo -e "Incorrect usage"
+                        	        usage
+                                	exit $exit_usage
+	                        fi
+        	        fi
+	        ;;
+
+        	4)      
+			value1=$2
+			type="brief"
+        	        val1=$(validate_integer value1)
+                	value2=$4
+	                val2=$(validate_integer value2)
+
+	                if [ $1 == "-d" ];then
+				if [ $3 != "-t" ];then
+					echo -e "Incorrect usage"
+					usage
+					exit $exit_usage
+				else
+                                        val1=$(validate_integer value1)
+                                        val3=$?
+	                        	val2=$(validate_integer value2)
+                                        val4=$?
+	        	                if [ $val3 -ne 0 ] && [ $val4 -ne 0 ];then
+        	                	        echo -e "Bias and Minutes values not in range. Possible Range: 0 - 1380\n"
+	                	                exit $exit_illegal_operand
+                                        elif [ $val3 -ne 0 ];then
+                                        	echo -e "Bias value not in range. Possible Range: 0 - 1380\n"
+                                        	exit $exit_illegal_operand
+                                        elif [ $val4 -ne 0 ];then
+                                        	echo -e "Minutes value not in range. Possible Range: 0 - 1380\n"
+                                        	exit $exit_illegal_operand
+        	                	fi
+				fi
+				td="td"
+				display type td value2 value1
+      	 			echo -e ""
+#				echo -e "---------------------------------"
+               		 elif [ $1 == "-t" ];then
+				if [ $3 != "-d" ];then
+					echo -e "Incorrect usage"
+					usage
+					exit $exit_usage
+				else
+                                        val1=$(validate_integer value1)
+                                        val3=$?
+                                        val2=$(validate_integer value2)
+                                        val4=$?
+                                        if [ $val3 -ne 0 ] && [ $val4 -ne 0 ];then
+                                                echo -e "Minutes and Bias values not in range. Possible Range: 0 - 1380\n"
+                                                exit $exit_illegal_operand
+                                        elif [ $val3 -ne 0 ];then
+                                                echo -e "Minutes value not in range. Possible Range: 0 - 1380\n"
+                                                exit $exit_illegal_operand
+                                        elif [ $val4 -ne 0 ];then
+                                                echo -e "Bias value not in range. Possible Range: 0 - 1380\n"
+                                                exit $exit_illegal_operand
+                                        fi
+				fi
+				td="td"
+				display type td val1 val2
+	                        echo -e ""
+                	elif [ $1 == "-a" ];then
+				if [ $2 != "-d" -a $2 != "-t" ];then
+		                        echo -e "Incorrect usage"
+        		                usage
+                		        exit $exit_usage
+				else
+					value3=$3
+		                	val3=$(validate_integer value3)
+		        	        if [ $? -ne 0 ];then
+	                	        	echo -e "Incorrect usage"
+		                	        usage
+        		                	exit $exit_usage
+	               		 	fi
+                                        if [ $4 != "-d" -a $4 != "-t" ] || [ -z $5 ] ;then
+                                        	echo -e "Incorrect usage"
+                                                usage
+                                                exit $exit_usage
+                                        fi
+
+				fi
+                	fi
+        	;;
+
+		5)     
+			type="long"
+	                if [ $1 != "-a" ];then
+        	                echo -e "Incorrect usage"
+                	        usage
+                        	exit $exit_usage
+	                else
+				if [ $2 == "-d" ];then
+					if [ -z $3 ];then
+						echo -e "Incorrect usage"
+						usage
+						exit $exit_usage
+					fi
+					if [ $4 != "-t" ];then
+						echo -e "Incorrect usage"
+						usage
+						exit $exit_usage
+                                        elif [ -z $5 ];then
+                                                echo -e "Incorrect usage"
+                                                usage
+                                                exit $exit_usage
+					fi
+                                        value1=$3
+                                        val1=$(validate_integer value1)
+                           		val3=$?
+                        		value2=$5
+                        		val2=$(validate_integer value2)
+					val4=$?
+                                        if [ $val3 -ne 0 ] && [ $val4 -ne 0 ];then
+                                                echo -e "Bias and Minutes values not in range. Possible Range: 0 - 1380\n"
+                                                exit $exit_illegal_operand
+                                        elif [ $val3 -ne 0 ];then
+                                                echo -e "Bias value not in range. Possible Range: 0 - 1380\n"
+                                                exit $exit_illegal_operand
+                                        elif [ $val4 -ne 0 ];then
+                                                echo -e "Minutes value not in range. Possible Range: 0 - 1380\n"
+                                                exit $exit_illegal_operand
+                                        fi
+					td="td"
+					display type td value2 value1
+                                        echo -e ""
+        	               elif [ $2 == "-t" ];then
+	                                if [ -z $3 ];then
+	                                        echo -e "Incorrect usage"
+        	                                usage
+						exit $exit_usage
+                                	fi
+					if [ $4 != "-d" ];then
+						echo -e "Incorrect usage"
+						usage
+						exit $exit_usage
+                                        elif [ -z $5 ];then
+                                                echo -e "Incorrect usage"
+                                                usage
+                                                exit $exit_usage
+					fi
+                                        value1=$3
+                                        val1=$(validate_integer value1)
+                                        val3=$?
+                                        value2=$5
+                                        val2=$(validate_integer value2)
+                                        val4=$?
+                                        if [ $val3 -ne 0 ] && [ $val4 -ne 0 ];then
+                                                echo -e "Minutes and Bias values not in range. Possible Range: 0 - 1380\n"
+                                                exit $exit_illegal_operand
+                                        elif [ $val3 -ne 0 ];then
+                                                echo -e "Minutes value not in range. Possible Range: 0 - 1380\n"
+                                                exit $exit_illegal_operand
+                                        elif [ $val4 -ne 0 ];then
+                                                echo -e "Bias value not in range. Possible Range: 0 - 1380\n"
+                                                exit $exit_illegal_operand
+                                        fi
+
+					td="td"
+					display type td value1 value2
+                                        echo -e ""
+				else
+					echo -e "Incorrect usage"
+					usage
+					exit $exit_usage
+				fi 
+			fi
+        	;;
+
+        	*) 
+			echo -e "Incorrect usage"
+	                usage
+			exit $exit_usage
+
+	esac
+}
+
+# M A I N
+
+# To parse the commnad line arguments
+parse_command "$@"
+
+exit $exit_success
+
+#END

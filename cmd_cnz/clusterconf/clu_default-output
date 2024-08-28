@@ -1,0 +1,197 @@
+#!/bin/bash
+# Author: Pranshu Sinha(XPRANSI)
+
+# Changelog
+# Updated by XPRANSI
+# Date: 27-10-2011
+
+
+# Funtions
+
+# User-Input validations
+  validate_value() {
+                   val=${!1}
+                   if [ -z $val ] ; then
+                                return 1
+
+                   else
+                   if [ $val != "serial" ] && [ $val != "vga" ] ; then
+                                return 1
+                   fi
+               fi
+                   echo $val
+        }
+ validate_integer() {
+                        int=${!1}
+                        if [ -z $int ] ; then
+                                return 1
+                        else
+                        num=$( echo $int | grep -Eq "^[0-9]+$")
+                        chk_num=$?
+                                if [ $chk_num -eq 1 ] ; then
+                                return 1
+                                fi
+                        fi
+                        echo $int
+        }
+# To delete an existing rule
+ delete() {
+        word=${!1}
+        rule=${!2}
+        rule_num=`validate_integer rule`
+        if [ $? -ne 0 ]
+        then
+                help
+                echo "Enter rule number as argument. Empty values not accepted "
+                exit 1
+        fi
+
+        # Calling cluster_parse file to delete rule
+        $clu_file $word --delete $rule_num
+        }
+# To add/modify an existing rule
+  add_mod() {
+        word=${!1}
+        arg=${!2}
+        value=${!3}
+        st=${!4}
+
+        w1=$(echo $arg | cut -d : -f 2)
+        if [ "$w1" != "$word" ]
+         then
+                echo "Enter correct format of arguments"
+                help
+                exit 1
+        fi
+
+        if [ $st == "modify" ]
+        then
+                rule=$(echo $arg | cut -d: -f 1)
+                rule_num=`validate_integer rule`
+                if [ $? -ne 0 ]
+                then
+                        help
+                        echo "Enter correct format of arguments. "
+                        exit 1
+                fi
+        fi
+
+        value_ip=`validate_value value`
+        if [ $? -ne 0 ]
+        then
+                help
+                echo "Empty values not accepted "
+                exit 1
+        fi
+
+        # Calling cluster_parse file to add timezone rule
+        rule="$word $value_ip"
+        chk_rule="$word"
+        if [ $st == "modify" ]
+        then
+                $clu_file $word --modify $rule_num $rule $chk_rule
+        else
+                $clu_file $word --add $rule $chk_rule
+        fi
+        }
+
+
+# To display existing disable-serial rules
+ display() {
+        $clu_file $word --display
+        }
+# To display help
+help()
+{
+echo "
+Usage: clu_$word <option> <rule>
+
+Options:
+-a|--add        <New-rule>                      To add a new $word rule
+-d|--delete     <Existing-rule-number>          To delete an existing $word rule
+-m|--modify     <rule number>:<new-rule>        To modify an existing $word rule
+-D|--display                                    To display all the existing rules
+-h|--help                                       To display help
+
+
+Rule: $word <value>
+<value>                    < serial / vga>
+"
+}
+
+#Main
+
+
+pwd=`pwd`
+fname="clu_parse"
+#clu_file="$pwd/$fname"
+clu_file="/opt/ap/apos/bin/clusterconf/$fname"
+word="default-output"
+
+if [ -f /cluster/etc/cluster.conf ];then
+        clu_Conf_path="/cluster/etc/"
+        clu_Conf_file="cluster.conf"
+else
+        echo -e "\n/cluster/etc/cluster.conf file does not exists"
+        exit 1
+fi
+
+        if [ -f $clu_file ];then
+                if [ -x $clu_file ];then
+                 ch=$1
+                 arg=$2
+                 arg3=$3
+                  case $ch in
+                        --add|-a)
+                                st="add"
+				if [ $# -gt 3 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+                                	add_mod word arg arg3 st
+                                fi
+				;;
+                        --delete|-d)
+				if [ $# -gt 2 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+                                	delete word arg
+                                fi
+				;;
+                        --modify|-m)
+                                st="modify"
+				if [ $# -gt 3 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+                                	add_mod word arg arg3 st
+                                fi
+				;;
+                        --display|-D) 
+				if [ $# -gt 1 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					display
+                                fi
+				;;
+                        --help|-h) 
+				if [ $# -gt 1 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					help
+                                fi
+				;;
+                        *)      echo -e "\nWrong input format, please follow the below format...\n"
+                                help
+                                ;;
+                  esac
+        else
+                        echo -e "\n$clu_file is not executable"
+                fi
+        else
+                echo -e "\n$clu_file file does not exists"
+        fi
+

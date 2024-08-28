@@ -1,0 +1,9 @@
+Usage:  usermgmt group list [--help] [--user=username]
+        
+Print  group  memberships  for  the username or, if no username is specified, 
+for the current user.
+ 
+<--user=>               Specify the username.
+
+<--help>                This help.
+

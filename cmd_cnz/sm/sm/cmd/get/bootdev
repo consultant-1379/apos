@@ -1,0 +1,101 @@
+#!/bin/bash -u
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       bootdev
+# Description:
+#       The "get bootdev" sub-command of the shelfmngr tool.
+##
+# Changelog:
+# Fri Mar 09 2012 - Francesco Rainone (efrarai)
+#	First Version
+##
+
+. $SHELFMNGR_DIR/$LIB_COMMON_DIR/shelfmngr_common.sh
+. $SHELFMNGR_DIR/$LIB_COMMON_DIR/snmp_queries.sh
+check_debug
+
+
+function is_verbose(){
+	return $OPT_VERBOSE	
+}
+
+function get_bootdev(){
+	GET_BOOTDEV
+}
+
+function usage(){
+	cat $MAN_DIR/get_bootdev.man
+}
+
+function parse_cmdline(){
+	# LONG_OPTIONS is a list of space-separated multi-character options.
+	#  The string must be in the form:
+	#   Example: 'option1 option2 ... optionN'.
+	#  Options that takes an argument must be followed by a colon:
+	#   Example: 'option1: option2 ... optionN:'
+	#  Options with an optional argument must be followed by a double colon:
+	#   Example: 'option1:: option2:: ... optionN'
+	local LONG_OPTIONS='help verbose'
+	
+	[ $# -le 0 ] && abort 'missing parameter'
+	/usr/bin/getopt --quiet --quiet-output --longoptions="$LONG_OPTIONS" -- "$@"
+	EXIT_CODE=$?
+	if [ $EXIT_CODE -ne $TRUE ]; then
+		usage
+		abort "Command line parameter error"
+	fi	
+	local ARGS="$@"
+	eval set -- "$ARGS"
+	
+	# Make sure to handle the cases for all the options listed in OPTIONS
+	#  and LONG_OPTIONS and to fill up the right script-wide variables.
+	while [ $# -gt 0 ]; do		
+		case "$1" in
+			$(check_board_format $1 && echo $1))
+				BOARD=$1
+				if ! boards_are_equal $BOARD $APUB_A; then
+					if ! boards_are_equal $BOARD $APUB_B; then
+						abort "this applies only to \"$APUB_A\" (slot $APUB_A_SLOT) and \"$APUB_B\" (slot $APUB_B_SLOT) boards"
+					fi
+				fi
+			;;
+			all-boards)
+				abort "this applies only to \"$APUB_A\" (slot $APUB_A_SLOT) and \"$APUB_B\" (slot $APUB_B_SLOT) boards"
+			;;
+			all-slots)
+				abort "this applies only to \"$APUB_A\" (slot $APUB_A_SLOT) and \"$APUB_B\" (slot $APUB_B_SLOT) boards"
+			;;
+			--help)
+				usage
+				exit $TRUE
+			;;
+			--verbose)				
+				OPT_VERBOSE=$TRUE				
+			;;			
+			--)
+				# "end of argument list"
+				shift
+				break
+			;;
+			*)
+				abort "unrecognized option ($1)"
+			;;
+		esac
+		shift
+	done
+}
+
+OPT_VERBOSE=$FALSE
+APUB_A='apub_a'
+APUB_A_SLOT=$(get_slot_by_name $APUB_A)
+APUB_B='apub_b'
+APUB_B_SLOT=$(get_slot_by_name $APUB_B)
+BOARD=''
+
+parse_cmdline $@
+get_bootdev
+exit $?

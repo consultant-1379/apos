@@ -1,0 +1,27 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2016 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       pam_tally2
+# Description:
+#       A script to wrap the invocation of pam_tally2 by tsadmin.
+# Note:
+#       None.
+##
+# Usage:
+#       None.
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Wed Jan 20 2016  - Alfonso Attanasio (ealfatt)
+#       First version.
+##
+
+/usr/bin/sudo /sbin/pam_tally2 $@
+exit $?
+

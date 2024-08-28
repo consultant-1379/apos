@@ -1,0 +1,11 @@
+Usage:  usermgmt group add [--help] [--gid=group_id] [--global] <--gname=group_name>
+
+Creates a new group account using the values specified.
+ 
+<--gname=>              Specify the Group name.
+
+<--gid=>                Specify GroupID for the new group.
+
+<--global>              Specify if the group must be global.
+
+<--help>                This help.

@@ -1,0 +1,30 @@
+# **********************************************************************
+#
+# **********************************************************************
+#
+# Ericsson AB 2010 All rights reserved.
+# The information in this document is the property of Ericsson.
+# Except as specifically authorized in writing by Ericsson, the receiver of this
+# document shall keep the information contained herein confidential and shall protect
+# the same in whole or in part from disclosure and dissemination to third parties.
+# Disclosure and disseminations to the receivers employees shall only be made
+# on a strict need to know basis.
+#
+# **********************************************************************
+#
+# Rev        Date         Name      What
+# R1A00      09-07-2015   ESTEVOL   First Draft of PXE VM image based on iPXE project (preliminary CXC nr and revision)
+#                                   Customized PXE sequence using an hardcoded TFTP server address different from DHCP one.
+#                                   Modified UUID fetching from SMBIOS as WA to following QEMU 2.1.2 bug:
+#                                   http://git.qemu.org/?p=qemu.git;a=commit;h=caad057bb6ce86a9cb71520af395fd0bd04a659f
+#
+# R1A01	     31-03-2016	  ESTEVOL   First official delivery.
+#
+# R1A02      26-04-2016   ESTEVOL   Implemented a new setting in iPXE to fetch the last byte of MAC address (maclastbyte).
+#                                   Changed the algorithm for the selection of boot interface: selection is now based on last
+#                                   hardcoded byte of MAC address (11) instead of interface order.
+#
+# R1A03      20-07-2016   ESTEVOL   Removed the patch on UUID ordering introduced in R1A00. QEMU's bug is fixed in QEMU 2.2.0 included in
+#									CEE 16B.
+#
+# **********************************************************************

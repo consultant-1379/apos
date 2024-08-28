@@ -1,0 +1,86 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2021 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       apos_rp-hosts-config
+# Description:
+#       A script to generating rp hosts config file
+# Note:
+#       This script is intended to be deployed to the
+#       /usr/lib/lde/config-management/ directory.
+#
+#       It relies on the /opt/ap/apos/conf/apos_common.sh library.
+##
+# Changelog:
+# - Wed  Sep 01 2021 - Pratap Reddy Uppada(XPRAUPP)
+#       First version.
+##
+# LDE_deployment:
+#       type:           start
+#       priority:       530
+##
+##
+# libraries -------------------------------------------------------------- BEGIN
+if [ -r /opt/ap/apos/conf/apos_common.sh ]; then
+  . /opt/ap/apos/conf/apos_common.sh
+else
+ echo '/opt/ap/apos/conf/apos_common.sh not found or not readable!' >&2
+ exit 1
+fi
+
+function generate_config() {
+  local PREFIX='0'
+  local COUNT=1
+ 
+  apos_log "Adding rp-vm hosts to /etc/hosts file..."
+  # Remove the End of file tag
+  sed -i '/# End of file/d' $ETC_ROOT/hosts 
+    
+  while [ $COUNT -le $MAX_ALLOWED_HOSTS ]; do
+    HOSTNAME=RPVM$COUNT
+    last_octet=$(echo $default_address | awk -F'.' '{print $4}')
+    host_num=$((last_octet+$COUNT))
+    if ! grep -q "$HOSTNAME" $ETC_ROOT/hosts ; then
+      echo "192.168.169.${host_num}  $HOSTNAME" >> $ETC_ROOT/hosts
+    fi
+    COUNT=$((COUNT+1))
+  done
+    
+  echo "" >> $ETC_ROOT/hosts
+  echo "# End of file" >> $ETC_ROOT/hosts
+  apos_log "Adding rp-vm hosts to /etc/hosts file...Success"
+}
+
+apos_intro $0
+
+# Helper function to add all addresses on internal network
+ACTION="$1"
+PHASE="$2"
+ETC_ROOT=${3:-"/etc"}
+MAX_ALLOWED_HOSTS='50'
+default_address='192.168.169.60'
+
+# This configuration is applicable only to vBSC nodes
+# Incase of vMSC & vHLR configurations, it simply exits
+# with out performing any changes
+if ! isvBSC;then
+  apos_log "Skipping apos_rp-hosts-config configuration changes"
+  apos_outro
+  exit $TRUE
+fi
+
+case "$ACTION" in
+  start|config)
+    generate_config
+    ;;
+  *)
+    echo "Usage: $0 reload phase <etc root>" >&2
+    exit 2
+   ;;
+esac
+apos_outro
+exit $TRUE
+# End of file

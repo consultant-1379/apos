@@ -1,0 +1,162 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       apos_ha_operations
+# Description:
+#   	This script is used to activate, deactivate the nbi address. 
+#       It also retrieves the nbi, primary_sc-a and primary_sc-b interface and address.
+##
+# Usage:
+#       call: apos_ha_operations 
+##
+# Changelog:
+# - Tue Feb 04 2020 - Anjali M (XANJALI)
+#       IPv6 impacts
+# - Mon Jul 15 2013 - Tanu Aggarwal (xtanagg)
+#       First version.
+##
+
+# command-set
+CMD_AWK=/usr/bin/awk
+CMD_CLUSTER=/usr/bin/cluster
+CMD_CAT=/bin/cat
+CMD_CLUSTERCONF=/opt/ap/apos/bin/clusterconf/clusterconf
+CMD_LOGGER=/bin/logger
+
+# global variable-set
+SCRIPT_NAME='apos_ha_operations'
+LOG_TAG='-t apos_ha_operations'
+
+# exit codes set
+exit_success=0
+exit_failure=1
+
+# This function logs the information messages in /var/log/messages
+# ------------------------------------------------------------------------
+function log() {
+	local PRIO='-p user.notice'
+	local MESSAGE="${*:-notice}"
+	$CMD_LOGGER $PRIO $LOG_TAG "$MESSAGE" &>/dev/null
+}
+
+# This function logs the error messages in /var/log/messages
+# ------------------------------------------------------------------------
+function log_error(){
+    local PRIO='-p user.err'
+    local MESSAGE="${*:-error}"
+    $CMD_LOGGER $PRIO $LOG_TAG "$MESSAGE" &>/dev/null
+}
+
+# This function prints the usage of apos_ha_operations on the console
+# ------------------------------------------------------------------------
+function usage(){
+	$CMD_CAT << HEREDOC
+Usage:
+	$SCRIPT_NAME --activate-mip
+	$SCRIPT_NAME --deactivate-mip
+	$SCRIPT_NAME --mip-info
+
+HEREDOC
+	exit $exit_failure
+}
+
+	
+# This function parses the cmdline and invokes appropriate actions
+# ------------------------------------------------------------------------
+function parse_cmdline(){
+
+	[ $# -ne 1 ] && usage
+
+	case $1 in
+	--activate-mip)
+		mip_activate
+	;;
+	--deactivate-mip)
+		mip_deactivate
+	;;
+	--mip-info)
+		info_mip
+	;;
+	*)
+		usage
+	esac
+}
+
+# This function activates the MIPs 
+# ------------------------------------------------------------------------
+function mip_activate() {	
+	# functionality is moved to apos_operations
+	return $exit_success
+}
+
+# This function deactivates the MIPs 
+# ------------------------------------------------------------------------
+function mip_deactivate() {	
+	# functionality is moved to apos_operations
+	return $exit_success
+}
+
+# This function prints the mip address and interface
+# ------------------------------------------------------------------------
+function info_mip() {
+
+	# prints the primary_sc-a address and interface on the console
+	ADDR_INTF=$($CMD_CLUSTERCONF mip --display | grep primary_sc-a | $CMD_AWK '{print $7":"$5}' | $CMD_AWK -F: '{print $1" "$2}')
+	[ -z "$ADDR_INTF" ] && {
+		log_error "Retrieval of primary_sc-a address and interface failed"
+		exit $exit_failure	
+	}
+	echo -e $ADDR_INTF
+
+	# This function prints the primary_sc-b address on the console
+	ADDR_INTF=$($CMD_CLUSTERCONF mip --display | grep primary_sc-b | $CMD_AWK '{print $7":"$5}' | $CMD_AWK -F: '{print $1" "$2}')
+	[ -z "$ADDR_INTF" ] && {
+		log_error "Retrieval of primary_sc-b address and interface failed"
+		exit $exit_failure	
+	}
+	echo -e $ADDR_INTF
+
+  # prints the nbi address and interface on the console
+  local ADDR_INTF_V4=$($CMD_CLUSTERCONF mip --display | grep -w 'nbi' | grep -w 'public' | $CMD_AWK '{print $7":"$5}' | $CMD_AWK -F: '{print $1" "$2}')
+  [ ! -z "$ADDR_INTF_V4" ] && {
+	  echo -e $ADDR_INTF_V4
+  }
+
+  # prints the nbi_v6 address and interface on the console
+	local ADDR_INTF_V6=''
+  local TMP_ADDR=$( $CMD_CLUSTERCONF mip --display | grep -w 'nbi_v6' | grep -w 'public_v6' | $CMD_AWK '{print $7"#"$5}' | $CMD_AWK -F# '{print $1}')
+  [ ! -z "$TMP_ADDR" ] && {
+	   local TMP_INTF=$( $CMD_CLUSTERCONF mip --display | grep -w 'nbi_v6' | grep -w 'public_v6' | $CMD_AWK '{print $7"#"$5}' | $CMD_AWK -F# '{print $2}' | $CMD_AWK -F: '{print $1}')
+		 if [ ! -z "$TMP_INTF" ]; then 
+		   ADDR_INTF_V6="$TMP_ADDR $TMP_INTF" 
+			 echo -e $ADDR_INTF_V6
+		 fi
+	}
+	
+	if [[ -z "$ADDR_INTF_V4" && -z "$ADDR_INTF_V6" ]]; then
+	  log_error "Retrieval of nbi or nbi_v6 address and interfaces failed"
+		exit $exit_failure
+  fi
+}
+
+# Function definitions end here =====>>
+
+# _____________________
+#|    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |
+#|_____________________|
+# Here begins the "main" function...
+
+# Set the interpreter to exit if a non-initialized variable is used.
+set -u
+
+# parse the command-line and invoke main functionality
+parse_cmdline $@
+
+exit $exit_success
+
+# End of file

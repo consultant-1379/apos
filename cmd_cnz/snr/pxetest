@@ -1,0 +1,996 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       pxetest
+# Description:
+#       This script is to check the healthyness of the current (active-node) node.
+#       This script is mainly used in Single Node Recovery.
+##
+# Usage:
+#      pxetest 
+##
+# Output:
+#	Checking  Node B Node Status(Active)...Ok
+#	Checking  Node A Cluster configuration...OK
+#	Checking  Node A DHCP Server...OK
+#	Checking  Node A TFTP Server...OK
+#	Checking  Node A Middleware Status...OK
+#
+# Changelog:
+# - Wed Feb 28 2018 - Raghavendra Koduri(xkodrag)
+# 	 Removed impacts for GEP7L spare part handling
+# - Wed Dec 06 2017 - Raghavendra Koduri(xkodrag)
+# 	 Added impacts for GEP7L spare part handling
+# - Thu Feb 11 2016 - Yeswanth Vankayala
+# 	 SLES12 Impacts
+# - Wed Nov 25 2014 - Nazeema Begum (xnazbeg)
+#	Added fix for impacts of GEP5-64 board
+# - Fri Jun 13 2014 - sabyasachi jha (xsabjha)
+#       function get_peer_apub_slot is modified.  
+# - Thu Mar 13 2014 - Gianluigi Crispino (xgiacri)
+#	Fix TR HS40162
+# - Fri Feb 21 2014 - Stefano Volpe (stevol)
+#	Adapted to support BSP architecture
+# - Thu Oct 17 2013 - Fabio Ronca (efabron)
+#   	Rebase from CM108 (get_apub_shelfid function removed and included in fetch_shelf_id function)
+# - Mon Oct 07 2013 - Francesco Rainone (efrarai)
+#	Fix for TR HR81288 (added get_apub_shelfid function).
+# - Wed Apr 17 2013 - Krishna Chaitanya (xchakri)
+#	Modified the code for TR HR25440
+# - Sat Feb 01 2013 - Malangsha Shaik (xmalsha)
+#       Printout change
+# - Fri May 18 2012 - Malangsha Shaik (xmalsha)
+#       Major rework
+# - Wed Jul 20 2011 - Pranshu Sinha (xpransi)
+#       First version.
+##
+
+# Load the apos common functions.
+. /opt/ap/apos/conf/apos_common.sh
+
+# global variables
+true=$( true; echo $? )
+false=$( false; echo $? )
+SCRIPT_NAME="pxetest"
+LOG_TAG='pxetest'
+l_board_name=''
+s_board_slot=''
+l_board_slot=''
+active=1
+ap_shelf_id=''
+ap_node_num=''
+shelf_architecture=''
+is_swm_2_0="/cluster/storage/system/config/apos/swm_version"
+
+# command-list
+immfind='/usr/bin/immfind'
+immlist='/usr/bin/immlist'
+shelfmngr=''
+cluster_conf='/cluster/etc/cluster.conf'
+cmd_hwtype='/opt/ap/apos/conf/apos_hwtype.sh'
+grep='/usr/bin/grep'
+dmidecode='/usr/sbin/dmidecode'
+awk='/usr/bin/awk'
+tail='/usr/bin/tail'
+sed='/usr/bin/sed'
+
+# exit-flags
+exit_sucs=0
+exit_fail=1
+exit_usge=2
+exit_actv_eror=3
+exit_dhcp_eror=4
+exit_atfp_eror=5
+exit_clus_eror=6
+exit_cmwx_eror=7
+exit_apNum_eror=8
+exit_shelfArch_eror=9
+
+# to align the error in snrinit
+exit_scbx_eror=22
+
+# function to log to system log
+function log(){
+	/bin/logger -t "$LOG_TAG" "$*"
+}
+
+# function to abort
+function abort(){
+	log "ABORTING: <"$1">"
+#	echo "Exiting..."
+#	echo -e "Failed to install other node"
+	exit $2
+}
+
+function console_print(){
+	echo -e
+	echo -e "$1"
+	echo -e
+}
+
+#-----------------------------------------------------------------------------
+# fetch target-node ap_node_num
+function fetch_ap_node_num(){
+	ap_node_num=0
+	ap_node_num=$($immlist -a apNodeNumber axeFunctionsId=1  | awk -F'=' '{print $2}')
+	[[ $ap_node_num -ne 1 && $ap_node_num -ne 2 ]] && abort "apNodeNumber not found" $exit_fail
+	return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+# fetch target-node shelf_id
+function fetch_shelf_id(){
+        for BLADE in $($immfind|grep '^apBladeId='); do
+                local FBN="$($immlist -a functionalBoardName $BLADE | $awk -F'=' '{print $2}')"
+                local SYSN="$($immlist -a systemNumber $BLADE | $awk -F'=' '{print $2}')"
+                if [[ "$FBN" == "300" && "$SYSN" ==  "$ap_node_num" ]]; then
+                        echo "$BLADE" | $awk -F',' '{print $2}' | $sed 's@shelfId=@@g'
+                        return "$exit_sucs"
+                fi
+        done
+        abort "not able to fetch shelfId" $exit_fail
+}
+
+function fetch_architecture(){
+	shelf_architecture=$($immlist -a apgShelfArchitecture axeFunctionsId=1 | awk 'BEGIN { FS = "=" } ; {print $2}') 
+	if [ ! $shelf_architecture ]; then
+		abort "not able to fetch shelf architecture" $exit_shelfArch_eror
+	fi
+
+	if [ $shelf_architecture == 2 ]; then
+		shelfmngr='/opt/ap/apos/bin/bspm/bspmngr'
+	else
+		shelfmngr='/opt/ap/apos/bin/sm/shelfmngr'
+	fi
+
+	return "$exit_sucs"
+
+}
+#-----------------------------------------------------------------------------
+function sanity_check(){
+	# check the magazine that we are running on and 
+	# populate /opt/ap/apos/bin/sm/lib/common/ip_by_name.dat
+	# for EVO and GEP machines.
+	local shelf_ip=/opt/ap/apos/bin/sm/lib/common/ip_by_name.dat	
+
+	# fetch target ap node system number
+   	fetch_ap_node_num
+
+   	# fetch target-node shelf_id
+	ap_shelf_id=$(fetch_shelf_id)
+	[ -z "$ap_shelf_id" ] && echo  "not able to fetch shelfId" $exit_sucs
+
+        # fetch hardware type
+        hw_ver=$( $cmd_hwtype -V | awk -F'hw-type=' '{ print $2 }' | tr -d '\n' )
+        GEP=${hw_ver%-*}
+        [ $? != 0 ] && abort "Could not retreive GEP version" $exit_clus_eror
+
+	# fetch APG shelf architecture
+	fetch_architecture
+	
+	if [ "$shelf_architecture" == "3" ]; then
+		return $exit_sucs
+	elif [ "$shelf_architecture" != "2" ]; then
+		# GEP1/GEP2 and EVO case
+		# SCB-RP/SCX are located at solots 0, 25	
+		# So fetch hardware information of these slots to get ips
+		# slot 0: dn -> otherBladeId=0,shelfId=${SHELF_ID},hardwareMgmtId=1,AxeEquipmentequipmentMId=1
+		# slot 25: dn -> otherBladeId=0,shelfId=${SHELF_ID},hardwareMgmtId=1,AxeEquipmentequipmentMId=1	
+		local SHELF_ID=$ap_shelf_id
+		slot0_ipna=$($immlist -a ipAddressEthA otherBladeId=0,shelfId=${SHELF_ID},hardwareMgmtId=1,AxeEquipmentequipmentMId=1 2>/dev/null | cut -d = -f2)
+		slot0_ipnb=$($immlist -a ipAddressEthB otherBladeId=0,shelfId=${SHELF_ID},hardwareMgmtId=1,AxeEquipmentequipmentMId=1 2>/dev/null | cut -d = -f2)
+		
+		slot25_ipna=$($immlist -a ipAddressEthA otherBladeId=25,shelfId=${SHELF_ID},hardwareMgmtId=1,AxeEquipmentequipmentMId=1 2>/dev/null | cut -d = -f2)	
+		slot25_ipnb=$($immlist -a ipAddressEthB otherBladeId=25,shelfId=${SHELF_ID},hardwareMgmtId=1,AxeEquipmentequipmentMId=1 2>/dev/null | cut -d = -f2)	
+		[[ -z $slot0_ipna || -z $slot0_ipnb || -z $slot25_ipna || -z $slot25_ipnb ]] && abort 'Could not fetch SCX/SCB-RP IP address from IMM' $exit_scbx_eror
+		[ ! $( grep -i -q $slot0_ipna $shelf_ip)  ] && sed -i 's/sc_a;sca=ipna:.*/sc_a;sca=ipna:'$slot0_ipna'/g'  $shelf_ip	
+		[ ! $( grep -i -q $slot0_ipnb $shelf_ip)  ] && sed -i 's/sc_a;sca=ipnb:.*/sc_a;sca=ipnb:'$slot0_ipnb'/g'  $shelf_ip	
+		[ ! $( grep -i -q $slot25_ipna $shelf_ip) ] && sed -i 's/sc_b;scb=ipna:.*/sc_b;scb=ipna:'$slot25_ipna'/g' $shelf_ip	
+		[ ! $( grep -i -q $slot25_ipnb $shelf_ip) ] && sed -i 's/sc_b;scb=ipnb:.*/sc_b;scb=ipnb:'$slot25_ipnb'/g' $shelf_ip	
+	else
+		# BSP architecture
+		# Switch Board are not defined in HWC Table. Check BGCI Vlan in cluster.conf
+		local clu_conf_cmd="/opt/ap/apos/bin/clusterconf/clusterconf"
+		
+		local bgci_a=$($clu_conf_cmd network -D | grep bgci_a | wc -l)
+		local bgci_b=$($clu_conf_cmd network -D | grep bgci_b | wc -l)
+		
+		[ $bgci_a == 0 ] && abort "BGCI network A not found" $exit_fail
+		[ $bgci_b == 0 ] && abort "BGCI network B not found" $exit_fail
+	fi
+
+        # verify apub_a mac addresses
+        get_local_apub_slot
+        [[ ! $? -eq 0 && -z "$l_board_slot" ]] && abort "Failed to fetch slot number for local node" $exit_fail
+
+        # verify apub_b mac addresses
+        get_peer_apub_slot
+        [[ ! $? -eq 0 && -z "$s_board_slot" ]] && abort "Failed to fetch slot number for peer node" $exit_fail
+			
+	return $exit_sucs
+}
+
+#-----------------------------------------------------------------------------
+# fetch local-node board name
+function fetch_board_name(){
+
+        if [ ! -f /etc/cluster/nodes/this/id ]; then
+                abort "/etc/cluster/nodes/this/id does not exist" $exit_fail
+        fi
+        local node_id=$(</etc/cluster/nodes/this/id)
+        if [ $node_id -eq 1 ]; then
+                l_board_name="A"
+        else
+                l_board_name="B"
+        fi
+
+        return $exit_sucs
+}
+
+
+function node_multiple_state(){
+
+	local rCode=0
+	local args=( $1 )
+	local attr_name_list=("saAmfNodeOperState" "saAmfNodeAdminState")
+	local attr_name_len=${#attr_name_list[@]}
+	local dn
+
+	# make temparary file for each instance of 'pxetest' to report errors.
+	prg=$(basename $0)
+	temp=/tmp/$prg$$
+
+	attr_list=$($immlist -a saAmfNodeOperState -a saAmfNodeAdminState \
+		${args[@]} | sed -e 's,<Empty>,,') || die_hard "Failed [$immlist]"
+
+	i=0
+	ctr=0
+	disp=1
+	partial_attr_list=""
+
+	# for each object of class SaAmfNode
+	# check it's administrative and operational state atribute
+	for attr in $attr_list; do
+		rv=0
+
+		if test $disp -eq 1; then
+			dn=${args[i]}
+			echo "$dn" >> $temp
+			disp=0
+		fi
+
+		partial_attr_list=$partial_attr_list' '$attr
+		ctr=$(($ctr+1))
+
+		if test $((${ctr}%${attr_name_len})) -eq 0; then
+			eval $partial_attr_list
+			adm_state $saAmfNodeAdminState >> $temp || rv=1
+			oper_state $saAmfNodeOperState >> $temp || rv=1
+
+			if test $rv -ne 0; then
+				rCode=1
+			fi
+
+			i=$(($i+1))
+			ctr=0
+			disp=1
+			partial_attr_list=""
+		fi
+	done
+
+	return $rCode
+}
+
+function cmw_node_status(){
+	
+	local node_id
+	local rCode=0
+	local dn
+
+	local arg_immlist=""
+	local arg_immlist_predecessor=""
+
+	# get the node-id
+	node_id=$(</etc/cluster/nodes/this/id)
+
+	# search for all objects of class SaAmfNode
+	items=$($immfind -c SaAmfNode | $grep "safAmfNode=SC-$node_id") 
+	rCode=$?
+	if test $rCode -ne 0; then
+		echo "Failed"
+		abort "Failed [immfind -c SaAmfNode]" $exit_cmwx_eror
+	fi
+	
+	# immlist command accepts multiple arguments
+	# in this respect arg_immlist variable is dedicated to hold
+	# multiple SaAmfApplication objects
+	for dn in $items; do
+		arg_immlist_predecessor=$arg_immlist
+		arg_immlist=$arg_immlist' '$dn
+	done
+	
+	if test "$arg_immlist" != ""; then
+		node_multiple_state "$arg_immlist" || rCode=1
+	fi
+
+	# CoreMW status is OK, now check for node role.
+	if [ -f $is_swm_2_0 ]; then
+		local node_role=$($immlist -a saAmfSISUHAState "safSISU=safSu=SC-$node_id\,safSg=2N\,safApp=ERIC-apg.nbi.aggregation.service,safSi=apg.nbi.aggregation.service-2N-1,safApp=ERIC-apg.nbi.aggregation.service" | cut -d = -f2)
+	else
+		local node_role=$($immlist -a saAmfSISUHAState "safSISU=safSu=$node_id\,safSg=2N\,safApp=ERIC-APG,safSi=AGENT,safApp=ERIC-APG" | cut -d = -f2)
+	fi
+
+	if test $node_role -ne $active; then
+		rCode=1
+	fi
+		
+	return $rCode
+}
+
+function drbd_status(){
+
+	# check only the DRBD role for now.
+	DRBDSTATE=`cat /proc/drbd | $grep ro: | cut -d "/" -f1 | cut -d ":" -f4`	
+	return $exit_sucs
+}
+
+function apply_cond_1() {
+	
+	local rCode=0
+	local nState=''
+
+	cmw_node_status
+	rCode=$?
+	if test $rCode -ne 0; then
+		nState='Passive'
+	else
+		nState='Active'
+	fi
+
+	echo -n "Checking Node $l_board_name Status ($nState)..."
+	[ "$nState" = 'Active' ] && echo 'OK'
+	[ "$nState" = 'Passive' ] && { 
+		echo 'Failed'
+		abort "Checking Node Status FAILED" $exit_actv_eror
+	}
+
+	return $exit_sucs
+}
+
+function apply_cond_2(){
+	echo -n "Checking Node $l_board_name Cluster Configuration..."
+	cluster config -v &> /dev/null
+	if [ $? == 0 ] ; then
+		verfy_clust_conf	
+		echo "OK"
+	else
+		echo  "Failed"
+		abort "Cluster config Verify FAILED" $exit_clus_eror
+	fi
+	return $exit_sucs
+}
+
+function apply_cond_3(){
+	echo -n "Checking Node $l_board_name DHCP Server..."
+	if [[ $ap_node_num -eq 0 || "$ap_node_num" == "1" ]]; then 	
+		apos_servicemgmt status apg-dhcpd.service &>/dev/null
+		if [ $? == 0 ] ; then
+			verfy_dhcp_conf
+			echo  "OK"
+		else
+			echo  "Failed"
+			abort "Checking DHCP Server Status FAILED" $exit_dhcp_eror
+		fi
+	fi
+
+	if [ "$ap_node_num" == "2" ]; then 	
+		apos_servicemgmt status apg-dhcpd.service &>/dev/null
+		if [ $? == 1 ] ; then
+			verfy_dhcp_conf
+			echo  "OK"
+		else
+			echo  "Failed"
+			abort "Checking DHCP Server Status FAILED" $exit_dhcp_eror
+		fi
+	fi
+
+	return $exit_sucs	
+}
+
+function apply_cond_4(){
+        local CHECK="$FALSE"
+        echo -n "Checking Node $l_board_name TFTP Server..."
+        apos_servicemgmt status lde-tftpd@boot_a.service &>/dev/null
+        if [ $? -ne 0 ] ; then
+                log "WARNING: lde-tftpd@boot_a.service not running"
+                apos_servicemgmt status lde-tftpd@boot_b.service  &>/dev/null
+                if [ $? -ne 0 ] ; then
+                        log "WARNING: lde-tftpd@boot_b.service not running"
+                        echo  "Failed"
+                        abort "Checking TFTP Server Status FAILED" $exit_atfp_eror
+                fi
+        fi
+        verfy_boot.0_path
+        echo "OK"
+        return $exit_sucs
+}
+
+function apply_cond_5(){
+	echo -n "Checking Node $l_board_name Middleware Status..."
+	cmw_su_status
+	if [ $? == 0 ] ; then
+		echo "OK"
+	else
+		echo "Failed"
+		abort "Checking Middleware Status FAILED" $exit_cmwx_eror
+	fi
+
+	return $exit_sucs
+}
+
+function verfy_dhcp_conf(){
+	dhcpconf="/etc/dhcpd.conf"
+	
+	if [ -f $dhcpconf ]; then
+		while read line; do
+			if [[ "$line" =~ "hardware ethernet" ]]; then
+				MAC=`echo $line | cut -d ";" -f1 | awk '{print $3}' | tr '[:lower:]' '[:upper:]'`	
+				$grep -ri $MAC $cluster_conf | $grep ^interface &> /dev/null
+				if [ $? != 0 ] ; then
+					echo  "Failed"
+					abort "DHCP($MAC) not found $cluster_conf" $exit_dhcp_eror
+				fi	
+			fi	
+
+			if [[ "$line" =~ "fixed-address" ]]; then
+				FIP=`echo $line | cut -d ";" -f1 | awk '{print $2}'`
+				$grep -ri $FIP $cluster_conf &> /dev/null
+				if [ $? != 0 ] ; then
+					echo  "Failed"
+					abort "DHCP($FIP) not found $cluster_conf" $exit_dhcp_eror
+				fi	
+			fi	
+
+			if [[ "$line" =~ "next-server" ]]; then
+				NSIP=`echo $line | cut -d ";" -f1 | awk '{print $2}'`
+				$grep -ri $NSIP $cluster_conf &> /dev/null
+				if [ $? != 0 ] ; then
+					echo  "Failed"
+					abort "DHCP($NSIP) not found $cluster_conf" $exit_dhcp_eror
+				fi	
+			fi	
+		done < $dhcpconf	
+	
+	else
+		echo "Failed"
+		abort "$dhcpconf not found" $exit_dhcp_eror
+	fi	
+	
+	return $exit_sucs
+}
+
+function verfy_boot.0_path(){
+	dhcpconf="/etc/dhcpd.conf"
+	root=/cluster
+
+	if [ -f $dhcpconf ]; then
+		while read line; do
+			if [[ "$line" =~ "filename" ]]; then
+				path=`echo $line | cut -d ";" -f1 | awk '{print $2}' | sed 's/"//g'`
+				ls -1 "$root/$path" &> /dev/null
+				if [ $? != 0 ] ; then
+					echo  "Failed"
+					abort "DHCP($root/$path) not found" $exit_atfp_eror
+				fi	
+			fi	
+		done < $dhcpconf
+	else
+		echo "Failed"
+		abort "$dhcpconf not found" $exit_atfp_eror
+	fi
+
+	return $exit_sucs
+}
+
+function increase_mac(){
+        printf '%012x' $(( 16#${1} + ${2} ))|tr [:lower:] [:upper:]|sed 's/../&:/g;s/:$//'
+}
+
+function verify_mac(){
+
+	slot_number=$1
+        GEPTYPE=$2
+
+	base_mac_shelf=$( $shelfmngr get mac --base $slot_number 2>/dev/null)
+	[ -z "$base_mac_shelf" ] && abort "Could not fetch base mac address" $exit_clus_eror
+	base_mac=$( echo $base_mac_shelf | cut -d = -f2 | sed 's/[[:blank:]]//g' 2>/dev/null)
+	
+	# following are the conversion rules.
+	# GEP1:
+	# eth3 -> base + 1
+	# eth4 -> base + 2
+	# eth2 -> base + 3
+	# eth0 -> base + 4
+	# eth1 -> base + 5
+	# GEP2:
+	# eth3 -> base + 1
+	# eth4 -> base + 2
+	# eth2 -> base + 3
+	# eth0 -> base + 5
+	# eth1 -> base + 6
+	# GEP5:
+	# eth3 -> base + 1
+	# eth4 -> base + 2
+	# eth2 -> base + 3
+	# eth5 -> base + 5
+	# eth6 -> base + 6
+	# eth0 -> base + 8
+	# eth1 -> base + 9
+	# GEP5-64:
+	# eth3 -> base + 1
+	# eth4 -> base + 2
+	# eth2 -> base + 3
+	# eth5 -> base + 5
+	# eth6 -> base + 6
+	# eth0 -> base + 8
+	# eth1 -> base + 9
+	# eth7 -> base + 15
+	# eth8 -> base + 16
+	# GEP7:
+	# eth3 -> base + 1
+	# eth4 -> base + 2
+	# eth2 -> base + 5
+	# eth5 -> base + 7
+	# eth6 -> base + 8
+	# eth7 -> base + 12
+	# eth8 -> base + 13
+
+	
+	case "$GEPTYPE" in
+		GEP1)
+			offset=4
+			mac_eth0=$(increase_mac $base_mac $offset)
+			offset=5
+			mac_eth1=$(increase_mac $base_mac $offset)
+			offset=3
+			mac_eth2=$(increase_mac $base_mac $offset)
+			offset=1
+			mac_eth3=$(increase_mac $base_mac $offset)
+			offset=2
+			mac_eth4=$(increase_mac $base_mac $offset)
+		;;
+		GEP2)
+			offset=5
+			mac_eth0=$(increase_mac $base_mac $offset)
+			offset=6
+			mac_eth1=$(increase_mac $base_mac $offset)
+			offset=3
+			mac_eth2=$(increase_mac $base_mac $offset)
+			offset=1
+			mac_eth3=$(increase_mac $base_mac $offset)
+			offset=2
+			mac_eth4=$(increase_mac $base_mac $offset)
+		;;
+		GEP5)
+			offset=8
+			mac_eth0=$(increase_mac $base_mac $offset)
+			offset=9
+			mac_eth1=$(increase_mac $base_mac $offset)
+			offset=3
+			mac_eth2=$(increase_mac $base_mac $offset)
+			offset=1
+			mac_eth3=$(increase_mac $base_mac $offset)
+			offset=2
+			mac_eth4=$(increase_mac $base_mac $offset)
+			offset=5
+			mac_eth5=$(increase_mac $base_mac $offset)
+			offset=6
+			mac_eth6=$(increase_mac $base_mac $offset)
+		;;
+		GEP5-64*)
+			offset=8
+                        mac_eth0=$(increase_mac $base_mac $offset)
+                        offset=9
+                        mac_eth1=$(increase_mac $base_mac $offset)
+                        offset=3
+                        mac_eth2=$(increase_mac $base_mac $offset)
+                        offset=1
+                        mac_eth3=$(increase_mac $base_mac $offset)
+                        offset=2
+                        mac_eth4=$(increase_mac $base_mac $offset)
+                        offset=5
+                        mac_eth5=$(increase_mac $base_mac $offset)
+                        offset=6
+                        mac_eth6=$(increase_mac $base_mac $offset)
+			offset=15
+                        mac_eth7=$(increase_mac $base_mac $offset)
+                        offset=16
+                        mac_eth8=$(increase_mac $base_mac $offset)
+		;;
+		GEP7-128|GEP7L*)
+			offset=5
+                        mac_eth2=$(increase_mac $base_mac $offset)
+                        offset=1
+                        mac_eth3=$(increase_mac $base_mac $offset)
+                        offset=2
+                        mac_eth4=$(increase_mac $base_mac $offset)
+                        offset=7
+                        mac_eth5=$(increase_mac $base_mac $offset)
+                        offset=8
+                        mac_eth6=$(increase_mac $base_mac $offset)
+                        offset=12
+                        mac_eth7=$(increase_mac $base_mac $offset)
+                        offset=13
+                        mac_eth8=$(increase_mac $base_mac $offset)
+		;;
+		*)
+			abort "$GEP HW-TYPE not supported" $exit_updt_eror
+		;;
+	esac
+
+	# Ok. we have the mac addresses of all the ethernet devices
+	# verify them against the cluster conf
+	
+    [[ ! "$GEPTYPE" =~ 'GEP7' ]] && {
+	  $($grep -i $mac_eth0 $cluster_conf &>/dev/null)
+	  if [ $? != 0 ] ; then
+		echo "Failed"
+		abort "$mac_eth0 not found in $cluster_conf" $exit_clus_eror
+	  fi
+
+	  $($grep -i $mac_eth1 $cluster_conf &>/dev/null)
+	  if [ $? != 0 ] ; then
+		echo "Failed"
+		abort "$mac_eth1 not found in $cluster_conf" $exit_clus_eror
+	  fi
+    }
+		
+	$($grep -i $mac_eth2 $cluster_conf &>/dev/null)
+	if [ $? != 0 ] ; then
+		echo "Failed"
+		abort "$mac_eth2 not found in $cluster_conf" $exit_clus_eror
+	fi
+
+	$($grep -i $mac_eth3 $cluster_conf &>/dev/null)
+	if [ $? != 0 ] ; then
+		echo "Failed"
+		abort "$mac_eth3 not found in $cluster_conf" $exit_clus_eror
+	fi
+
+	$($grep -i $mac_eth4 $cluster_conf &>/dev/null)
+	if [ $? != 0 ] ; then
+		echo "Failed"
+		abort "$mac_eth4 not found in $cluster_conf" $exit_clus_eror
+	fi
+	
+	[[ "$GEPTYPE" =~ 'GEP5' || "$GEPTYPE" =~ 'GEP7' ]] && {
+		$($grep -i $mac_eth5 $cluster_conf &>/dev/null)
+		if [ $? != 0 ] ; then
+			echo "Failed"
+			abort "$mac_eth5 not found in $cluster_conf" $exit_clus_eror
+		fi
+	
+		$($grep -i $mac_eth6 $cluster_conf &>/dev/null)
+		if [ $? != 0 ] ; then
+			echo "Failed"
+			abort "$mac_eth6 not found in $cluster_conf" $exit_clus_eror
+		fi
+		[[ "$GEPTYPE" =~ 'GEP5-64' || "$GEPTYPE" =~ 'GEP7' ]] && {
+			$($grep -i $mac_eth7 $cluster_conf &>/dev/null)
+                	if [ $? != 0 ] ; then
+                        	echo "Failed"
+                        	abort "$mac_eth7 not found in $cluster_conf" $exit_clus_eror
+                	fi
+
+                	$($grep -i $mac_eth8 $cluster_conf &>/dev/null)
+                	if [ $? != 0 ] ; then
+                        	echo "Failed"
+                        	abort "$mac_eth8 not found in $cluster_conf" $exit_clus_eror
+                	fi
+		}
+
+	}
+
+	return $exit_sucs
+}
+
+function get_peer_apub_slot() {
+
+                LOCAL_ETH3_IP=$(ip -f inet addr show eth3 | grep 192.168.169.[1234][^0-9] | $awk '{print $2}'| $awk -F'/' '{print $1}')
+        for BLADE in $($immfind | $grep '^apBladeId='); do
+                FBN="$($immlist -a functionalBoardName $BLADE | $awk -F'=' '{print $2}')"
+                SYSTEM_NUM="$($immlist -a systemNumber $BLADE | $awk -F'=' '{print $2}')"
+                if [[ "$FBN" -eq 300  && "$SYSTEM_NUM" -eq $ap_node_num ]]; then
+                        if [ "$($immlist -a ipAddressEthA $BLADE | $awk -F'=' '{print $2}')" != "$LOCAL_ETH3_IP" ]; then
+                        s_board_slot=$( echo  "$BLADE"| $awk -F',' '{print $1}'| $awk -F'=' '{print $2}')
+                        return $exit_sucs
+                        fi
+                fi
+        done
+        return $exit_fail
+}
+
+function get_local_apub_slot() {
+	LOCAL_ETH3_IP=$(ip -f inet addr show eth3 | grep 192.168.169.[1234][^0-9] | $awk '{print $2}'| $awk -F'/' '{print $1}')
+	for BLADE in $($immfind|grep '^apBladeId='| grep "shelfId=$ap_shelf_id"); do
+		FBN="$($immlist -a functionalBoardName $BLADE | $awk -F'=' '{print $2}')"
+		if [ "$FBN" == "300" ]; then
+			if [ "$($immlist -a ipAddressEthA $BLADE | $awk -F'=' '{print $2}')" = "$LOCAL_ETH3_IP" ]; then
+				l_board_slot=$( echo "$BLADE"|$awk -F',' '{print $1}'|$awk -F'=' '{print $2}')
+				return $exit_sucs
+			fi
+		fi
+	done
+	return $exit_fail
+	
+}
+
+function verfy_clust_conf(){
+
+	if [ "$shelf_architecture" == "3" ]; then
+		return $exit_sucs
+	elif [ "$shelf_architecture" != "2" ]; then	
+		status=$($shelfmngr get master 2>/dev/null)
+		if [ $? == 0 ] ; then
+			if [ "$status" == "none" ]; then
+				$($shelfmngr set -m sc_a 2>/dev/null)
+			fi
+		else
+			echo "Failed"
+			abort "snmpget did not return a valid result." $exit_clus_eror
+		fi
+	fi
+       
+
+ 
+    # verify apub_a mac addresses
+	verify_mac $l_board_slot $GEP	
+		  
+	# verify apub_b mac addresses
+	verify_mac $s_board_slot $GEP
+	
+	return $exit_sucs	
+}
+
+function adm_state(){
+	
+	local rCode=1
+	local val=$1
+	echo -n "   AdminState="
+	if test -z "$val"; then
+		echo "<Empty>"
+	elif [ $val -eq 1 ]; then
+		echo "UNLOCKED(1)"
+		rCode=0
+	elif [ $val -eq 2 ]; then
+		echo "LOCKED(2)"
+	elif [ $val -eq 3 ]; then
+		echo "LOCKED-INSTANTIATION(3)"
+	elif [ $val -eq 4 ]; then
+		echo "SHUTTING-DOWN(4)"
+	else
+		echo "UNKNOWN($val)"
+	fi
+	return $rCode
+}
+
+function oper_state(){
+
+	local rCode=1
+	local val=$1
+	echo -n "   OperState="
+	if test -z "$val"; then
+		echo "<Empty>"
+	elif [ $val -eq 1 ]; then
+		rCode=0
+		echo "ENABLED(1)"
+	elif [ $val -eq 2 ]; then
+		echo "DISABLED(2)"
+	else
+		echo "UNKNOWN($val)"
+	fi
+	return $rCode
+}
+
+function pres_state(){
+
+	local rCode=1
+	local val=$1
+	echo -n "   PresenceState="
+	if test -z "$val"; then
+		echo "<Empty>"
+	elif [ $val -eq 1 ]; then
+		echo "UNINSTANTIATED(1)"
+	elif [ $val -eq 2 ]; then
+		echo "INSTANTIATING(2)"
+	elif [ $val -eq 3 ]; then
+		rCode=0
+		echo "INSTANTIATED(3)"
+	elif [ $val -eq 4 ]; then
+		echo "TERMINATING(4)"
+		elif [ $val -eq 5 ]; then
+		echo "RESTARTING(5)"
+	elif [ $val -eq 6 ]; then
+		echo "INSTANTIATION-FAILED(6)"
+	elif [ $val -eq 7 ]; then
+		echo "TERMINATION-FAILED(7)"
+	else
+		echo "UNKNOWN($val)"
+	fi
+	return $rCode
+}
+
+function readiness_state() {
+	
+	local rCode=1
+	local val=$1
+	echo -n "   ReadinessState="
+	if test -z "$val"; then
+		echo "<Empty>"
+	elif [ $val -eq 1 ]; then
+		echo "OUT-OF-SERVICE(1)"
+	elif [ $val -eq 2 ]; then
+		rCode=0
+		echo "IN-SERVICE(2)"
+	elif [ $val -eq 3 ]; then
+		echo "STOPPING(3)"
+	else
+		echo "UNKNOWN($val)"
+	fi
+	return $rCode
+}
+
+function su_multiple_state(){
+
+	local rCode=0
+	local args=( $1 )
+	local attr_name_list=("saAmfSUAdminState" "saAmfSUOperState" "saAmfSUPresenceState" "saAmfSUReadinessState")
+	local attr_name_len=${#attr_name_list[@]}
+	local dn
+	
+	# make temparary file for each instance of 'pxetest' to report errors.
+	prg=$(basename $0)
+	temp=/tmp/$prg$$
+
+	attr_list=$($immlist -a saAmfSUAdminState -a saAmfSUOperState \
+		-a saAmfSUPresenceState -a saAmfSUReadinessState \
+		${args[@]} | sed -e 's,<Empty>,,') || abort "Failed [$immlist]" $exit_cmwx_eror
+
+	i=0
+	ctr=0
+	disp=1
+	partial_attr_list=""
+
+	# for each object of class SaAmfSU
+	# check it's administrative, operational, presence and
+	# readiness state attributes
+	for attr in $attr_list; do
+		rv=0
+		if test $disp -eq 1; then
+			dn=${args[i]}
+			echo "$dn" >> $temp
+			disp=0
+		fi
+
+		partial_attr_list=$partial_attr_list' '$attr
+		ctr=$(($ctr+1))
+
+		if test $((${ctr}%${attr_name_len})) -eq 0; then
+			eval $partial_attr_list
+
+			adm_state $saAmfSUAdminState >> $temp || rv=1
+			oper_state $saAmfSUOperState >> $temp || rv=1
+			pres_state $saAmfSUPresenceState >> $temp || rv=1
+			readiness_state $saAmfSUReadinessState >> $temp || rv=1
+
+			if test $rv -ne 0; then
+				rCode=1
+				log "Look in $temp for errors"
+			fi
+
+			i=$(($i+1))
+			ctr=0
+			disp=1
+			partial_attr_list=""
+		fi
+	done
+	return $rCode
+}
+
+
+function cmw_su_status(){
+
+	local rCode=0
+	local dn
+	local node_id
+	
+	local arg_immlist=""
+	local arg_immlist_predecessor=""
+
+	# get the node-id 
+	node_id=$(</etc/cluster/nodes/this/id)
+	
+	# search for all objects of class SaAmfSU
+	items=$($immfind -c SaAmfSU | $grep 'safSu='$node_id'\|safSu=SC-'$node_id'')
+	rCode=$?
+	if test $rCode -ne 0; then
+		echo "Failed"
+		abort "Failed [$immfind -c SaAmfSU]" $exit_cmwx_eror
+	fi
+	
+	# immlist command accepts multiple arguments
+	# in this respect arg_immlist variable is dedicated to hold
+	# multiple SaAmfSU objects
+	for dn in $items; do
+		arg_immlist_predecessor=$arg_immlist
+		arg_immlist=$arg_immlist' '$dn
+	done
+
+	# send the last immlist with the rest of the parameters
+	if test "$arg_immlist" != ""; then
+		su_multiple_state "$arg_immlist" || rCode=1
+		arg_immlist=""
+	fi	
+
+	return $rCode
+}
+
+function parse_args(){
+
+	if test $# -gt 0; then	
+		echo -e "Incorrect Usage"
+		console_print "Usage: pxetest"
+		log "Incorrect Usage"
+		log "END: <$0>"
+		exit $exit_usge
+	fi		
+	return $exit_sucs
+}
+
+# _____________________ _____________________ 
+#|    _ _   _  .  _    |    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |   | ) ) (_| | | )   |
+#|_____________________|_____________________|
+# Here begins the "main" function...
+
+# fetch target ap node system number
+#fetch_ap_node_num
+
+# fetch target-node shelf_id
+#fetch_shelf_id
+
+log "START: <$0>"
+
+# perform sanity check
+sanity_check
+
+# parse the command-line paramters
+parse_args $*
+
+# fetch local board name
+fetch_board_name
+
+# Chck if current node is Active and DRBD is primary
+apply_cond_1
+
+# Chck current node cluster configuration
+apply_cond_2
+
+# Chck current node DHCP configuration
+apply_cond_3
+
+# Chck current node TFTP configuration 
+apply_cond_4
+
+# Chck health of SUs of CoreMW on Active
+apply_cond_5
+
+#echo -e "Ready to install other node"
+
+log "END: <$0>"
+exit $exit_sucs
+

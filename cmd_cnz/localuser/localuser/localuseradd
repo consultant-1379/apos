@@ -1,0 +1,502 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2015 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       localuseradd
+# Description:
+#       A script to add local APG user
+#
+##
+# Usage: 
+#   localuseradd [-e <expiry>] [-p] -R <role,...> <username>
+#   localuseradd -h
+##
+# Output:
+#       Command print-out is printed on console.
+#
+##
+# Changelog:
+# - Thu Jun 25 2015 - Stefano Volpe
+#       First version.
+##
+
+# Commands 
+ECHO=/bin/echo
+USERADD="/usr/sbin/useradd"
+PASSWD="/usr/bin/passwd"
+GREP=/usr/bin/grep
+AWK=/usr/bin/awk
+CHAGE="/usr/bin/chage"
+USERDEL="/usr/sbin/userdel"
+RM="/bin/rm"
+CP="/bin/cp"
+MV="/bin/mv"
+CMD_CAT="/bin/cat"
+CMD_CUT="/usr/bin/cut"
+CMD_IMMLIST="/usr/bin/immlist"
+CMD_NSCD="/usr/sbin/nscd"
+
+# Exit codes
+
+exit_success=0
+exit_usage=2
+exit_privilege=3
+exit_expiry_info=4
+exit_user_exists=5
+exit_useradd=7
+exit_force_pwd=8
+exit_expiry_fail=9
+exit_pwd_fail=10
+exit_file_updt_fail=12
+exit_invalid_user=13
+exit_pwdx_lenx=14
+exit_pwdx_hist=15
+exit_group_not_allowed=16
+exit_role_not_found=17
+exit_term=18
+# Global variables
+login_allw_file=/cluster/etc/login.allow
+login_allw_bkp_file=/cluster/etc/login.allow.bkp
+expiry_info=0
+secondary_group_info=0
+root_user="root"
+root_group="root"
+local_group="apg-local"
+com_group="com-emergency"
+com_ldap_group="com-ldap"
+ts_group="tsgroup"
+admin="tsadmin"
+secondary_group=""
+group_file=/cluster/etc/group
+
+
+maxpassdays=-1
+persistent_password=0
+secondary_group=""
+script_name="localuseradd"
+common_home_dir=/home/nohome/
+
+# Message functions
+
+#set -x 
+
+function show_usage() {
+    ${ECHO} "Usage: $script_name [-e <expiry>] [-p] -R <role,...> <username>"
+    ${ECHO} "       $script_name -h"
+    ${ECHO} ""
+}
+
+#-------------------------------------------------------------------------
+
+function usage_error() {
+    ${ECHO} "$1"
+    show_usage
+    exit $2
+}
+#-------------------------------------------------------------------------
+function abort () {
+    ${ECHO} "ERROR: Failed to add user [$username]"
+    slog  "ABORTING: <"$1">"
+    exit $2
+}
+
+#------------------------------------------------------------------------
+function slog () {
+    /bin/logger -t localuseradd "$*"
+}
+
+#-------------------------------------------------------------------------
+function error() {
+    ${ECHO} "$1"
+    ${ECHO} ""
+    exit $2
+}
+#-------------------------------------------------------------------------
+function print_passwd_policy() {
+   
+    # hardcode the needed paramters for now.
+    dn='AxeLocalTsUsersPolicylocalTsUsersPolicyMId=1'
+    pwdlen_str='minimumPasswordLength'
+    pwdhis_str='passwordHistorySize'
+
+    # retries the corresponding values from imm.
+    pwdlen_val=$( $CMD_IMMLIST -a $pwdlen_str $dn | $CMD_CUT -d = -f2)
+    [ -z $pwdlen_val ] && error "ERROR: Minimum password length could not be retrieved" $exit_pwdx_lenx
+
+    pwdhis_val=$( $CMD_IMMLIST -a $pwdhis_str $dn | $CMD_CUT -d = -f2)
+    [ -z $pwdhis_val ] && error "ERROR: Minimum password history size could not be retrieved" $exit_pwdx_hist
+
+
+    # print format on console
+    if [ "$persistent_password" -eq "0" ]; then    
+	    ${ECHO} -e 'The password policy for local users may be overridden ONLY when'
+	    ${ECHO} -e 'assigning the initial password below.'
+	    ${ECHO} -e 'This is done by simply ignoring the bad password messages.'
+	    ${ECHO} -e          
+	    ${ECHO} -e 'Please note that the password set below must be changed'
+	    ${ECHO} -e 'at first login.'
+	    ${ECHO} -e 
+    fi          
+    ${ECHO} -e 'When changing the password it is required that'
+    ${ECHO} -e "* At least $pwdlen_val  characters are used"
+    ${ECHO} -e "* Previous  $pwdhis_val passwords may not be reused"
+    ${ECHO} -e '(minimum password length and password history are configurable in'
+    ${ECHO} -e 'MO LocalTsUsersPolicyM=1)'
+    ${ECHO} -e           
+    ${ECHO} -e 'It is also required that the changed password must contain'
+    ${ECHO} -e 'characters from at least 3 out of the 4 classes,'
+    ${ECHO} -e 'upper case characters, lower case characters, digits and'
+    ${ECHO} -e 'special characters.'
+    ${ECHO} -e           
+    ${ECHO} -e 'The changed password is also checked if it is found in a'
+    ${ECHO} -e 'dictionary, if it is just a case change only, or if it is just'
+    ${ECHO} -e 'a rotated variant of the old password.\n'
+    if [ "$persistent_password" -eq "1" ]; then
+	    ${ECHO} -e 'Press <Enter> when asked for old password.'
+    fi
+ }                                  
+#-------------------------------------------------------------------------
+function privilege_check() {
+    userid=`id -u`
+    tsadmin_id=`${GREP} "^$admin:" /cluster/etc/passwd | ${AWK} -F: '{print $3}'`
+    root_id=`${GREP} "^$root_user:" /etc/passwd  | ${AWK} -F: '{print $3}'`
+    if [ "$userid" != "$tsadmin_id" ] && [ "$userid" != "$root_id" ];then
+        error "ERROR: Not enough privileges to use this command" $exit_privilege
+    fi 
+}
+#-------------------------------------------------------------------------
+function expiry_info_set() {
+    expiry=$1
+    re='^([0-9]+)$|^(-1)$'
+    expirylength=${#expiry}
+    if ! [[ $expiry =~ $re ]] ; then
+	    error "ERROR: Invalid expiry information provided" $exit_expiry_info
+    fi
+    if [ "$expirylength" -gt 4 ] ;then
+        error "ERROR: Maximum 4 digit expiry information is allowed" $exit_expiry_info
+    fi
+    if [ "$expiry" -lt 1 ] ;then
+       	error "ERROR: Invalid expiry information provided" $exit_expiry_info
+    fi
+
+}
+
+function check_group() {
+	group=$1
+	
+	if [ "$group" == "$com_ldap_group" ] || [ "$group" == "$local_group" ] || [ "$group" == "$ts_group" ] || [ "$group" == "$root_group" ] || [ "$group" == "$com_group" ]; then
+		error "ERROR: Role '$group' not allowed." $exit_group_not_allowed
+	fi
+	
+	${CMD_CAT} $group_file | ${GREP} "^$group:" &>/dev/null
+	
+	if [ $? -ne 0 ]; then
+		error "ERROR: Role '$group' not found." $exit_role_not_found
+	fi	
+}
+
+function secondary_group_set() {
+    secondary_group=$1
+	re='^[a-zA-Z0-9_-]+((,[a-zA-Z0-9_-]+)*)?$'
+    if ! [[ $secondary_group =~ $re ]] ; then
+	    error "ERROR: Invalid role information provided" $exit_expiry_info
+	fi
+	
+	for j in $($ECHO $secondary_group | $AWK 'BEGIN { FS = "," }; { for (i = 1; i <= NF; i = i + 1) {print $i}}')
+	do
+		check_group $j
+	done
+}
+
+#-------------------------------------------------------------------------
+function name_convention_chk() {
+    username=$1
+   
+    len=`${ECHO} ${#username}` 
+    startstr=${username:0:3}
+    re='^[a-zA-Z]([a-zA-Z0-9_-]){1,31}$'
+    if ! [[ $username =~ $re ]] ; then
+            if  [ $len -lt  4 ] || [ $len -gt 32 ]; then
+                error "ERROR: Invalid username [$username]. The minimum number of characters for the username is 4 and maximum is 32" $exit_invalid_user
+            fi
+
+            error "ERROR: Invalid username provided" $exit_invalid_user 
+    fi
+    if [ "$startstr" == "ts_" ];then
+        error "ERROR: Invalid way of naming local user. Prefix 'ts_' shall not be used" $exit_invalid_user
+    fi
+   
+}
+
+#-------------------------------------------------------------------------
+function name_length_chk(){
+    username=$1
+    local len
+    len=`${ECHO} ${#username}`
+    if  [ $len -lt  4 ] || [ $len -gt 32 ]; then
+        error "ERROR: Invalid username [$username]. The minimum number of characters for the username is 4 and maximum is 32" $exit_invalid_user
+    fi
+}
+
+#-------------------------------------------------------------------------
+function reload_sshd(){
+    # senidng HUP signal to all instances of sshd
+    # to reload the configuration.
+    for PID in $( ps -ef | grep '/usr/sbin/sshd' | grep -v grep | awk '{print $2}')
+    do
+          kill -HUP $PID
+    done
+}
+
+#-------------------------------------------------------------------------
+function parse_args() {
+    if [ $# -lt 3 ] || [ $# -gt 6 ];then
+        usage_error "Incorrect usage" $exit_usage
+    fi
+
+    if [ $# -eq 1 ];then
+        case "$1" in
+            -h)
+                show_usage
+                exit $exit_usage
+                ;;
+            -*)
+                usage_error "Incorrect usage" $exit_usage
+                ;;
+            *)
+                username=$1
+                ;;
+        esac
+    else
+        validate_args "$@"
+    fi
+
+}
+
+#---------------------------------------------------------------------------------------
+function validate_args() {
+    local parameters=($@)
+    local num_parameters=${#parameters[@]}
+
+    username=${parameters[$num_parameters - 1]}
+
+
+    TEMP=$(getopt -q "e:R:p" $@)
+
+    #exit from code if invalid arguments
+    if [ $? != 0 ]; then
+        usage_error "Incorrect usage" $exit_usage
+    fi
+
+
+    # The following section is redirect the functionality as per options
+#   eval set -- "$TEMP"
+
+#   echo "$LINENO: param 1 $1, parm2 $2, param3 $3, DollarSTAR -$*-"
+
+    ##  while true; do
+    while [ $# -gt 1 ]; do
+        case $1 in
+                -e)
+                        #Set expiry information
+                        if [ $expiry_info -eq 1 ]; then
+			   usage_error "Incorrect usage" $exit_usage
+			fi
+			expiry_info_value=$2
+                        expiry_info=1
+                        #  shift 2 extra shift outside case
+                        shift		
+		;;
+                -R)
+                        if [ $secondary_group_info -eq 1 ]; then
+			   usage_error "Incorrect usage" $exit_usage
+			fi
+                        #Set secondary groups  
+			secondary_group_info=1
+			secondary_group_info_value=$2
+                        secondary_group_info=1
+                        #  shift 2 extra shift outside case
+                        shift
+         	;;
+                -p)     #Set persistent password
+                        persistent_password=1
+                ;;
+                *)      usage_error "Incorrect usage" $exit_usage
+        esac
+	shift
+    done
+
+    case $num_parameters in
+        3)
+#          echo "Only -R plus group should have been set"
+            if [ $secondary_group_info -ne 1 ] || [ $persistent_password -eq 1 ]; then
+                usage_error "Incorrect usage" $exit_usage
+            fi
+        ;;
+	4)
+#          echo "Both -p and -R plus group should have been set"
+            if [ $persistent_password -ne 1 ] || [ $secondary_group_info -ne 1 ]; then
+                usage_error "Incorrect usage" $exit_usage
+            fi
+        ;;
+
+	5)
+#          echo "Both -e plus num and -R plus group should have been set"
+            if [ $expiry_info -ne 1 ] || [ $secondary_group_info -ne 1 ] || [ $persistent_password -eq 1 ]; then
+                usage_error "Incorrect usage" $exit_usage
+            fi
+        ;;
+	6)
+#          echo "Options -p, -R plus group and -e plus num should have been set"
+            if [ $persistent_password -ne 1  ] || [ $secondary_group_info -ne 1 ] || [ $expiry_info -ne 1 ]; then
+                usage_error "Incorrect usage" $exit_usage
+            fi
+        ;;
+	*)
+                usage_error "Incorrect usage" $exit_usage
+        ;;
+    esac
+
+	if [ $secondary_group_info -eq 1 ]; then
+          secondary_group_set $secondary_group_info_value
+        fi
+
+	if [ $expiry_info -eq 1 ]; then
+	  expiry_info_set $expiry_info_value
+	fi	
+
+}
+#-------------------------------------------------------------------------
+function set_expiry_max() {
+    if [ "$expiry_info" -eq "0" ];then
+        expiry=$maxpassdays
+    fi
+}
+
+#-------------------------------------------------------------------------
+function check_localuser() {
+	
+    #Invalidate passwd cache first
+    ${CMD_NSCD} -i passwd 1>/dev/null
+
+    ${GREP} "^$username:" /cluster/etc/passwd 1>/dev/null
+    if [ $? == 0 ];then
+        error "ERROR: User [$username] already exists" $exit_user_exists
+    fi
+}
+
+#------------------------------------------------------------------------
+function clean_up() {
+    ${USERDEL} -P /cluster/etc "$username" 1>/dev/null
+    abort "Termination signal received" $exit_term
+    #exit 1
+}
+
+#-------------------------------------------------------------------------
+function add_localuser() {
+    if [ "$persistent_password" -eq "1" ];then
+    	${USERADD} -p "" -d $common_home_dir -P /cluster/etc -g "$local_group" -G $com_ldap_group,"$secondary_group" "$username" &>/dev/null
+    else
+    	${USERADD} -d $common_home_dir -P /cluster/etc -g "$local_group" -G $com_ldap_group,"$secondary_group" "$username" &>/dev/null
+    fi
+    if [ $? != 0 ];then
+    	error "ERROR: Failed to add user [$username]" $exit_useradd
+    fi
+    trap clean_up SIGHUP SIGINT SIGTERM
+    sleep 5
+}
+#-------------------------------------------------------------------------
+function set_passwd() {
+    if [ "$persistent_password" -eq "1" ];then
+	${CHAGE} -M $expiry -m 0 -I 0 $username 1>/dev/null
+	if [ $? != 0 ];then
+                ${USERDEL} -P /cluster/etc "$username" 1>/dev/null
+                error "ERROR: User add failed as setting expiry information failed"  $exit_expiry_fail
+        fi
+    	sudo -u $username  ${PASSWD}
+    else
+    	${PASSWD} $username
+    fi
+
+    if [ $? == 0 ];then
+	if [ "$persistent_password" -eq "0" ];then
+	        # Setting force password change
+        	${PASSWD} -e $username 1>/dev/null
+	        if [ $? != 0 ];then			
+        	        ${USERDEL} -P /cluster/etc "$username" 1>/dev/null
+                	error "ERROR: User add failed as set forced password change failed" $exit_force_pwd
+        	fi
+	
+		# Setting expiry information for the user
+		${CHAGE} -M $expiry -m 0 -I 0 $username 1>/dev/null
+		if [ $? != 0 ];then
+		        ${USERDEL} -P /cluster/etc "$username" 1>/dev/null
+		        error "ERROR: User add failed as setting expiry information failed"  $exit_expiry_fail
+		fi
+	fi
+
+	str_append="$username all"
+
+        # Take the backup of login.allow file
+        ${CP} $login_allw_file $login_allw_bkp_file
+        ${ECHO} "$str_append" >>${login_allw_file}
+        if [ $? != 0 ];then
+                ${MV} $login_allw_bkp_file $login_allw_file
+                error "ERROR: Failed to update a file related to login" $exit_file_updt_fail
+        fi
+        # reload sshd configuration
+        #reload_sshd
+        # Remove the backup file
+        ${RM} -f $login_allw_bkp_file
+        
+	${ECHO} "User Add Success"
+	${ECHO} ""
+
+    else
+    	${USERDEL} -P /cluster/etc "$username" 1>/dev/null
+        error "ERROR: User add failed as password set failed" $exit_pwd_fail
+    fi
+    exit $exit_success
+}
+#-------------------------------------------------------------------------
+
+# _____________________ _____________________ 
+#|    _ _   _  .  _    |    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |   | ) ) (_| | | )   |   
+#|_____________________|_____________________|
+# Here begins the "main" function...
+#set -x
+# Set the interpreter to exit if a non-initialized variable is used.
+#set -u
+
+# Privilege check: tsadmin or root
+#privilege_check
+
+# Parse command line arguments.
+parse_args $*
+
+# Name check for the username
+name_convention_chk $username
+
+#Length check for username
+name_length_chk $username
+
+# Setting expiry information for maximum days when expiry information is not given as input
+set_expiry_max
+
+# Checking if username already exists
+check_localuser
+
+# Adding localuser with given information 
+add_localuser
+
+# Prints the password policy
+print_passwd_policy
+
+# Setting password for the given user
+set_passwd
+
+exit $exit_success                                                                                

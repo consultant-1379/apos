@@ -1,0 +1,1016 @@
+-- =============================================================================
+--
+-- %CCaseFile:	GEN-LOG-MIB.mib %
+-- %CCaseRev:	/main/R1A/1 %
+-- %CCaseDate:	2010-08-27 %
+-- %CCaseDocNo:	5/196 03-CRA 119 1365 Ux %
+-- Author:	xsandku
+--
+-- =============================================================================
+--
+-- Copyright (C) 2009-2010 by Ericsson AB
+-- S-126 25  STOCKHOLM
+-- SWEDEN, tel int + 46 8 719 0000
+--
+-- This Program may be used and/or copied only with the written permission
+-- from Ericsson AB, or in accordance with the terms and
+-- conditions stipulated in the agreement/contract under which the program
+-- has been supplied.
+--
+-- All rights reserved.
+--
+-- =============================================================================
+--
+-- REVISION HISTORY
+--
+-- Rev        Date         Name        What
+-- ========   ==========   ========    ========
+-- PA1        2009-09-16   xsandku     Initial verion of generic Log and 
+--                                     container handling MIB.
+-- PA2        2009-09-21   xsandku     Updated after review. 
+-- A          2009-09-21   xsandku     Final GEN-LOG-MIB. 
+-- A          2010-08-27   uabpnil     New document number
+-- =============================================================================
+
+GEN-LOG-MIB	DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY,
+    OBJECT-TYPE,
+    NOTIFICATION-TYPE,
+    enterprises,
+    Integer32
+	FROM SNMPv2-SMI
+
+    OBJECT-GROUP,	
+    NOTIFICATION-GROUP,
+    MODULE-COMPLIANCE
+        FROM SNMPv2-CONF
+    
+    DisplayString,
+--  RowStatus,
+    TEXTUAL-CONVENTION
+        FROM SNMPv2-TC;
+
+
+-- ********************************************************************
+   genLog MODULE-IDENTITY
+        LAST-UPDATED 
+   		"200909161700Z"
+        ORGANIZATION
+		"Ericsson AB "
+	CONTACT-INFO
+		"E-mail: ingvar.froroth@ericsson.com"       
+	DESCRIPTION
+		"This MIB module defines objects for managing the 
+		logging and container functionalities"
+ 
+	-- Revision history.	 
+	REVISION
+	        "200909161700Z"
+	DESCRIPTION
+                "See top of the document"  
+ 
+        ::= { enterprises ericsson(193) component(177) generic (2)
+              equipment(2) genLog(4) }
+
+
+-- ============================================================================
+-- Definitions of object
+-- ============================================================================
+
+--ericsson                OBJECT IDENTIFIER ::= {enterprises 193}
+--component               OBJECT IDENTIFIER ::= {ericsson 177}
+--generic                 OBJECT IDENTIFIER ::= {component 2 }
+--equipment               OBJECT IDENTIFIER ::= {generic 2}
+--genLog                  OBJECT IDENTIFIER ::= {equipment 4}
+
+-------------------------------------------------------------------------------
+
+logNotifications                OBJECT IDENTIFIER ::= { genLog 0 }
+contNotifications               OBJECT IDENTIFIER ::= { genLog 1 }
+notificationsObjects            OBJECT IDENTIFIER ::= { genLog 2 }
+
+logFileObjects     	    	OBJECT IDENTIFIER ::= { genLog 3 }
+  logFileParameterObjects       OBJECT IDENTIFIER ::= { logFileObjects 1 } 
+
+contFileObjects                 OBJECT IDENTIFIER ::= { genLog 4 }
+  contFileParameterObjects      OBJECT IDENTIFIER ::= { contFileObjects 1 }
+
+logConformace                   OBJECT IDENTIFIER ::= { genLog 5 }
+  logGroups                     OBJECT IDENTIFIER ::= { logConformace 1 }
+  logCompliances                OBJECT IDENTIFIER ::= { logConformace 2 }
+
+contConformace                  OBJECT IDENTIFIER ::= { genLog 6 }
+  contGroups                    OBJECT IDENTIFIER ::= { contConformace 1 }
+  contCompliances               OBJECT IDENTIFIER ::= { contConformace 2 }
+
+-- ============================================================================
+-- Textual conventions
+-- ============================================================================
+
+Confirmation ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "Values indication yes or no."
+    SYNTAX      INTEGER {
+                   no (0),
+                   yes (1)
+                   }
+
+Acknowledge ::= TEXTUAL-CONVENTION
+    STATUS	current
+    DESCRIPTION
+	"Values indication ok or not ok."
+    SYNTAX	INTEGER {
+                   nok (0),
+		   ok (1)
+		   }
+
+Action ::= TEXTUAL-CONVENTION
+    STATUS	current
+    DESCRIPTION
+	"Values indication start or stop."
+    SYNTAX	INTEGER {
+                   stop (0),
+		   start (1)
+		   }
+
+TransferStatus ::= TEXTUAL-CONVENTION
+    STATUS	current
+    DESCRIPTION
+	"Values indication different types of log file transfer status."
+    SYNTAX	INTEGER {
+                   open (0),
+		   ready (1),
+		   safe (2)
+		   }
+
+LogLevel ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "Values indicating different types of log levels."
+    SYNTAX      INTEGER {
+                   disbleDebug (0),
+                   enableDebug (1)
+		   }
+
+
+ContLevel ::= TEXTUAL-CONVENTION
+    STATUS	current
+    DESCRIPTION
+	"Values indicating different level of completenes of contianer file."
+    SYNTAX	INTEGER {
+                   empty  (0),
+		   full   (1),
+		   subset (2)
+		   }
+-- ----------------------------------------------------------------------------
+-- notificationsObjects OBJECT IDENTIFIER ::= { genLog 2 }
+-- ----------------------------------------------------------------------------
+
+filename OBJECT-TYPE
+    SYNTAX	DisplayString
+    MAX-ACCESS	accessible-for-notify
+    STATUS	current
+    DESCRIPTION
+	"A string containing a file name."
+    ::= { notificationsObjects 1 }
+
+result OBJECT-TYPE
+    SYNTAX	Acknowledge
+    MAX-ACCESS	accessible-for-notify
+    STATUS	current
+    DESCRIPTION
+	"Description of the file transfer result"
+    ::= { notificationsObjects 2 }
+
+level OBJECT-TYPE
+    SYNTAX	ContLevel
+    MAX-ACCESS	accessible-for-notify
+    STATUS	current
+    DESCRIPTION
+	"Description of the container creation level."
+    ::= { notificationsObjects 3 }
+-- ----------------------------------------------------------------------------
+-- NOTIFICATION-TYPE
+-- logNotifications OBJECT IDENTIFIER ::= { genLog 0 }
+-- ----------------------------------------------------------------------------
+
+-- ----------------------------------------------------------------------------
+-- Log File Ready notification
+-- ---------------------------------------------------------------------------- 
+
+logFileReady NOTIFICATION-TYPE 
+      OBJECTS { 
+        filename 
+        } 
+      STATUS      current 
+      DESCRIPTION 
+        "Sent to indicate that a log file with indicated 'filename' is full, 
+        closed and ready for transfer. 
+        This notification will not be sent if configuration parameter 
+        logNotificationsCtrl is switched to no(0)." 
+      ::= { logNotifications 1 } 
+
+-- ----------------------------------------------------------------------------
+-- Log File Transfer Complete notification
+-- ---------------------------------------------------------------------------- 
+
+logTransferComplete NOTIFICATION-TYPE 
+      OBJECTS { 
+        filename,
+	result
+        } 
+      STATUS      current 
+      DESCRIPTION 
+        "Sent to indicate the result of a log file transfer. 
+        This notification will not be sent if configuration parameter 
+        logNotificationsCtrl is switched to no(0)." 
+      ::= { logNotifications 2 } 
+
+-- ----------------------------------------------------------------------------
+-- NOTIFICATION-TYPE
+-- contNotifications OBJECT IDENTIFIER ::= { genLog 1 }
+-- ----------------------------------------------------------------------------
+
+-- ----------------------------------------------------------------------------
+-- Information Container File Ready notification
+-- ----------------------------------------------------------------------------
+
+contFileReady NOTIFICATION-TYPE
+      OBJECTS {
+        filename,
+        level
+        }
+      STATUS      current
+      DESCRIPTION
+        "Sent to indicate that a information container file with indicated 
+        filename is finished, closed and ready for transfer. 
+        transferContFile can be used to initiate transfer of specified 
+        filename to TFTP server.
+        The 'level' indicates the completeness  of the container file. Refer
+        contFileLevel for details. 
+        This notification will not be sent if configuration parameter 
+        contNotificationCtrl is set to no(0)."
+      ::= { contNotifications 1 }
+
+-- ----------------------------------------------------------------------------
+-- Information Container File Transfer Complete notification
+-- ----------------------------------------------------------------------------
+
+contTransferComplete NOTIFICATION-TYPE
+      OBJECTS {
+        filename,
+        level,
+        result
+        }
+      STATUS      current
+      DESCRIPTION
+        "Sent to indicate the result of a information container file transfer.
+        This notification is only sent after transferContFile set command 
+        is issued to transfer information container and gives the result of 
+        file transfer to TFTP server.
+        The 'level' indicates the completeness  of the container file. Refer
+        contFileLevel for details.  
+        Note that the content of information container is for designers'
+        eyes only. It is important not to change the name of the file when
+        sending it to design team for analyses.
+        This notification will not be sent if configuration parameter
+        contNotification is set to no(0)."
+      ::= { contNotifications 2 }
+
+
+
+-- ----------------------------------------------------------------------------
+-- logFileObjects OBJECT IDENTIFIER ::= { genLog 3 }
+--
+-- Log file handling
+-- ----------------------------------------------------------------------------
+
+-- Log File Type Table
+
+logFileTypeTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF LogFileTypeEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table contains configuration parameters for each log type."
+    ::= { logFileObjects 2 }
+
+logFileTypeEntry OBJECT-TYPE
+    SYNTAX      LogFileTypeEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry in the Log File Type table.
+        Each entry in the table contains configuration parameters for one
+        log type."
+    INDEX   { logTypeIndex }
+    ::= { logFileTypeTable 1 }
+
+LogFileTypeEntry ::= SEQUENCE {
+    logTypeIndex            Integer32,
+    logTypeName             DisplayString,
+    logTypeRotateSize       Integer32,
+    logTypeFilesPerLogType  Integer32,
+    logTypeLogLevel         LogLevel
+--    logTypeRowStatus       RowStatus
+    }
+
+logTypeIndex OBJECT-TYPE
+    SYNTAX      Integer32 (0..10)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Index for the Log File Type Table is as defined in LogType data type."
+    ::= { logFileTypeEntry 1 }
+
+logTypeName OBJECT-TYPE
+    SYNTAX	DisplayString
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	" Name reference of the log type represented by this row. The specific
+          set of available log types are specific to each type of component.
+          Applicable product documentation should be consulted for such
+          details."
+    ::= { logFileTypeEntry 2 }
+
+logTypeRotateSize OBJECT-TYPE
+    SYNTAX	Integer32
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+        " Specifies a file size threshold used as criterion for when file
+          of this log type shall be closed and rotated. 
+          The threshould is given in kilobytes (kB) and rotation will occur
+          as soon as practicable whenever the file's size reaches this
+          threshold. It is thus possible that the actual size of a rotated
+          file slightly exceeds the configured threshold value. Specific
+          limits and default values may apply to each log type for each
+          type of component. Applicable product documenttation should
+          be consulted for such details."
+    ::= { logFileTypeEntry 3 }
+
+logTypeFilesPerLogType OBJECT-TYPE
+    SYNTAX	Integer32
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+        " Specifies the maximum number of files that are kept in the rotation
+          scheme for this log type. 
+          Specific limits and default values may apply to each log type for
+          each type of component. Applicable product documenttation should
+          be consulted for such details."
+    ::= { logFileTypeEntry 4 }
+
+logTypeLogLevel OBJECT-TYPE
+    SYNTAX	LogLevel
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+       "By default events of all priorities except LOG_DEBUG are logged. 
+       Debug level can be enabled per log type by setting this object to 
+       enableDebug (1). This might be useful in troubleshooting scenarios. 
+       Default log level can be returned back by setting this object to 
+       disbleDebug (0).
+       Reading this value will return presently used setting. "
+    ::= { logFileTypeEntry 5 }
+
+--logTypeRowStatus OBJECT-TYPE
+--    SYNTAX	RowStatus
+--    MAX-ACCESS	read-write
+--    STATUS	current
+--    DESCRIPTION
+--	"The status of this conceptual row. Used when a row in the
+--	table is created or deleted."
+--    ::= { logFileTypeEntry 6 }
+
+
+-- ----------------------------------------------------------------------------
+-- Log File Table
+-- ----------------------------------------------------------------------------
+
+logFileTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF LogFileEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table contains the list of all log files currently available for 
+        transfer. Transfer status flag is reported for each file. 
+        This table is useful e.g. for a troubleshooter, who has just connected 
+        to a blade, to obtain exact filenames in order to initiate transfer with 
+        transferLogFile set command.
+        Note that there can be up to logTypeFilesPerLogType files per log type."
+    ::= { logFileObjects 3 }
+
+logFileEntry OBJECT-TYPE
+    SYNTAX      LogFileEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry int the Log File Type table
+        Each entry gives the filename and transfer status of one log file."
+    INDEX	{ logFileIndex }
+    ::= { logFileTable 1 }
+
+LogFileEntry ::= SEQUENCE {
+    logFileIndex          Integer32,
+    logFileName           DisplayString,
+    logFileStatus         TransferStatus
+--  logRowStatus          RowStatus
+--    this is a readonly 
+--    table and should not be manipulated with, no rowstatus
+    }
+
+logFileIndex OBJECT-TYPE
+    SYNTAX      Integer32 (0..50)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Index for the Log File Table"
+    ::= { logFileEntry 1 }
+
+logFileName OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Filename of the log file."
+    ::= { logFileEntry 2 }
+
+logFileStatus OBJECT-TYPE
+    SYNTAX      TransferStatus
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Transfer status of the file according to log rotation and log transfer.
+        Each log file has one of the following transfer status flags: 
+          open (0):   that is only current file still opened and used for 
+                       writing log entries. If this file is requested to be 
+                       transferred it will be rotated first (closed, compressed 
+                       and renamed) - new name of the log file will be reported 
+                       in logTransferComplete notification 
+          ready (1):  log file is full, closed and ready for transfer. 
+                       If configuration parameter logNotificationsCtrl was not 
+                       switched off then notification logFileReady has been 
+                       already sent, but no transferLogFile has been received 
+                       (yet).
+          safe (2):   log file has been transferred to the designated external 
+                       location; it is safe to delete this file.
+        Note that copyLogFile does not in any way affect transfer status 
+        of a file. 
+        After system restart, any existing log files (saved from previous run) 
+        are treated as complete rotated log files not yet transferred (ready)."
+    ::= { logFileEntry 3 }
+
+--logRowStatus OBJECT-TYPE
+--    SYNTAX	 RowStatus
+--    MAX-ACCESS read-write
+--    STATUS	 current
+--    DESCRIPTION
+--	"The status of this conceptual row. Used when a row in the
+--	table is created or deleted."
+--    ::= { logFileEntry 4 }
+
+---------------------------------------
+
+transferLogFile OBJECT-TYPE
+    SYNTAX	DisplayString
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+	"Writing a filename here (set operation) initiates log file transfer. 
+	Filename must be a valid one - e.g. the one reported in logFileReady 
+	notification or from logFileTable.
+	File will be transferred to the TFTP server location defined by 
+	configuration parameters logTransferSrvIP and logTransferSrvPath. 
+	When the transfer is finished and configuration parameter 
+	logNotificationsCtrl was not switched off, the result will be reported 
+	with logTransferComplete notification.
+	Get operation will return the filename of log file which is being 
+	transferred - otherwise string 'No file is being transferred at this 
+	time.' will be returned."
+    ::= { logFileObjects 4 }
+
+copyLogFile OBJECT-TYPE
+    SYNTAX	DisplayString
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+	"Writing a filename here (set operation) initiates log file coping.
+	Filename must be a valid one - e.g. the one reported in logFileReady 
+	notification or from logFileTable.
+	File will be copied to the TFTP server location defined by 
+	configuration parameters logCopySrvIP and logCopySrvPath. 
+	No notification will be sent for successful transfer
+	nor will this in any way impact logFileStatus flags for that file.
+	This is useful e.g. when a troubleshooter needs to download file 
+	without disturbing already set up log file transfer off site.
+	Get operation will return the filename of log file which is being 
+	transferred - otherwise string 'No file is being transferred at this 
+	time.' will be returned."
+    ::= { logFileObjects 5 }
+
+deleteLogFile OBJECT-TYPE
+    SYNTAX	DisplayString
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+	"Set operation is used to delete log file with filename. 
+	Filename must be a valid one - e.g. the one reported in logFileReady 
+	notification or from logFileTable.  
+	Get operation will return string 'Not applicable.'"
+    ::= { logFileObjects 6 }
+
+-- ----------------------------------------------------------------------------
+--   logFileParameterObjects   OBJECT IDENTIFIER ::= { logFileObjects 1 }
+--
+--   Here are listed configurable parameters applicable to all log types 
+--   and files.
+-- ----------------------------------------------------------------------------
+
+logTransferSrvIP OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The IP address or valid domain name to the TFTP server. This parameter 
+        is used when transferLogFile is set, or when logAutomaticTransfer is 
+	configured to yes.
+	Default is empty string so this parameter must be configured before 
+	log transfer function can be used."
+    ::= { logFileParameterObjects 1 }
+
+logTransferSrvPath OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The path within the TFTP server where the logs should be stored. 
+        This parameter is used when transferLogFile is set, or when 
+	logAutomaticTransfer is configured to yes.
+        Default is '/tmp/'."
+    ::= { logFileParameterObjects 2 }
+
+logCopySrvIP OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The IP address or valid domain name to the TFTP server. This parameter 
+        is used when copyLogFile is set.
+        Default is empty string so this parameter must be configured before 
+	coping of log files can be used."
+    ::= { logFileParameterObjects 3 }
+
+logCopySrvPath OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The path within the server where the logs should be stored. 
+        This parameter is used when copyLogFile is set.
+        Default is '/tmp/'."
+    ::= { logFileParameterObjects 4 }
+
+logNotificationsCtrl OBJECT-TYPE
+    SYNTAX	Confirmation
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+	"Wheather log* notifications should be sent for log file events. 
+	By default it is yes (1). If this parameter is switched to no then the 
+	only way to find out the correct filename of the log file is through
+	logFileTable. "
+    ::= { logFileParameterObjects 5 }
+
+logAutomaticTransfer OBJECT-TYPE
+    SYNTAX	Confirmation
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+	"Wheather log files should be automatically transfered to a storage 
+	server location defined by configuration parameters logTransferSrvIP 
+	and logTransferSrvPath. By default it is no (0). 
+	If configured to yes, then whenever some log file is ready, no 
+	logFileReady notification is sent. Instead transfer is automatically 
+	initiated. The result of the transfer is (like in manual transfer) 
+	reported with logTransferComplete notification. "
+    ::= { logFileParameterObjects 6 }
+
+-- ----------------------------------------------------------------------------
+-- OBJECT-TYPE
+-- contFileObjects OBJECT IDENTIFIER ::= { genLog 4 }
+--
+-- Information container handling
+-- ----------------------------------------------------------------------------
+
+contFileTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF ContFileEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table contains the list of all container files currently available 
+	for transfer. 
+	This table is useful e.g. for a troubleshooter, who has just connected 
+	to the blade, to obtain exact filenames in order to initiate transfer 
+	with transferContFile set command. 
+	The number of container file is not supervised and therefor needs to be 
+	created with care."
+    ::= { contFileObjects 2 }
+
+contFileEntry OBJECT-TYPE
+    SYNTAX      ContFileEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry in the Container File table.
+        Each entry gives the filename of one container file."
+    INDEX	{ contFileIndex }
+    ::= { contFileTable 1 }
+
+ContFileEntry ::= SEQUENCE {
+    contFileIndex         Integer32,
+    contFileName          DisplayString,
+    contFileLevel         ContLevel,
+    contFileStatus        TransferStatus
+--  contFileRowStatus   RowStatus    this is a readonly table 
+--  and should not be manipulated with, no rowstatus
+    }
+
+contFileIndex OBJECT-TYPE
+    SYNTAX      Integer32 (0..10)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Index for the Container File Table"
+    ::= { contFileEntry 1 }
+
+contFileName OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Filename of the container file."
+    ::= { contFileEntry 2 }
+
+contFileLevel OBJECT-TYPE
+    SYNTAX      ContLevel
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The object indicates the level of completeness of this container file.
+         Any value other then full(1) indicates that the size of container file
+         specified by user is not sufficient to accommodate all/any file(s).
+         Operator may increase the size of container file by using contFileSize
+         object.
+         empty(0) - No file is part of this container, i.e. container is empty. 
+         full(1) -  All logs and crash dumps existing in the system (during the
+                    time of creation of this container) are part of this
+                    container file.
+         subset(2) - A prioritized subset of the logs and crash  dumps in the
+                     system are part of this container."
+    ::= { contFileEntry 3 }
+
+contFileStatus OBJECT-TYPE
+    SYNTAX      TransferStatus
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Transfer status of the information container file.
+        Each container file has one of the following transfer status flags: 
+          open (0):   information container file os still opened and beeing 
+                       created. This file cannot be transfered.
+          ready (1):  information container file is ready for transfer. 
+                       If configuration parameter contNotificationsCtrl isn't 
+                       switched off then notification contFileReady is been 
+                       already sent, but no transferContFile has been received 
+                       (yet).
+          safe (2):   container file has been transferred to the designated 
+                       external location; it is safe to delete this file.
+        After system restart, any existing information container files (saved 
+        from previous run) are treated as not yet transferred (ready)."
+    ::= { contFileEntry 4 }
+
+--contFileRowStatus OBJECT-TYPE
+--    SYNTAX	        RowStatus
+--    MAX-ACCESS        read-write
+--    STATUS            current
+--    DESCRIPTION
+--	"The status of this conceptual row. Used when a row in the
+--	table is created or deleted."
+--    ::= { contFileEntry 3 }
+
+transferContFile OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Writing a filename here (set operation) initiates transfer of 
+        information container file to the server.
+	Filename must be a valid one - e.g. the one reported in contFileReady 
+	notification or from contFileTable.
+	File will be transferred to the TFTP server location defined by 
+	configuration parameters contTransferSrvIP and contTransferSrvPath. 
+	When the transfer is finished and configuration parameter 
+	contNotificationsCtrl was not switched off, the result will be reported 
+	with contTransferComplete notification.
+	Get operation will return the filename of the file which is being 
+	transferred - otherwise string 'No file is being transferred at this 
+	time.' will be returned."
+    ::= { contFileObjects 3 }
+
+deleteContFile OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+	"Set operation is used to delete log file with filename. 
+	Filename must be a valid one - e.g. the one reported in contFileReady 
+	notification or from contFileTable.
+	Get operation will return string 'Not applicable.'"
+    ::= { contFileObjects 4 }
+
+availableCrash OBJECT-TYPE
+    SYNTAX	INTEGER { false(0), true(1) }
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"This flag indicates if there has been a system crash within
+	last 24 hours. This is useful e.g. for servers that have limited and 
+	scarce storage capacity. They can choose not to request information 
+	container creation/transfer if there has been no system crash."
+    ::= { contFileObjects 5 }
+
+createContFile OBJECT-TYPE
+    SYNTAX	Action
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+	"Setting this to value start(1) will initiate creation of an information 
+	container file. This task can take some time as the files have to be 
+	picked in priority order, compressed, encrypted and checked if the final 
+	file does not exceed configurable size contFileSize. If the size limit is 
+	exceeded the process will be started again. If contAutomaticTransfer
+	parameter is set to no(0), the result of information container creation 
+	will be reported in contFileReady notification. Otherwise, the 
+	transfer of information container file is started automatically.
+	Note that the content of information container is for designers' 
+	eyes only. It is important not to 
+	change the name of the file when sending it to design team for analyses.
+        Setting this object to stop(0) is not permissible. Get operation of this
+        object will return stop(0) if no manual creation of container file is 
+        going on.
+	"
+    ::= { contFileObjects 6}
+
+-- ----------------------------------------------------------------------------
+-- OBJECT-TYPE
+-- contFileParameterObjects OBJECT IDENTIFIER ::= { contFileObjects 1 }
+-- 
+--   Here are listed configurable parameters for information container
+-- ----------------------------------------------------------------------------
+
+contTransferSrvIP OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The IP address or valid domain name to the TFTP server collecting the 
+	information container file. The same location is used for manual and 
+	automatic file transfer (paramenter contAutomaticTransfer).
+	Default is empty string so this parameter must be configured before 
+	transferContFile can be used."
+    ::= { contFileParameterObjects 1 }
+
+contTransferSrvPath OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The path within the TFTP server where the information container file 
+        should be stored. The same location is used for manual and 
+	automatic file transfer (paramenter contAutomaticTransfer).
+        Default is '/tmp/'."
+    ::= { contFileParameterObjects 2 }
+
+contNotificationsCtrl OBJECT-TYPE
+    SYNTAX	Confirmation
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+	"Wheather cont* notifications should be sent for container file events. 
+	By default it is yes (1). If this parameter is switched to no then the 
+	only way to find out the correct filename of the log file is 
+	through contFileTable."
+    ::= { contFileParameterObjects 3 }
+
+contAutomaticTransfer OBJECT-TYPE
+    SYNTAX	Confirmation
+    MAX-ACCESS	read-write
+    STATUS	current
+    DESCRIPTION
+	"Wheather the information container file should be automatically 
+	transfered to a storage server location defined by configuration 
+	parameters contTransferSrvIP and contTransferSrvPath. 
+	By default it is yes (1). 
+	If configured to yes, then when information container file is ready, no 
+	contFileReady notification is sent. Instead transfer is automatically 
+	initiated. The result of the transfer is (like in manual transfer) 
+	reported with contTransferComplete notification. "
+    ::= { contFileParameterObjects 4 }
+
+contFileSize OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This is the size limit for information container file.
+        Units: kB (kilobytes).
+        Default: 600000 kB, Accepted range from 250 kB to 1000000 kB"
+    ::= { contFileParameterObjects 5 }
+
+contFileEncryption OBJECT-TYPE
+    SYNTAX      Confirmation
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The object indicates whether the container files should be encrypted 
+         or not. Default is yes (1).
+         yes (1) - The container file is encrypted before transfer.
+         no (0) - The container file is not encrypted before transfer."
+    ::= { contFileParameterObjects 6 }
+
+-- ----------------------------------------------------------------------------
+-- NOTIFICATION-TYPE
+-- logConformance OBJECT IDENTIFIER ::= { genLog 5 }
+-- ----------------------------------------------------------------------------
+
+-- ----------------------------------------------------------------------------
+-- OBJECT-TYPE
+-- logGroups OBJECT IDENTIFIER ::= { logConformance 1 }
+-- ----------------------------------------------------------------------------
+
+logNotificationGroup NOTIFICATION-GROUP
+    NOTIFICATIONS {
+       logFileReady,
+       logTransferComplete
+       }
+    STATUS	current
+    DESCRIPTION
+	"See corresponding notification description."
+    ::= { logGroups 1 }
+
+trapObjectGroup OBJECT-GROUP
+    OBJECTS {
+       filename,
+       result,
+       level
+       }
+    STATUS	current
+    DESCRIPTION
+	"See corresponding notification description."
+    ::= { logGroups 2 }
+
+logFileObjectGroup OBJECT-GROUP
+    OBJECTS {
+--     logTypeIndex,
+       logTypeName,
+       logTypeRotateSize,
+       logTypeFilesPerLogType,
+       logTypeLogLevel,
+--     logTypeRowStatus,
+--     logFileIndex,
+       logFileName,
+       logFileStatus,
+--     logFileRowStatus,
+       transferLogFile,
+       copyLogFile,
+       deleteLogFile
+       }
+    STATUS	current
+    DESCRIPTION
+	"See corresponding object description."
+    ::= { logGroups 3 }
+
+logFileParamObjectGroup OBJECT-GROUP
+    OBJECTS {
+       logTransferSrvIP,
+       logTransferSrvPath,
+       logCopySrvIP,
+       logCopySrvPath,
+       logNotificationsCtrl,
+       logAutomaticTransfer
+       }
+    STATUS	current
+    DESCRIPTION
+	"See corresponding object description."
+    ::= { logGroups 4 }
+
+-- ----------------------------------------------------------------------------
+-- contConformance OBJECT IDENTIFIER ::= { genLog 6 }
+-- ----------------------------------------------------------------------------
+
+-- ----------------------------------------------------------------------------
+-- OBJECT-TYPE
+-- contGroups OBJECT IDENTIFIER ::= { contConformance 1 }
+-- ----------------------------------------------------------------------------
+
+contNotificationGroup NOTIFICATION-GROUP
+    NOTIFICATIONS {
+       contFileReady,
+       contTransferComplete
+       }
+    STATUS	current
+    DESCRIPTION
+	"See corresponding notification description."
+    ::= { contGroups 1 }
+
+contFileObjectGroup OBJECT-GROUP
+    OBJECTS {
+       contFileName,
+       contFileLevel,
+       contFileStatus,
+--     contRowStatus,
+       transferContFile,
+       deleteContFile,
+       availableCrash,
+       createContFile
+       }
+    STATUS	current
+    DESCRIPTION
+	"See corresponding object description."
+    ::= { contGroups 2 }
+
+contFileParamObjectGroup OBJECT-GROUP
+    OBJECTS {
+       contTransferSrvIP,
+       contTransferSrvPath,
+       contNotificationsCtrl,
+       contAutomaticTransfer,
+       contFileSize,
+       contFileEncryption
+       }
+    STATUS	current
+    DESCRIPTION
+	"See corresponding object description."
+    ::= { contGroups 3 }
+
+
+-- ----------------------------------------------------------------------------
+-- OBJECT-TYPE
+-- logCompliances OBJECT IDENTIFIER ::= { logConformance 2 }
+-- ----------------------------------------------------------------------------
+
+logCompliance MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+	"The compliance statement for components instrumenting this mib module."
+    MODULE -- this module
+
+    GROUP logNotificationGroup
+    DESCRIPTION 
+        "Implementation of this group is optional"
+
+    GROUP trapObjectGroup
+    DESCRIPTION
+        "Implementation of this group is optional"
+
+    GROUP logFileObjectGroup
+    DESCRIPTION
+        "Implementation of this group is optional"
+
+    GROUP logFileParamObjectGroup
+    DESCRIPTION
+        "Implementation of this group is optional"
+
+    ::= { logCompliances 1 }
+
+-- ----------------------------------------------------------------------------
+-- OBJECT-TYPE
+-- contCompliances OBJECT IDENTIFIER ::= { contConformance 2 }
+-- ----------------------------------------------------------------------------
+
+contCompliance MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+	"The compliance statement for components instrumenting this mib module."
+    MODULE -- this module
+
+    GROUP contNotificationGroup
+    DESCRIPTION
+        "Implementation of this group is optional"
+
+    GROUP contFileObjectGroup
+    DESCRIPTION
+        "Implementation of this group is optional"
+    
+    GROUP contFileParamObjectGroup
+    DESCRIPTION
+        "Implementation of this group is optional"
+	
+    ::= { contCompliances 1 }
+
+END

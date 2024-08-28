@@ -1,0 +1,392 @@
+# NOTE
+# use keywords 'yes' and 'no' to specify whether a component is locked or no.
+
+components:
+- name: ITHBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=fixs.ith,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=fixs.ith,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: STSMAINBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=sts.stsmain,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=sts.stsmain,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: STSCONVBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=sts.stsconv,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=sts.stsconv,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service  
+- name: STSPROVBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=sts.stsprov,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=sts.stsprov,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: MAUSLBIN
+  locked: 
+  cmd:
+  - amf-adm restart safComp=cphw.mausl,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=cphw.mausl,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: ADHADMBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=mcs.adhadm,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=mcs.adhadm,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CPFBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=fms.cpf,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=fms.cpf,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: BUSRVBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=cps.busrv,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=cps.busrv,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: BUFTPDBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=cps.buftpd,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=cps.buftpd,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CFETCMDBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=pes.cfetcmd,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=pes.cfetcmd,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: IPNAADMBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=ocs.ipnaadm,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=ocs.ipnaadm,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: AIAPBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=mcs.aiap,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=mcs.aiap,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: BUAPBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=cps.buap,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=cps.buap,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CPTASPAPI
+  locked: no
+  cmd:
+  - amf-adm restart safComp=mas.cptaspapi,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=mas.cptaspapi,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CPTASPCENTRALA
+  locked: no
+  cmd:
+  - amf-adm restart safComp=mas.cptaspcentrala,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=mas.cptaspcentrala,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CPTASPCENTRALB
+  locked: no
+  cmd:
+  - amf-adm restart safComp=mas.cptaspcentralb,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=mas.cptaspcentralb,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CPTASPCENTRAL
+  locked: no
+  cmd:
+  - amf-adm restart safComp=mas.cptaspcentral,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=mas.cptaspcentral,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CPTASPMML
+  locked: no
+  cmd:
+  - amf-adm restart safComp=mas.cptaspmml,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=mas.cptaspmml,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: ALECBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=mcs.alec,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=mcs.alec,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: AMIHBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=fixs.amih,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=fixs.amih,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: TREFCBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=fixs.trefc,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=fixs.trefc,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: ALDABIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=mcs.alda,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=mcs.alda,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: LMBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.lm,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=acs.lm,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CPTMP2DBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=mas.cptmp2d,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=mas.cptmp2d,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CPTMP3DBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=mas.cptmp3d,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=mas.cptmp3d,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: MSRMHBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=mas.msrmh,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=mas.msrmh,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CQPHBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=cqs.cqph,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=cqs.cqph,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CQRHBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=cqs.cqrh,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=cqs.cqrh,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: APSESHBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.apsesh,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=acs.apsesh,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: MISCLHBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=mas.misclh,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=mas.misclh,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: EMFBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.emf,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=acs.emf,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: NSFBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.nsf,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=acs.nsf,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CCHBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=fixs.cch,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=fixs.cch,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CMXHBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=fixs.cmxh,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=fixs.cmxh,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: SYSCONBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=cphw.syscon,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=cphw.syscon,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: MAUS1BIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=cphw.maus1,safSu=SC-1,safSg=NWA,safApp=ERIC-apg.maus1.service
+  - amf-adm restart safComp=cphw.maus1,safSu=SC-2,safSg=NWA,safApp=ERIC-apg.maus1.service
+- name: MAUS2BIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=cphw.maus2,safSu=SC-1,safSg=NWA,safApp=ERIC-apg.maus2.service
+  - amf-adm restart safComp=cphw.maus2,safSu=SC-2,safSg=NWA,safApp=ERIC-apg.maus2.service
+- name: MAUSCBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=cphw.mausc,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=cphw.mausc,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CPTMP4DBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=mas.cptmp4d,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=mas.cptmp4d,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CPTASPCENTRALC
+  locked: no
+  cmd:
+  - amf-adm restart safComp=mas.cptaspcentralc,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=mas.cptaspcentralc,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: DDTBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=aes.ddt,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=aes.ddt,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: APCMHBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=mcs.apcmh,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=mcs.apcmh,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: FIXELHCMDBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=fixs.fixelhcmd,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=fixs.fixelhcmd,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: GPRSHMBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=cphw.gprshm,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=cphw.gprshm,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: SCHBIN 
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.sch,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=acs.sch,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: XBRMBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.xbrm,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=acs.xbrm,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: HCBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.hc,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=acs.hc,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: DSDBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.dsd,safSu=SC-1,safSg=NWA,safApp=ERIC-apg.dsd.service
+  - amf-adm restart safComp=acs.dsd,safSu=SC-2,safSg=NWA,safApp=ERIC-apg.dsd.service
+- name: CSBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.cs,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=acs.cs,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: SSUBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.ssu,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=acs.ssu,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: ASECBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.asec,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=acs.asec,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: HAAGENTBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=apos.haagent,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=apos.haagent,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: HADEVMONBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=apos.hadevmon,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=apos.hadevmon,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: TESRVCMDBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=cps.tesrvcmd,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=cps.tesrvcmd,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CDHBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=aes.cdh,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=aes.cdh,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: DBOBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=aes.dbo,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=aes.dbo,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CLHBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=pes.clh,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=pes.clh,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: SGSBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=sts.sgs,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=sts.sgs,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: ALOGBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.alog,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=acs.alog,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: LCTBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.lct,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=acs.lct,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: LOGMBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.logm,safSu=SC-1,safSg=NWA,safApp=ERIC-apg.logm.service
+  - amf-adm restart safComp=acs.logm,safSu=SC-2,safSg=NWA,safApp=ERIC-apg.logm.service
+- name: ALHBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.alh,safSu=SC-1,safSg=NWA,safApp=ERIC-apg.alh.service
+  - amf-adm restart safComp=acs.alh,safSu=SC-2,safSg=NWA,safApp=ERIC-apg.alh.service
+- name: TOCAPBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=ocs.tocap,safSu=SC-1,safSg=NWA,safApp=ERIC-apg.tocap.service
+  - amf-adm restart safComp=ocs.tocap,safSu=SC-2,safSg=NWA,safApp=ERIC-apg.tocap.service
+- name: APBMBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.apbm,safSu=SC-1,safSg=NWA,safApp=ERIC-apg.apbm.service
+  - amf-adm restart safComp=acs.apbm,safSu=SC-2,safSg=NWA,safApp=ERIC-apg.apbm.service
+- name: AFPBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=aes.afp,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=aes.afp,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: CSYNCBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.csync,safSu=SC-1,safSg=NWA,safApp=ERIC-apg.csync.service
+  - amf-adm restart safComp=acs.csync,safSu=SC-2,safSg=NWA,safApp=ERIC-apg.csync.service
+- name: MTZBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.mtz,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=acs.mtz,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: HBEATBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.hbeat,safSu=SC-1,safSg=NWA,safApp=ERIC-apg.hbeat.service
+  - amf-adm restart safComp=acs.hbeat,safSu=SC-2,safSg=NWA,safApp=ERIC-apg.hbeat.service
+- name: TRAPDSBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.trapds,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=acs.trapds,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: USABIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.usa,safSu=SC-1,safSg=NWA,safApp=ERIC-apg.usa.service
+  - amf-adm restart safComp=acs.usa,safSu=SC-2,safSg=NWA,safApp=ERIC-apg.usa.service
+- name: ACABIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.aca,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=acs.aca,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: RTRBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=acs.rtr,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=acs.rtr,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+- name: FCSRVBIN
+  locked: no
+  cmd:
+  - amf-adm restart safComp=cps.fcsrv,safSu=SC-1,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+  - amf-adm restart safComp=cps.fcsrv,safSu=SC-2,safSg=2N,safApp=ERIC-apg.nbi.aggregation.service
+
+not-lockable:
+- name: CLOGGCMDBIN
+- name: EVHANDLCLIENT
+- name: NCLIBBIN
+- name: OSCONFBIN
+- name: OSCMDBIN
+- name: OSEXTBIN
+- name: AEHBIN
+- name: APGCCBIN
+- name: TRAUTLBIN
+- name: ACSBIN
+- name: GCCBIN
+- name: JTPBIN
+- name: PRCBIN
+- name: OHIBIN
+- name: SWRBIN
+- name: HCSBIN
+- name: BURBIN
+- name: APRCBIN
+- name: MAUSOBIN
+- name: TINYCOREBIN 
+- name: USAFMBIN

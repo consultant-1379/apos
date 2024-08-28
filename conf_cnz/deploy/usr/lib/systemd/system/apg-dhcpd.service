@@ -1,0 +1,8 @@
+[Unit]
+Description=dhcpd daemon
+
+[Service]
+Type=forking
+Restart=on-failure
+ExecStartPre=-/usr/bin/rm -f /var/run/dhcpd.pid
+ExecStart=/usr/lib/systemd/scripts/apg-dhcpd.sh

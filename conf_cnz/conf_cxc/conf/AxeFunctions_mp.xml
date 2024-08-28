@@ -1,0 +1,508 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><!--
+	Copyright (c) 2020 Ericsson AB.
+	All rights reserved
+
+	DX ECIM Tool-chain generated this file on Dec 8, 2020 11:45:34 PM using:
+	* com.ericsson.ecim.m2m 3.13.0.202006261811
+	* com.ericsson.ecim.dsl 3.13.0.202006261811
+	* com.ericsson.ecim.edm 3.13.0.202006261811
+--><!DOCTYPE models SYSTEM "mp.dtd">
+<models>
+    <dtdVersion>K</dtdVersion>
+    <momMetaData>
+        <momTitle>Managed Object Model for AXE Functions</momTitle>
+        <momSubTitle/>
+        <momIdentity>
+            <docNum>2/19089-CXA 117 0043/8</docNum>
+            <docLang>Uen</docLang>
+            <docRev>B</docRev>
+            <docDate>2020-12-08</docDate>
+        </momIdentity>
+        <createdBy>
+            <signature>XHARBAV</signature>
+        </createdBy>
+    </momMetaData>
+    <mim author="Harika Bavana" contact="XHARBAV" correction="0" date="2020-12-08" docNo="" name="AxeFunctions" namespace="urn:com:ericsson:ecim:AxeFunctions" namespacePrefix="axefunctions" organization="-" release="4" revision="A" version="3">
+        <description>AXE Functions MOM.</description>
+        <domainExtension domain="ECIM">
+            <extension name="immNamespace" value="NONE"/>
+        </domainExtension>
+        <modelFeatures modelType="Template">
+            <modelFeature featureType="basic" name="CPI_HIDDEN"/>
+            <modelFeature featureType="basic" name="VIRTUAL_HIDDEN"/>
+            <modelFeature featureType="basic" name="NATIVE_HIDDEN"/>
+        </modelFeatures>
+        
+        
+        
+        <enum name="AxeApplication">
+            <description>Specifies the type of the AXE Application the APG is serving to.</description>
+            <domainExtension domain="ECIM">
+                <extension name="originatingMimVersion" value="2"/>
+                <extension name="originatingMimRelease" value="3"/>
+                <extension name="originatingMimName" value="AxeCommonLibrary"/>
+            </domainExtension>
+            <enumMember name="MSC">
+                <description>Specifies a MSC-S Application.</description>
+                <value>0</value>
+            </enumMember>
+            <enumMember name="HLR">
+                <description>Specifies a HLR Application.</description>
+                <value>1</value>
+            </enumMember>
+            <enumMember name="BSC">
+                <description>Specifies a BSC Application.</description>
+                <value>2</value>
+            </enumMember>
+            <enumMember name="WIRELINE">
+                <description>Specifies a Wireline Application.</description>
+                <value>3</value>
+            </enumMember>
+            <enumMember name="TSC">
+                <description>Specifies a TSC-S Application.</description>
+                <value>4</value>
+            </enumMember>
+            <enumMember name="IPSTP">
+                <description>Specifies an IP-STP Application.</description>
+                <value>5</value>
+            </enumMember>
+        </enum>
+        <enum name="ApgIdentity">
+            <description>Defines the identity of an APG.</description>
+            <enumMember name="AP1">
+                <description>Indicates AP1.</description>
+                <value>1</value>
+            </enumMember>
+            <enumMember name="AP2">
+                <description>Indicates AP2.</description>
+                <value>2</value>
+                <decisionPoint>
+                    <decisionStatement decisionType="basic">if-feature NOT VIRTUAL_HIDDEN</decisionStatement>
+                </decisionPoint>
+            </enumMember>
+        </enum>
+        <enum name="ApgOamAccessType">
+            <description>Lists the possible ways to reach APG from MS for OaM activities.</description>
+            <enumMember name="FRONTCABLE">
+                <description>Front cables are used.</description>
+                <value>0</value>
+            </enumMember>
+            <enumMember name="NOCABLE">
+                <description>No front cables are used.</description>
+                <value>1</value>
+            </enumMember>
+        </enum>
+        <enum name="ApgShelfArchitecture">
+            <description>Specifies the magazine type and the shelf manager type used for the shelf where the APG is located. </description>
+            <domainExtension domain="ECIM">
+                <extension name="originatingMimVersion" value="2"/>
+                <extension name="originatingMimRelease" value="3"/>
+                <extension name="originatingMimName" value="AxeCommonLibrary"/>
+            </domainExtension>
+            <enumMember name="SCB">
+                <description>APG is into an EGEM magazine with SCB.</description>
+                <value>0</value>
+            </enumMember>
+            <enumMember name="SCX">
+                <description>APG is into an EGEM2 magazine with SCXB and AXE manages the infrastructure.</description>
+                <value>1</value>
+            </enumMember>
+            <enumMember name="BSP">
+                <description>APG is into an EGEM2 magazine within BSP.</description>
+                <value>2</value>
+            </enumMember>
+            <enumMember name="VIRTUALIZED">
+                <description>APG is in a virtualized infrastructure.</description>
+                <value>3</value>
+            </enumMember>
+            <enumMember name="SMX">
+                <description>APG is into an EGEM2 magazine with SMXB and AXE manages the infrastructure.</description>
+                <value>4</value>
+            </enumMember>
+        </enum>
+        
+        <enum name="SystemType">
+            <description>Specifies the AXE system type in terms of number of CP connected to APG.
+</description>
+            <domainExtension domain="ECIM">
+                <extension name="originatingMimVersion" value="2"/>
+                <extension name="originatingMimRelease" value="3"/>
+                <extension name="originatingMimName" value="AxeCommonLibrary"/>
+            </domainExtension>
+            <enumMember name="SINGLE_CP_SYSTEM">
+                <description>Indicates a Single-CP System. It is a system including only one Dual-Sided CP.</description>
+                <value>0</value>
+            </enumMember>
+            <enumMember name="MULTI_CP_SYSTEM">
+                <description>Indicates a Multi-CP System. It is a system including several types of CPs, regardless if the CPs are Single-Sided CPs or Dual-Sided CPs.</description>
+                <value>1</value>
+            </enumMember>
+        </enum>
+        <derivedDataType name="WelcomeMessage">
+            <description>Specifies the pattern to follow for welcomeMessage attribute.</description>
+            <baseType>
+                <string>
+                    <lengthRange>
+                        <min>0</min>
+                        <max>2000</max>
+                    </lengthRange>
+                    <stringLength>
+                        <subrange>
+                            <min>0</min>
+                            <max>2000</max>
+                        </subrange>
+                    </stringLength>
+                    <validValues>^[^\\`]*$</validValues>
+                </string>
+            </baseType>
+            <validationRules>
+                <rule exceptionText="" format="posix_ere" name="Pattern Constraint"><![CDATA[^[^\\`]*$]]></rule>
+            </validationRules>
+        </derivedDataType>
+        <class name="AxeFunctions">
+            <description>Represents the root MOC for AXE Functions Management function MOM.
+
+AXE Functions Management consists of AXE specific functions aiming to configure and operate an AXE node.
+
+The AXE specific functions are structured in five function layers and each of them is a functions set belonging to it:
+  
+Data Output Handling. Functions set handling statistical counters collection, and data transfer with local media or remote destination. DataOutputHandling is the root MOC for the related MOM.
+
+Security Handling. Functions set allowing to configure the audit logging, the hardening and the user authority on APG. SecurityHandling is the root MOC for the related MOM.
+
+Supervision Handling. Functions set providing, in the applicable APG configurations, the handling of externally generated alarms in the AXE node and supervision of network interfaces used to communicate with a MS.
+
+System Component Handling. Functions set allowing to administer the HW, MW and SW configuration for the different components in the AXE node. SystemComponentHandling is the root MOC for the related MOM.
+
+System Handling. Functions set providing basic configurations for handling the AXE node, like license management and alphanumeric device administration. SystemHandling is the root MOC for the related MOM.</description>
+            <systemCreated/>
+            <root/>
+            <attribute name="axeFunctionsId">
+                <description>Holds the name used when identifying the MO.</description>
+                <mandatory/>
+                <noNotification/>
+                <restricted/>
+                <key/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="systemType">
+                <description>Specifies the AXE system type.
+</description>
+                <noNotification/>
+                <readOnly/>
+                <dataType>
+                    <enumRef name="SystemType">
+                        <mimName>AxeFunctions</mimName>
+                    </enumRef>
+                </dataType>
+            </attribute>
+            <attribute name="axeApplication">
+                <description>Specifies the AXE node type.
+</description>
+                <noNotification/>
+                <readOnly/>
+                <dataType>
+                    <enumRef name="AxeApplication">
+                        <mimName>AxeFunctions</mimName>
+                    </enumRef>
+                </dataType>
+            </attribute>
+            <attribute name="apgShelfArchitecture">
+                <description>Specifies the shelf infrastructure in which APG is located.</description>
+                <noNotification/>
+                <readOnly/>
+                <dataType>
+                    <enumRef name="ApgShelfArchitecture">
+                        <mimName>AxeFunctions</mimName>
+                    </enumRef>
+                </dataType>
+                <decisionPoint>
+                    <decisionStatement decisionType="basic">if-feature NOT VIRTUAL_HIDDEN</decisionStatement>
+                </decisionPoint>
+            </attribute>
+            
+            
+            
+            <attribute name="ap">
+                <description>Specifies the APG identity a user is logged in.</description>
+                <readOnly/>
+                <dataType>
+                    <enumRef name="ApgIdentity">
+                        <defaultValue>AP1</defaultValue>
+                        <mimName>AxeFunctions</mimName>
+                    </enumRef>
+                </dataType>
+            </attribute>
+            
+            <attribute name="apgOamAccess">
+                <description>Specifies how the APG is accessed from an MS for OaM activities. Either via front cables or via backplane connection.</description>
+                <readOnly/>
+                <dataType>
+                    <enumRef name="ApgOamAccessType">
+                        <defaultValue>FRONTCABLE</defaultValue>
+                        <mimName>AxeFunctions</mimName>
+                    </enumRef>
+                </dataType>
+                <decisionPoint>
+                    <decisionStatement decisionType="basic">if-feature NOT VIRTUAL_HIDDEN</decisionStatement>
+                </decisionPoint>
+            </attribute>
+        </class>
+        <class name="SecurityHandling">
+            <description>Represents the root MOC for Security Handling function MOM.
+
+Security Handling is an AXE specific function layer consisting of functions set allowing to configure the AP sessions properties, audit logging, TS users policy and user authority for MML sessions.
+
+It allows defining the welcome message text.
+
+One or more attributes setting can fail due to one of the following reasons:
+	- Unreasonable value: Welcome message contains invalid special characters.</description>
+            <systemCreated/>
+            <attribute name="securityHandlingId">
+                <description>Holds the name used when identifying the MO.</description>
+                <mandatory/>
+                <noNotification/>
+                <restricted/>
+                <key/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+            <attribute name="welcomeMessage">
+                <description>Specifies the welcome message to be displayed before entering the password in all session types.
+The welcome message is not displayed when a TLS-based session type is opened.
+
+The welcome message contains the operator legal notice and it might optionally contain the privacy notice as well, according to company policies and local country regulations, which sets the right expectations for users regarding authorized and acceptable use of the node.
+The privacy notice is to be showed in the countries where the usage of the product may require providing Notice of privacy policy. 
+
+When configuring this attribute, the tag "&lt;BR&gt;" can be used to insert a line break into the string at the time it is shown in the session.
+
+The default value of this attribute consists of the legal notice string only.
+
+The welcome message string is always shown between a default sequence of wildcard characters "*".</description>
+                <dataType>
+                    <derivedDataTypeRef name="WelcomeMessage">
+                        <defaultValue>IF YOU ARE NOT AN AUTHORIZED USER, PLEASE EXIT IMMEDIATELY.</defaultValue>
+                        <mimName>AxeFunctions</mimName>
+                    </derivedDataTypeRef>
+                </dataType>
+            </attribute>
+        </class>
+        <class name="SystemHandling">
+            <description>Represents the root MOC for System Handling function MOM.
+
+System Handling is an AXE specific function layer providing basic configurations for handling the AXE node, like license management and alphanumeric device administration.</description>
+            <systemCreated/>
+            <attribute name="systemHandlingId">
+                <description>Holds the name used when identifying the MO.</description>
+                <mandatory/>
+                <noNotification/>
+                <restricted/>
+                <key/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+        </class>
+        <class name="SupervisionHandling">
+            <description>Represents the root MOC for Supervision Handling function MOM.
+
+Supervision Handling is an AXE specific function layer consisting of functions set providing, in the applicable APG configurations, the handling of externally generated alarms in the AXE node and supervision of network interfaces used to communicate with a MS.</description>
+            <systemCreated/>
+            <attribute name="supervisionHandlingId">
+                <description>Holds the name used when identifying the MO.</description>
+                <mandatory/>
+                <noNotification/>
+                <restricted/>
+                <key/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+        </class>
+        <class name="DataOutputHandling">
+            <description>Represents the root MOC for Data Output Handling function MOM.
+
+Data Output Handling is an AXE specific function layer consisting of functions set handling statistical counters collection, and data transfer with local media or remote destination.
+</description>
+            <systemCreated/>
+            <attribute name="dataOutputHandlingId">
+                <description>Holds the name used when identifying the MO.</description>
+                <mandatory/>
+                <noNotification/>
+                <restricted/>
+                <key/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+        </class>
+        <class name="SystemComponentHandling">
+            <description>Represents the root MOC for System Component Handling function MOM.
+
+System Component Handling is an AXE specific function layer allowing to administer the different components present in an AXE node.</description>
+            <systemCreated/>
+            <attribute name="systemComponentHandlingId">
+                <description>Holds the name used when identifying the MO.</description>
+                <mandatory/>
+                <noNotification/>
+                <restricted/>
+                <key/>
+                <dataType>
+                    <string/>
+                </dataType>
+            </attribute>
+        </class>
+        <relationship name="AxeFunctions_to_SecurityHandling">
+            <containment>
+                <parent>
+                    <hasClass name="AxeFunctions">
+                        <mimName>AxeFunctions</mimName>
+                    </hasClass>
+                </parent>
+                <child>
+                    <hasClass name="SecurityHandling">
+                        <mimName>AxeFunctions</mimName>
+                    </hasClass>
+                    <cardinality>
+                        <min>1</min>
+                        <max>1</max>
+                    </cardinality>
+                </child>
+                <domainExtension domain="ECIM">
+                    <extension name="canCreate" value="false"/>
+                    <extension name="canDelete" value="false"/>
+                </domainExtension>
+                <notCreatable/>
+                <notDeleteable/>
+            </containment>
+        </relationship>
+        <relationship name="AxeFunctions_to_SystemHandling">
+            <containment>
+                <parent>
+                    <hasClass name="AxeFunctions">
+                        <mimName>AxeFunctions</mimName>
+                    </hasClass>
+                </parent>
+                <child>
+                    <hasClass name="SystemHandling">
+                        <mimName>AxeFunctions</mimName>
+                    </hasClass>
+                    <cardinality>
+                        <min>1</min>
+                        <max>1</max>
+                    </cardinality>
+                </child>
+                <domainExtension domain="ECIM">
+                    <extension name="canCreate" value="false"/>
+                    <extension name="canDelete" value="false"/>
+                </domainExtension>
+                <notCreatable/>
+                <notDeleteable/>
+            </containment>
+        </relationship>
+        <relationship name="AxeFunctions_to_SupervisionHandling">
+            <containment>
+                <parent>
+                    <hasClass name="AxeFunctions">
+                        <mimName>AxeFunctions</mimName>
+                    </hasClass>
+                </parent>
+                <child>
+                    <hasClass name="SupervisionHandling">
+                        <mimName>AxeFunctions</mimName>
+                    </hasClass>
+                    <cardinality>
+                        <min>1</min>
+                        <max>1</max>
+                    </cardinality>
+                </child>
+                <domainExtension domain="ECIM">
+                    <extension name="canCreate" value="false"/>
+                    <extension name="canDelete" value="false"/>
+                </domainExtension>
+                <notCreatable/>
+                <notDeleteable/>
+            </containment>
+        </relationship>
+        <relationship name="AxeFunctions_to_DataOutputHandling">
+            <containment>
+                <parent>
+                    <hasClass name="AxeFunctions">
+                        <mimName>AxeFunctions</mimName>
+                    </hasClass>
+                </parent>
+                <child>
+                    <hasClass name="DataOutputHandling">
+                        <mimName>AxeFunctions</mimName>
+                    </hasClass>
+                    <cardinality>
+                        <min>1</min>
+                        <max>1</max>
+                    </cardinality>
+                </child>
+                <domainExtension domain="ECIM">
+                    <extension name="canCreate" value="false"/>
+                    <extension name="canDelete" value="false"/>
+                </domainExtension>
+                <notCreatable/>
+                <notDeleteable/>
+            </containment>
+        </relationship>
+        <relationship name="AxeFunctions_to_SystemComponentHandling">
+            <containment>
+                <parent>
+                    <hasClass name="AxeFunctions">
+                        <mimName>AxeFunctions</mimName>
+                    </hasClass>
+                </parent>
+                <child>
+                    <hasClass name="SystemComponentHandling">
+                        <mimName>AxeFunctions</mimName>
+                    </hasClass>
+                    <cardinality>
+                        <min>1</min>
+                        <max>1</max>
+                    </cardinality>
+                </child>
+                <domainExtension domain="ECIM">
+                    <extension name="canCreate" value="false"/>
+                    <extension name="canDelete" value="false"/>
+                </domainExtension>
+                <notCreatable/>
+                <notDeleteable/>
+            </containment>
+        </relationship>
+    </mim>
+    <interMim>
+        <relationship name="SystemFunctions_to_AxeFunctions">
+            <domainExtension domain="CoreMW">
+                <extension name="splitImmDn" value="true"/>
+            </domainExtension>
+            <containment>
+                <parent>
+                    <hasClass name="SystemFunctions">
+                        <mimName>ComTop</mimName>
+                    </hasClass>
+                </parent>
+                <child>
+                    <hasClass name="AxeFunctions">
+                        <mimName>AxeFunctions</mimName>
+                    </hasClass>
+                    <cardinality>
+                        <min>1</min>
+                        <max>1</max>
+                    </cardinality>
+                </child>
+                <domainExtension domain="ECIM">
+                    <extension name="canCreate" value="false"/>
+                    <extension name="canDelete" value="false"/>
+                </domainExtension>
+                <notCreatable/>
+                <notDeleteable/>
+            </containment>
+        </relationship>
+    </interMim>
+</models>

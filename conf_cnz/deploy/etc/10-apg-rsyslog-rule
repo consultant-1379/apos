@@ -1,0 +1,15 @@
+#/etc/logrot.d/10-apg-rsyslog-rule: logrotate configuration for apg
+#<logfile> <limit> <rotations> <retention>
+/var/log/*/messages 102400 9
+/var/log/*/kernel 102400 9
+/var/log/*/auth 102400 9
+/var/log/*/security_audit 102400 9
+/data/acs/data/alog/mml_audit 102400 9
+ 
+/var/log/acs/tra/logging/agentd.log 30720 3
+/var/log/acs/tra/logging/devmond.log 30720 3
+ 
+ 
+/var/log/*/wtmp 512 1
+ 
+#End of file

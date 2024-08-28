@@ -1,0 +1,179 @@
+--- auth.c      2024-01-22 10:46:47.640803000 +0100
++++ /home/zkisvel/Downloads/openssh_uplift_CBA_5_3/APG43L/apos/ext_cnz/openssh/portable_caa/src/auth_base.c     2024-01-22 10:24:56.527835000 +0100
+zkisvel@seroius02156[09:09][openssh/portable_caa/src]$ diff auth.c auth_base.c
+628a629,634
+> #ifdef ERICSSON_PATCH_ENABLED
+>         ci->host = get_canonical_hostname(options.use_dns);
+>         ci->address = get_remote_ipaddr();
+>         ci->subsystem = NULL;
+> #endif
+>
+
+--- servconf.c  2024-01-22 10:46:47.948723000 +0100
++++ /home/zkisvel/Downloads/openssh_uplift_CBA_5_3/APG43L/apos/ext_cnz/openssh/portable_caa/src/servconf_base.c 2024-01-22 10:24:57.825869000 +0100
+852a853,863
+> #ifdef ERICSSON_PATCH_ENABLED
+>         const char *user    = NULL;
+>         const char *host    = NULL;
+>         const char *address   = NULL;
+>         const char *subsystem = NULL;
+>         /* Here the condition is hold
+>          *  ci==NULL ==> user==NULL
+>          *  that is, it is not possible that ci==NULL but user!=NULL
+>          */
+> #endif
+>
+855a867
+> #ifndef ERICSSON_PATCH_ENABLED
+860a873,884
+> #else
+>         {
+>                 user = ci->user;
+>                 host = ci->host;
+>                 address = ci->address;
+>                 subsystem = ci->subsystem;
+>                 debug3("checking match for '%s' user %s host %s addr %s subsystem %s "
+>                         "laddr %s lport %d", cp, user ? user : "(null)", host ? host : "(null)",
+>                         address ? address : "(null)", subsystem ? subsystem : "(null)",
+>                                     ci->laddress ? ci->laddress : "(null)", ci->lport);
+>         }
+> #endif
+878a903,909
+> #ifdef ERICSSON_PATCH_ENABLED
+>                          if (!user)
+>                          /* For clarity: it should be "if (!ci || !user) {" but the two expressions have
+>                           * exactly the same values under the above condition that
+>                           * (ci==NULL) ==> (user==NULL).
+>                           */
+> #else
+879a911,912
+> #endif
+>                          {
+888a922,924
+> #ifdef ERICSSON_PATCH_ENABLED
+>                           if (!user) /* Same comment as above */
+> #else
+889a926,927
+> #endif
+>                           {
+899a938,940
+> #ifdef ERICSSON_PATCH_ENABLED
+>                         if (!host) /* Same comment on the condition as user above */
+> #else
+900a942,943
+> #endif
+>                         {
+909a953,955
+> #ifdef ERICSSON_PATCH_ENABLED
+>                        if (!address) /* Same comment on the condition as user above */
+> #else
+910a957,958
+> #endif
+>                         {
+960a1009,1020
+> #ifdef ERICSSON_PATCH_ENABLED
+>                 } else if (strcasecmp(attrib, "subsystem") == 0) {
+>                        if (!subsystem) {
+>                          result = 0;
+>                          continue;
+>                    }
+>                  if (match_pattern_list(subsystem, arg, 0) != 1)
+>                    result = 0;
+>                  else
+>                    debug("subsystem %.100s matched 'Subsystem %.100s' at line %d", subsystem, arg, line);
+> #endif
+>
+2047a2108,2111
+> #ifdef ERICSSON_PATCH_ENABLED
+>                 } else if (strncmp(p, "subsystem=", 10) == 0) {
+>                         ci->subsystem = xstrdup(p + 10);
+> #endif
+
+--- servconf.h  2024-01-22 10:46:47.952726000 +0100
++++ /home/zkisvel/Downloads/openssh_uplift_CBA_5_3/APG43L/apos/ext_cnz/openssh/portable_caa/src/servconf_base.h 2024-01-22 10:24:57.830777000 +0100
+213a214,216
+> #ifdef ERICSSON_PATCH_ENABLED
+>         const char *subsystem; /* Subsystem service requested by the remote client application */
+> #endif
+
+--- session.c   2024-01-22 10:46:47.426688000 +0100
++++ /home/zkisvel/Downloads/openssh_uplift_CBA_5_3/APG43L/apos/ext_cnz/openssh/portable_caa/src/session_base.c  2024-01-22 10:24:57.838905000 +0100
+2310c2310
+<
+---
+> #ifndef ERICSSON_PATCH_ENABLED
+2328a2329,2360
+> #else
+>        /* Searching for subsystem into the options repository */
+>         for (i = 0; i < options.num_subsystems; i++) {
+>           if (strcmp(s->subsys, options.subsystem_name[i]) == 0)  break;
+>        }
+>
+>        if (i < options.num_subsystems) { /* subsystem found */
+>            struct connection_info ci;
+>
+>            ci.user = NULL;
+>            ci.host = NULL;
+>            ci.address = NULL;
+>            ci.subsystem = s->subsys;
+>
+>            parse_server_match_config(&options, &ci);
+>
+>            prog = options.subsystem_command[i];
+>            cmd = options.subsystem_args[i];
+>
+>            if (strcmp(INTERNAL_SFTP_NAME, prog) == 0) {
+>                s->is_subsystem = SUBSYSTEM_INT_SFTP;
+>                debug("subsystem: %s", prog);
+>            } else {
+>                   if (stat(prog, &st) < 0)
+>                            debug("subsystem: cannot stat %s: %s", prog, strerror(errno));
+>                   s->is_subsystem = SUBSYSTEM_EXT;
+>                   debug("subsystem: exec() %s", cmd);
+>            }
+>
+>            success = do_exec(s, cmd) == 0;
+>        }
+> #endif
+
+--- sshd.8      2024-01-22 10:46:47.956755000 +0100
++++ /home/zkisvel/Downloads/openssh_uplift_CBA_5_3/APG43L/apos/ext_cnz/openssh/portable_caa/src/sshd_base.8     2024-01-22 10:24:58.005849000 +0100
+109c109
+< that would apply to the specified user, host, and address will be set before
+---
+> that would apply to the specified user, host, and address, and subsystem will be set before
+114a115
+> .Dq addr ,
+118,119c119,120
+< .Dq addr .
+< All are required and may be supplied in any order, either with multiple
+---
+> .Dq subsystem .
+> All are required, but subsystem that is optional, and may be supplied in any order, either with multiple
+
+--- sshd.c      2024-01-22 10:46:48.532731000 +0100
++++ /home/zkisvel/Downloads/openssh_uplift_CBA_5_3/APG43L/apos/ext_cnz/openssh/portable_caa/src/sshd_base.c     2024-01-22 10:24:58.007936000 +0100
+199c199
+< #define       MAX_LISTEN_SOCKS        16
+---
+> #define       MAX_LISTEN_SOCKS        20
+1655a1656,1659
+> #ifdef ERICSSON_PATCH_ENABLED
+>         connection_info->address = connection_info->host =
+>                 connection_info->subsystem = connection_info->user = NULL;
+> #endif
+
+--- sshd_config.5       2024-01-22 10:46:47.976658000 +0100
++++ /home/zkisvel/Downloads/openssh_uplift_CBA_5_3/APG43L/apos/ext_cnz/openssh/portable_caa/src/sshd_config_base.5      2024-01-22 10:24:58.014885000 +0100
+378c378,379
+< PAM)
+---
+> PAM or though authentication styles supported in
+> .Xr login.conf 5)
+1096a1098
+> .Cm Address ,
+1100c1102
+< .Cm Address .
+---
+> .Cm Subsystem .
+

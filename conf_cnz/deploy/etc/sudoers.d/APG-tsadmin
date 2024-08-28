@@ -1,0 +1,41 @@
+#
+# Sample /etc/sudoers file.
+#
+# This file MUST be edited with the 'visudo' command as root.
+#
+# See the sudoers man page for the details on how to write a sudoers file.
+#
+
+##
+# User alias specification
+##
+
+##
+# Runas alias specification
+##
+
+##
+# Host alias specification
+##
+
+##
+# Cmnd alias specification
+##
+
+#Alias section
+Cmnd_Alias ADMINGROUPLIST = \
+		/opt/ap/acs/bin/acs_lct_addtsuser.sh, \
+		/opt/ap/acs/bin/acs_lct_modtsuser.sh, \
+		/opt/ap/acs/bin/acs_lct_pwdresetlaadmin.sh, \
+		/opt/ap/acs/bin/acs_lct_pwdresettsuser.sh, \
+		/opt/ap/acs/bin/acs_lct_removetsuser.sh, \
+		/usr/bin/chfn, \
+		/opt/ap/acs/bin/acs_lct_pwdsettsadmin.sh, \
+                /opt/ap/apos/bin/rpskeymgmt
+
+##
+# User specification
+##
+# Administrator Group can run following on any machine as any user
+%tsadmin        ALL = (root) NOPASSWD: ADMINGROUPLIST
+

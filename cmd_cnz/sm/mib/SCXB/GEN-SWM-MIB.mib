@@ -1,0 +1,364 @@
+-- ============================================================================
+--
+-- %CCaseFile:	GEN-SWM-MIB.mib %
+-- %CCaseRev:	/main/R1A/1 %
+-- %CCaseDate:	2010-08-27 %
+-- %CCaseDocNo:	11/196 03-CRA 119 1365 Ux %
+-- Author:	uabhre
+--
+-- ============================================================================
+--
+-- Copyright (C) 2009-2010 by Ericsson AB
+-- S-126 25  STOCKHOLM
+-- SWEDEN, tel + 46 8 719 0000
+--
+-- This Program may be used and/or copied only with the written permission
+-- from Ericsson AB, or in accordance with the terms and
+-- conditions stipulated in the agreement/contract under which the program
+-- has been supplied.
+--
+-- All rights reserved.
+--
+-- ============================================================================
+--
+-- REVISION HISTORY
+--
+-- Rev        Date        Name        What
+-- ========   ========    ========    ========
+-- PA1        2009-09-18  uabhre      GEN Initial revision.
+-- A          2010-02-12  qsangov     Firm revision of GEN-SWM-MIB
+-- A          2010-08-27  uabpnil     New document number
+-- ============================================================================
+
+GEN-SWM-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY,
+    NOTIFICATION-TYPE,
+    OBJECT-TYPE,
+    Integer32,
+    enterprises
+        FROM SNMPv2-SMI
+
+    TEXTUAL-CONVENTION,
+    DisplayString
+        FROM SNMPv2-TC
+
+    OBJECT-GROUP,             
+    NOTIFICATION-GROUP,
+    MODULE-COMPLIANCE       
+        FROM SNMPv2-CONF; 
+
+genSwmMIB MODULE-IDENTITY
+           LAST-UPDATED 
+	       "200909230000Z"
+	   ORGANIZATION
+	       "Ericsson AB - EAB/FLJ/IE"
+	   CONTACT-INFO
+	       "E-mail: ingvar.froroth@ericsson.com"       
+	   DESCRIPTION
+	       "This MIB module defines objects for reading/writing software
+     	        management components unique for Generic switch board (GEN)."
+ 
+	    -- Revision history.	 
+	    REVISION
+	       "200909230000Z"
+	   DESCRIPTION
+               "See top of document"  
+ 
+    ::= { enterprises ericsson(193) component(177) generic(2) equipment(2) 3 }
+
+-- -------------------------------------------------------------
+-- Group definitions 
+-- -------------------------------------------------------------
+
+swmNotifications         OBJECT IDENTIFIER ::= { genSwmMIB 0 }
+swmNotificationObjects   OBJECT IDENTIFIER ::= { genSwmMIB 1 }
+swmObjects               OBJECT IDENTIFIER ::= { genSwmMIB 2 }
+swmActions               OBJECT IDENTIFIER ::= { genSwmMIB 3 }
+
+swmConformance           OBJECT IDENTIFIER ::= { genSwmMIB 4 }
+   swmGroups 	            OBJECT IDENTIFIER ::= { swmConformance 1 }
+   swmCompliance            OBJECT IDENTIFIER ::= { swmConformance 2 }
+
+-- -------------------------------------------------------------
+-- Textual Conventions 
+-- -------------------------------------------------------------
+
+URLString ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT
+        "255a"
+    STATUS      current
+    DESCRIPTION
+        "A Uniform Resource Locator represented in accordance with RFCs 1738
+         and 2368, presented in the NVT ASCII charset defined in RFC 854."
+    SYNTAX      OCTET STRING (SIZE (0..255))
+
+Acknowledge ::= TEXTUAL-CONVENTION
+    STATUS	current
+    DESCRIPTION
+	"Values indication ok or not ok."
+    SYNTAX	INTEGER {
+                     nok (0),
+                     ok (1)
+		   }
+
+-- -------------------------------------------------------------
+-- Notification Objects (swmNotificationObjects)
+-- -------------------------------------------------------------
+
+result OBJECT-TYPE
+    SYNTAX	Acknowledge
+    MAX-ACCESS	accessible-for-notify
+    STATUS	current
+    DESCRIPTION
+	"Description of the file transfer result"
+    ::= { swmNotificationObjects 1 }
+
+
+-- -------------------------------------------------------------
+-- Notifications (swmNotifications)
+-- -------------------------------------------------------------
+
+loadReleaseCompleted NOTIFICATION-TYPE
+    OBJECTS { result }
+    STATUS  current
+    DESCRIPTION
+            "A loadReleaseCompleted notification signifies the end of a
+             loadRelease action."
+    ::= { swmNotifications 1 }
+
+removeReleaseCompleted NOTIFICATION-TYPE
+    OBJECTS { result }
+    STATUS  current
+    DESCRIPTION
+            "A removeReleaseCompleted notification signifies the end of a
+             removeRelease action."
+    ::= { swmNotifications 2 }
+
+
+-- -------------------------------------------------------------
+-- Objects (swmObjects)
+-- -------------------------------------------------------------
+
+swmLoadedTable OBJECT-TYPE
+    SYNTAX       SEQUENCE OF SwmLoadedEntry
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "A list of loaded software entries."
+    ::= { swmObjects 1 }
+
+swmLoadedEntry OBJECT-TYPE
+    SYNTAX       SwmLoadedEntry
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "An entry containing information applicable to
+         loaded software."
+    INDEX       { swmLoadedIndex }
+    ::= { swmLoadedTable 1 }
+
+SwmLoadedEntry ::=
+    SEQUENCE {
+              swmLoadedIndex         Integer32,
+              swmLoadedVersion       DisplayString,
+              swmLoadedType          INTEGER,
+              swmLoadedAttribute     INTEGER
+             }
+
+swmLoadedIndex OBJECT-TYPE
+    SYNTAX  	 Integer32 (1..10)
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "The software loaded index."
+    ::= { swmLoadedEntry 1 }
+
+swmLoadedVersion OBJECT-TYPE
+    SYNTAX       DisplayString
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "The software version."
+    ::= { swmLoadedEntry 2 }
+
+swmLoadedType OBJECT-TYPE
+    SYNTAX  	   INTEGER { failSafe (1),
+                           exchangeble (2),
+                           program (3) }
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "The loaded software type can be either failSafe (1) or
+         exchangeble (2) or program module (3). A failSafe 
+         software cannot be removed."
+    ::= { swmLoadedEntry 3 }
+
+swmLoadedAttribute OBJECT-TYPE
+    SYNTAX       INTEGER { noAttribute(0),
+                           currentSW(1),
+                           defaultSW(2),
+                           currentDefaultSW(3) }
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "The loaded software attribute."
+    ::= { swmLoadedEntry 4 }
+
+
+-- -------------------------------------------------------------
+-- Actions (swmActions)
+-- -------------------------------------------------------------
+
+swmAction OBJECT-TYPE
+    SYNTAX       INTEGER { loadRelease(1),
+                           startRelease(2),
+                           makeDefault(3),
+                           removeRelease(4) }
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "- loadRelease(1) downloads and installs a release specified by
+         an URL (or File, Host, Protocol, User, Password).
+
+         - startRelease(2) makes the node restart with a named Version 
+         which has previously been installed by using loadRelease;
+         the from-version must be set to default before upgrade.
+
+         - makeDefault(3) makes the current version default version.
+
+         - removeRelease(4) removes a Version, although a currentSW(1),
+         defaultSW(2) or currentDefaultSW(3) (object swmLoadedAttribute)
+         version cannot be removed
+
+         A notification (loadReleaseCompleted or removeReleaseCompleted) 
+         will be sent to indicate the end of a loadRelease(1) or 
+         removeRelease(4) action, and the status will be availabe in the 
+         swmActionStatus object. 
+         The results of other actions are directly returned.
+
+         Applicable parameters (objects swmActionVersion and/or 
+         swmActionURL) must be set before or in the same SNMP-SET as the          
+         action."
+    ::= { swmActions 1 }
+
+swmActionVersion OBJECT-TYPE
+    SYNTAX       DisplayString
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "The version of the software, which is required for startRelease(2),
+         and removeRelease(4)."
+    ::= { swmActions 2 }
+
+swmActionURL OBJECT-TYPE
+    SYNTAX       URLString
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "The location of the file to be downloaded,
+         e.g. 'tftp://host/file'.
+
+         Required for the loadRelease(1) action, and for the startRelease(2)
+         action in case the appointed software has not been loaded."
+    ::= { swmActions 3 }
+
+swmActionStatus OBJECT-TYPE
+    SYNTAX       INTEGER { loadReleaseInProgress(1),
+                           loadReleaseSuccess(2),
+                           loadReleaseHostNotFound(3),
+                           loadReleaseLoginIncorrect(4),
+                           loadReleaseNoSuchDirectory(5),
+                           loadReleaseNoSuchFile(6),
+                           loadReleaseErroneousUrl(7),
+                           loadReleaseError(8),
+                           removeReleaseInProgress(9),
+                           removeReleaseSuccess(10),
+                           removeReleaseError(11), 
+                           statusUnInitiated(12) }
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "The status of the current 'loadRelease(1)' or 'removeRelease(4)'
+         software action."
+    ::= { swmActions 4 }
+
+-- -------------------------------------------------------------
+-- Conformance Groups (swmGroups)
+-- -------------------------------------------------------------
+
+swmNotificationGroup NOTIFICATION-GROUP
+    NOTIFICATIONS {
+       loadReleaseCompleted,
+       removeReleaseCompleted
+       }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding notification description."
+    ::= { swmGroups 1 }
+
+swmNotificationObjectGroup OBJECT-GROUP
+    OBJECTS {
+       result
+       }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding object descriptions."
+    ::= { swmGroups 2 }
+
+swmObjectGroup OBJECT-GROUP
+    OBJECTS {
+--       swmLoadedIndex,
+       swmLoadedVersion,
+       swmLoadedType,
+       swmLoadedAttribute
+       }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding object descriptions."
+    ::= { swmGroups 3 }
+
+swmActionGroup OBJECT-GROUP
+    OBJECTS {
+       swmAction,
+       swmActionVersion,
+       swmActionURL,
+       swmActionStatus
+       }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding object descriptions."
+    ::= { swmGroups 4 }
+
+-- -------------------------------------------------------------
+-- Compliance Statement
+-- -------------------------------------------------------------
+
+swmSwmCompliance MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+	"The compliance statement for SNMP entities supported
+	 by this MIB"
+    MODULE -- this module
+		
+    GROUP swmNotificationGroup
+		DESCRIPTION
+		    "Implementation of this group is optional."
+				 
+	  GROUP swmNotificationObjectGroup
+		DESCRIPTION
+		    "Implementation of this group is optional."
+
+	  GROUP swmObjectGroup
+		DESCRIPTION
+		    "Implementation of this group is optional."
+
+		GROUP swmActionGroup DESCRIPTION 
+        "Implementation of this group is optional."
+
+    ::= { swmCompliance 1 }
+
+END
+
+

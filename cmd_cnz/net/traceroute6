@@ -1,0 +1,189 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2020 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       traceroute6
+# Description:
+# 	Wrapper script for traceroute6 command
+# Note:
+#       None.
+##
+# Usage: 
+#	traceroute6 [-nFV][-I interface] [-f first_ttl] 
+#		    [-m max_hops] [-p port] [-w timeout] 
+#		    [-q nqueries] [-S source_addr] [-g gateway] [-t tos] host [packetlen] 
+##
+# Output:
+#       Command print-out is printed on console.
+##
+# Changelog:
+# - Mon Apr 20 2020 - Bipin Polabathina (xbippol)
+#       First version.
+##
+
+# Load the apos common functions.
+. /opt/ap/apos/conf/apos_common.sh
+
+apos_intro $0
+
+# Global parameters
+TRACEROUTE6="/usr/sbin/traceroute6"
+OPTIONS=""
+OPTS="FnVf:I:m:p:w:q:S:g:t:"
+version="This is traceroute6 1.0"
+version+="\n"
+version+="Copyright (c) 2020 Ericsson"
+
+# Exit-codes
+exit_success=0
+exit_failure=1
+exit_usage=2
+exit_option=20
+
+# Functions
+
+show_version()
+{
+	echo -e "$version"
+}
+
+function usage() {
+echo -e "Usage: traceroute6 [-nFV][-I interface] [-f first_ttl] [-m max_hops] [-p port] [-w timeout] [-q nqueries] [-S source_addr] [-g gateway] [-t tos]  host [packetlen]"
+        echo  
+}
+
+
+function help()
+{
+        echo -e "Usage: traceroute6 [-nFV][-I interface] [-f first_ttl] [-m max_hops] [-p port] [-w timeout] [-q nqueries] [-S source_addr] [-g gateway] [-t tos] host [packetlen]"
+        echo -e "
+-F
+	Do not fragment probe packets
+-f first_ttl
+	Specifies with what TTL to start
+-I interface
+	Specifies the interface through which traceroute6 should send packets
+-m max_hops
+	Specifies maximum number of hops traceroute6 will probe
+-n 
+	Do not try to map IP address to host names
+-p port
+	For UDP tracing, specifies the host port base traceroute6 will use (the host port number will be incremented by each probe).
+	For ICMP tracing, specifies the initial icmp sequence value (incremented by each probe too).
+	For TCP specifies just the (constant) host port to connect
+-w timeout
+	Set time to wait for a response to a probe
+-q nqueries
+	Sets the number of probe packets per hop
+-S source_addr
+	Chooses an alternative source address
+-g gateway
+	Tells traceroute6 to add an IP source routing option to the outgoing packet that tells the network to route the packet through the  specified  gateway
+	For IPv6, the form of num,addr,addr... is allowed, where num is a route header type (default is type 2).
+-t tos
+	For IPv6, set the Traffic Control value.
+-V
+	Print version and exit
+"
+}
+
+# Main program
+interface=
+port=
+nqueries=
+ttl=
+max_ttl=
+timeout=
+source_addr=
+gateway=
+tos=
+num_args=$#
+
+
+if [ ! -f $TRACEROUTE6 ]; then
+        echo "Error when executing (general fault)"
+        exit $exit_failure
+fi
+
+	while getopts $OPTS option
+	do
+        	case $option in
+	        F)      # To set the dont-fragment bit
+        	        OPTIONS="$OPTIONS -F"
+        	;;
+        	f)      # Initial time-to-live for first outgoing packet
+                	ttl=$OPTARG
+                	OPTIONS="$OPTIONS -f $ttl"
+        	;;
+        	I)      # To specify interface through which traceroute6 sends packets
+	                interface=$OPTARG
+        	        OPTIONS="$OPTIONS -i $interface"
+        	;;
+        	m)      # To set maximum time-to-live used in outgoing probe packets
+                	max_ttl=$OPTARG
+                	OPTIONS="$OPTIONS -m $max_ttl"
+        	;;
+        	n)      # Numeric output only
+                	OPTIONS="$OPTIONS -n"
+        	;;
+        	p)      # Specify port number
+                	port=$OPTARG
+                	OPTIONS="$OPTIONS -p $port"
+        	;;
+        	w)      # Specify time out
+                	timeout=$OPTARG
+                	OPTIONS="$OPTIONS -w $timeout"
+        	;;
+        	q)      # number of probe packets per hop
+                	nqueries=$OPTARG
+                	OPTIONS="$OPTIONS -q $nqueries"
+        	;;
+        	S)      # Source address
+                	source_addr=$OPTARG
+                	OPTIONS="$OPTIONS -s $source_addr"
+        	;;
+        	g)      # gateway 
+                	gateway=$OPTARG
+                	OPTIONS="$OPTIONS -g $gateway"
+        	;;
+        	t)      # tos
+                	tos=$OPTARG
+                	OPTIONS="$OPTIONS -t $tos"
+        	;;
+        	V)      # Show version and exit
+                	#OPTIONS="$OPTIONS -V"
+                	show_version
+		        exit $exit_success
+        	;;
+		\?)	# Wrong option
+			echo "Illegal option"
+			usage
+			exit $exit_option
+		esac
+	done 2> /dev/null
+
+	if [[ $num_args == 0 ]]; then
+		echo "Incorrect usage"
+		usage
+		exit $exit_usage
+	fi 
+
+	shift $((OPTIND - 1))
+	rem_args="$@"
+
+	$TRACEROUTE6 $OPTIONS $rem_args 2> /dev/null
+	[ $? -ne 0 ] && {
+		echo "Incorrect usage"
+		usage
+		exit $exit_usage
+	}
+								
+				
+apos_outro $0
+exit $exit_success
+
+# End of file
+

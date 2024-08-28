@@ -1,0 +1,13 @@
+[Unit]
+Description=APOS recovery configuration
+
+Before=lde-failoverd.service
+Wants=rpcbind.service proc-fs-nfsd.mount
+After=network.target lde-prepare.target lde-network.service rsyslog.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/systemd/scripts/apos-recovery-conf.sh start
+
+[Install]
+WantedBy=lde-nodetype@control.target

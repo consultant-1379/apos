@@ -1,0 +1,754 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       rifls
+# Description:
+#       This script is to display all the configuration for
+#       Reliable Ethernet
+##
+# Usage:
+#     rifls
+### Changelog:
+# - Wed Nov 18 2020 - Neelam Kumar (xneelku)
+#          Updated to inhibit 'rifls' command in Cableless architecture
+# - Thu May 05 2016 - Luca De Simone (xludesi)
+#          Updated to inhibit 'rifls' command in SMX architecture
+#   PD1  - Feb 2015 by Swapnika Baradi (xswapba)
+#          Emptying log file each time Cmd is executing, TR_HT39650
+# - Thu 27 Nov 2014 - Madhu Muthyala (XMADMUT)
+#	Updated to inhibit rifls command in virtualized architecture
+#   PC2 29 Apr 2014 by Gianluigi Crispino (xgiacri)
+#	Support of "apos_common.sh" 
+#   PC1  - 24 Apr 2014   by Torgny Wilhelmsson (xtorwil)
+#          Introduction of CheckCableLess
+#   PB5  - 28 Mar 2014   by Torgny Wilhelmsson (xtorwil)
+#          Update with Public VLAN compatibility 
+#   PA31 - 2nd of December - by Luca Ruffini (XLUCRUF)
+#	   remove LOCAL_CLUSTER_CONF
+#   PA30 - 18th of November - by Luca Ruffini (XLUCRUF)
+#	   rework after internal man page review (PA7)
+#   PA29 - 14th of November - by Luca Ruffini (XLUCRUF)
+#          RIFRM REQUIRED instead of REBOOT REQUIRED
+#   PA28 - 11st of November - by Luca Ruffini (XLUCRUF)
+#          IP printout left-alignment
+#   PA27 - 07th of November - by Luca Ruffini (XLUCRUF)
+#          tab removed in printout
+#   PA26 - 06th of November - by Marco Zambonelli (XMARZAM)
+#          cleanup
+#   PA25 - 29th of October - by Luca Ruffini (XLUCRUF)
+#           UNKNOWN printout removed, common variables and functions moved to rif_common
+#   PA24 - 21st of October - by Luca Ruffini (XLUCRUF)
+#           rif_common  and apos_rif.conf handling
+#   PA23 - 3rd of October - by Torgny Wilhelmsson (XTORWIL)
+#           added to immstatus check || [ $IMM_STATUS -eq 20 ]
+#   PA22 - 1st of October - by Torgny Wilhelmsson (XTORWIL)
+#           changed debug to off
+#           one exit code misstake corrected
+#
+#   PA21 - 30th of September - by Torgny Wilhelmsson (XTORWIL)
+#           Removed reliance on ifconfig for printout status
+#
+#   PA20 - 27th of September - by Torgny Wilhelmsson (XTORWIL)
+#           Changed 'log' to 'INFO', added debug path
+#           Changed EXIT_INVALID_CC and EXIT_INVALID_IFCONFIG to invalid state
+#           added && [ $PEER_NODE_STATUS != "passivenodeisupbutnotallresourcesarerunning"  for extra allowance on node
+#
+# - Fri sep 6 2013 - Fabrizio Paglia (XFABPAG)
+#   - pings deleted
+# - Tue sep 3 2013 - Fabrizio Paglia (XFABPAG)
+#   - reversed order of the prcstate -l check and pings
+# - Fri aug 30 2013 - Fabrizio Paglia (XFABPAG)
+#   - changed "RELIABLE ETHERNET TABLE" in "RELIABLE PUBLIC INTERFACE TABLE"
+#   - removed the ending '.' from exit codes printout
+# - Fri aug 30 2013 - Fabrizio Paglia (XFABPAG)
+#   - added "unofficial" exit code 21 if executed on not active node
+#   - added prcstate -l check of the passive node after ping to avoid communication problems
+# - Thu aug 29 2013 - Fabrizio Paglia (XFABPAG)
+#   - redirect stderr to /dev/null in all ssh commands... to avoid connection related error messages
+# - Wed aug 28 2013 - Fabrizio Paglia (XFABPAG)
+#   - exit code 4 printout changed
+#   - node status listing modified
+# - Wed aug 28 2013 - Fabrizio Paglia (XFABPAG)
+#   - handling of teamingStatus values introduced by RIFRM
+# - Mon aug 26 2013 - Fabrizio Paglia (XFABPAG)
+#   - printouts modified
+#   - exit code 5 modified, exit code 6 added
+# - Fri aug 16 2013 - Fabrizio Paglia (XFABPAG)
+#   - don't check bond alias status if node is in passive mode
+#   - check of peer connectivity first on the public interface, and in case of failure on the internal interface
+# - Mon aug 12 2013 - Fabrizio Paglia (XFABPAG)
+#   - added consistency check between local /cluster/etc/cluster.conf and global /boot/.cluster.conf
+#   - re-arranged exit codes
+# - Wed aug  7 2013 - Fabrizio Paglia (XFABPAG)
+#   - added check of IPs with which bond interface is configured
+# - Tue aug  6 2013 - Fabrizio Paglia (XFABPAG)
+#   - re-arrange of the command flow and exit codes
+# - Wed jul 31 2013 - Fabrizio Paglia (XFABPAG)
+#   - global variables for all expected values
+#   - checking of the public IP assigned to the bond interface
+#   - diagnostic (ar)ping of the peer node via public interface (not via back-plane)
+#   - log events
+# - Fri jul 26 2013 - Fabrizio Paglia (XFABPAG)
+#       First version.
+##
+
+RIF_COMMON=$(dirname $0)/rif_common
+. $RIF_COMMON
+
+_RIFLS_VER="PD1"
+
+# Global Parameters
+EXPECTED_BOND_NAME="bond1"
+EXPECTED_BOND_FIRST_INTERFACE="eth0"
+EXPECTED_BOND_SECOND_INTERFACE="eth1"
+EXPECTED_BOND_ALIAS_NAME="bond1:1"
+
+# Global variables
+OK_KO[0]="KO"
+OK_KO[1]="OK"
+
+YES_NO[0]="NO"
+YES_NO[1]="YES"
+
+localNodeStatus=-1
+remoteNodeStatus=-1
+global_rifls_state=-1
+
+### Config states and relevant return values
+state_notconf_string="NOT DEFINED"
+return_notconf=0
+state_conf_string="DEFINED"
+return_conf=1
+state_partdef_string="DEFINING"
+return_partdef=2
+state_partrem_string="REMOVING"
+return_partrem=3
+state_rifls_failed_string="FAILED"
+return_rifls_failed=4
+exit_virtual_arch_string="Illegal command in this system configuration"
+exit_virtual_arch=44
+
+## these state should be obsolete now
+state_conf_reboot_string="DEFINED (RIFRM REQUIRED)"
+state_notconf_reboot_string="NOT DEFINED (RIFRM REQUIRED)"
+state_UNKNOWN_string="UNKNOWN"
+state_partdef_reboot_string="PARTLY DEFINED (REBOOT REQUIRED)"
+state_partrem_reboot_string="PARTLY REMOVED (REBOOT REQUIRED)"
+state_partdef_rifdef_string="PARTLY DEFINED (RIFDEF REQUIRED)"
+state_partrem_rifrm_string="PARTLY REMOVED (RIFRM REQUIRED)"
+
+#### Functions #######################################################
+
+
+
+### Set some variables #######################################################
+function rifls_initvar() {
+
+    if [ $LNODE -eq 1 ] ; then
+        THIS_NODE_LETTER="A"
+        PEER_NODE_LETTER="B"
+    else
+        THIS_NODE_LETTER="B"
+        PEER_NODE_LETTER="A"
+    fi
+
+    IF_OWN_STATUS=-1
+    IF_PEER_STATUS=-1
+    RIF_OWN_STATUS=-1
+    RIF_PEER_STATUS=-1
+    CC_OWN_STATUS=-1
+    CC_PEER_STATUS=-1
+
+
+   if [ "$_DEBUG" == "on" ] ; then
+    CheckLogPath $LOG_DIR
+        F_INFO="$LOG_DIR/$LOG_FILE"
+	echo "" > $F_INFO
+   else
+        F_INFO="/dev/null"
+   fi
+   
+
+   Public_VLAN_NO=''
+   NETWORK='public'
+   Public_VLAN_NO=$(${CMD_GREP} ^ip $CLUSTER_CONF | ${CMD_GREP} -w $NETWORK | ${CMD_HEAD} -1 | ${CMD_AWK} '{ print $3}' | ${CMD_AWK} -F'.' '{ print $2 }')
+   if [ $Public_VLAN_NO ] ; then 
+      EXPECTED_BOND_NAME="bond1.$Public_VLAN_NO"
+      EXPECTED_BOND_ALIAS_NAME="bond1.$Public_VLAN_NO:1"
+   fi
+   
+   INFO "[$(date +'%Y-%m-%d %H:%M:%S')] $LINENO: RIFLS -- Execution started on node "$THIS_NODE_NAME" ($LextIP)"
+ }
+
+
+function node_config_status(){
+    TRACE_ENTER $FUNCNAME
+
+    INFO "$LINENO: Checking consistency of local/global cluster.conf on own node..."
+    CC_OWN_CONSISTENT=$(local_global_cluster_config_consistency_check "this")
+    if [ $CC_OWN_CONSISTENT -eq 0 ] ; then
+        log_error "Inconsistent cluster configuration!"
+	global_rifls_state=$return_rifls_failed
+	print_status
+	exit $exit_success
+    fi
+    INFO "$LINENO: Consistent cluster configuration => "${YES_NO[$CC_OWN_CONSISTENT]}
+
+
+    INFO "$LINENO: Checking cluster configuration on own node..."
+    CC_OWN_STATUS=$(cluster_config_status "this")
+    if  ( [ $CC_OWN_STATUS -ne 0 ] && [ $CC_OWN_STATUS -ne 1 ] ) ; then
+        log_error "Unexpected cluster configuration!"
+	global_rifls_state=$return_rifls_failed
+	print_status
+	exit $exit_success
+    fi
+    INFO "$LINENO: Cluster configuration => "${OK_KO[$CC_OWN_STATUS]}
+
+    if [ "$_DEBUG" == "on" ] ; then
+        INFO "$LINENO: Checking ifconfig status on own node..."
+        IF_OWN_STATUS=$(rifls_ifconfig_status "this")
+        if [ $IF_OWN_STATUS -ne 0 ] && [ $IF_OWN_STATUS -ne 1 ] ; then
+            log_error "Unexpected ifconfig status!"
+	    global_rifls_state=$return_rifls_failed
+	    print_status
+	    exit $exit_success
+        fi
+        INFO "$LINENO: ifconfig status => "${OK_KO[$IF_OWN_STATUS]}
+    fi
+    
+    TRACE_LEAVE $FUNCNAME
+}
+
+function cluster_config_status() {
+    TRACE_ENTER $FUNCNAME
+    if [ $1 == "this" ] ; then
+        CLUSTER_CONFIG=$CMD_CLUSTER_CONF
+    else
+        CLUSTER_CONFIG="ssh $PEER_NODE_NAME $CMD_CLUSTER_CONF"
+    fi
+
+#XLUCRUF : CHECK IPTABLE!!!!!!
+    bond_configured=0
+    bond_properly_configured=0
+    bond_properly_ips=0
+    alias_configured=0
+    mip_configured=0
+    mip_properly_configured=0
+
+    bond_configured=$(cluster_config_bond_status)
+    INFO "$LINENO: Interface "$EXPECTED_BOND_NAME" configured => "${YES_NO[$bond_configured]}
+    if [ $bond_configured -ne 0 ] ; then
+        bond_properly_configured=$(cluster_config_check_bond_configuration)
+        INFO "$LINENO: Interface "$EXPECTED_BOND_NAME" configuration => "${OK_KO[$bond_properly_configured]}
+        bond_properly_ips=$(cluster_config_check_bond_ips)
+        INFO "$LINENO: Interface "$EXPECTED_BOND_NAME" configured with nodes public IP => "${YES_NO[$bond_properly_ips]}
+        alias_configured=$(cluster_config_alias_status)
+        INFO "$LINENO: Alias interface "$EXPECTED_BOND_ALIAS_NAME" configuration => "${OK_KO[$alias_configured]}
+        if [ $alias_configured -ne 0 ] ; then
+            mip_configured=$(cluster_config_mip_status)
+            INFO "$LINENO: MIP configured => "${YES_NO[$mip_configured]}
+            if [ $mip_configured -ne 0 ] ; then
+                mip_properly_configured=$(cluster_config_check_mip_configuration)
+                INFO "$LINENO: MIP configuration => "${OK_KO[$mip_properly_configured]}
+            fi
+        fi
+    fi
+
+    (( checksum = $bond_configured + $bond_properly_configured + $bond_properly_ips + $alias_configured + $mip_configured + $mip_properly_configured ))
+
+    if [ $checksum -eq 0 ] ; then
+        echo 0
+    elif [ $checksum -eq 6 ] ; then
+        echo 1
+    else
+        echo 2
+        log_error "Unexpected clusterconfig status!"
+    fi
+    TRACE_LEAVE $FUNCNAME
+}
+
+function cluster_config_bond_status() {
+    TRACE_ENTER $FUNCNAME
+    bond_conf_line=$($CLUSTER_CONFIG interface -D 2>/dev/null | grep -i "$EXPECTED_BOND_NAME bonding")
+
+    if [ ! -z $(echo $bond_conf_line | tr -d ' ') ] ; then
+        echo 1
+    else
+        echo 0
+    fi
+    TRACE_LEAVE $FUNCNAME
+}
+
+function cluster_config_check_bond_configuration() {
+    TRACE_ENTER $FUNCNAME
+    bond_conf_line=$($CLUSTER_CONFIG interface -D 2>/dev/null | grep -i "$EXPECTED_BOND_NAME bonding")
+    bond_conf_components=($bond_conf_line)
+
+    if [ ${#bond_conf_components[@]} -eq 7 ] ; then
+        control_keyword=${bond_conf_components[2]}
+        bond_name=${bond_conf_components[3]}
+        bonding_keyword=${bond_conf_components[4]}
+        first_eth=${bond_conf_components[5]}
+        second_eth=${bond_conf_components[6]}
+
+        if [ $control_keyword == "control" ] && [ $bond_name == $EXPECTED_BOND_NAME ] && [ $bonding_keyword == "bonding" ] && [ $first_eth == $EXPECTED_BOND_FIRST_INTERFACE ] && [ $second_eth == $EXPECTED_BOND_SECOND_INTERFACE ] ; then
+            echo 1
+        else
+            echo 0
+        fi
+    else
+        echo 0
+    fi
+    TRACE_LEAVE $FUNCNAME
+}
+
+function cluster_config_check_bond_ips() {
+    TRACE_ENTER $FUNCNAME
+    bond_this_ip_line=$($CLUSTER_CONFIG ip -D 2>/dev/null | grep -i "$LNODE\s$EXPECTED_BOND_NAME\spublic\s$LextIP")
+
+    if [ ! -z $(echo $bond_this_ip_line | tr -d ' ') ] ; then
+        bond_peer_ip_line=$($CLUSTER_CONFIG ip -D 2>/dev/null | grep -i "$RNODE\s$EXPECTED_BOND_NAME\spublic\s$RextIP")
+
+        if [ ! -z $(echo $bond_peer_ip_line | tr -d ' ') ] ; then
+            echo 1
+        else
+            echo 0
+        fi
+    else
+        echo 0
+    fi
+    TRACE_LEAVE $FUNCNAME
+}
+
+function cluster_config_alias_status() {
+    TRACE_ENTER $FUNCNAME
+    bond_alias_conf_line=$($CLUSTER_CONFIG interface -D 2>/dev/null | grep -i "$EXPECTED_BOND_ALIAS_NAME alias")
+
+    if [ ! -z $(echo $bond_alias_conf_line | tr -d ' ') ] ; then
+        echo 1
+    else
+        echo 0
+    fi
+    TRACE_LEAVE $FUNCNAME
+}
+
+function cluster_config_mip_status() {
+    TRACE_ENTER $FUNCNAME
+    mip_conf_line=$($CLUSTER_CONFIG mip -D 2>/dev/null | grep -i "nbi")
+
+    if [ ! -z $(echo $mip_conf_line | tr -d ' ') ] ; then
+        echo 1
+    else
+        echo 0
+    fi
+    TRACE_LEAVE $FUNCNAME
+}
+
+function cluster_config_check_mip_configuration() {
+    TRACE_ENTER $FUNCNAME
+    mip_conf_line=$($CLUSTER_CONFIG mip -D 2>/dev/null | grep -i "nbi")
+    mip_conf_components=($mip_conf_line)
+
+    if [ ${#mip_conf_components[@]} -eq 7 ] ; then
+        bond_alias_name=${mip_conf_components[4]}
+
+        if [ $bond_alias_name == $EXPECTED_BOND_ALIAS_NAME ] ; then
+            echo 1
+        else
+            echo 0
+        fi
+    else
+        echo 0
+    fi
+    TRACE_LEAVE $FUNCNAME
+}
+
+function rifls_ifconfig_status() {
+    TRACE_ENTER $FUNCNAME
+    if [ $1 == "this" ] ; then
+        IFCONFIG=$CMD_IFCONFIG
+        PRCSTATE=$CMD_PRCSTATE
+    else
+        IFCONFIG="ssh $PEER_NODE_NAME $CMD_IFCONFIG"
+        PRCSTATE="ssh $PEER_NODE_NAME $CMD_PRCSTATE"
+    fi
+
+    bond_interface_up=0
+    bond_interface_properly_configured=0
+    alias_interface_up=0
+
+    bond_interface_up=$(ifconfig_bond_status)
+    INFO "$LINENO: Interface $EXPECTED_BOND_NAME up => "${YES_NO[$bond_interface_up]}
+    if [ $bond_interface_up -ne 0 ] ; then
+        bond_interface_properly_configured=$(ifconfig_check_bond_configuration $1)
+        INFO "$LINENO: Interface $EXPECTED_BOND_NAME configured with public IP => "${YES_NO[$bond_interface_properly_configured]}
+
+        if [ $($PRCSTATE) == "active" ] ; then
+            alias_interface_up=$(rifls_ifconfig_alias_status)
+            INFO "$LINENO: Alias interface $EXPECTED_BOND_ALIAS_NAME up => "${YES_NO[$alias_interface_up]}
+        else
+            alias_interface_up=1 #if node is passive, set to 1 anyway... because mip interface is up only for active node
+        fi
+    fi
+
+    (( checksum = $bond_interface_up + $bond_interface_properly_configured + $alias_interface_up ))
+
+    if [ $checksum -eq 0 ] ; then
+        echo 0
+    elif [ $checksum -eq 3 ] ; then
+        echo 1
+    else
+        echo 2
+    fi
+    TRACE_LEAVE $FUNCNAME
+}
+
+function ifconfig_bond_status() {
+    TRACE_ENTER $FUNCNAME
+    bond_conf_lines=$($IFCONFIG $EXPECTED_BOND_NAME 2>/dev/null | head -2)
+
+    if [ $(echo -e "$bond_conf_lines" | wc -l) -eq 2 ] ; then
+        echo 1
+    else
+        echo 0
+    fi
+    TRACE_LEAVE $FUNCNAME
+}
+
+function ifconfig_check_bond_configuration() {
+    TRACE_ENTER $FUNCNAME
+    if [ $1 == "this" ] ; then
+        expected_ip=$LextIP
+    else
+        expected_ip=$RextIP
+    fi
+
+    bond_conf_lines=$($IFCONFIG $EXPECTED_BOND_NAME 2>/dev/null | head -2)
+    bond_conf_line=$(echo -e "$bond_conf_lines" | tail -n -1)
+    bond_conf_line_components=($bond_conf_line)
+    bond_ip=${bond_conf_line_components[1]:5}
+    if [ $bond_ip ] && [ $bond_ip == $expected_ip ] ; then
+        echo 1
+    else
+        echo 0
+    fi
+    TRACE_LEAVE $FUNCNAME
+}
+
+function rifls_ifconfig_alias_status() {
+    TRACE_ENTER $FUNCNAME
+    bond_alias_conf_line=$($IFCONFIG $EXPECTED_BOND_NAME 2>/dev/null | head -1)
+
+    if [ ! -z $(echo $bond_alias_conf_line | tr -d ' ') ] ; then
+        echo 1
+    else
+        echo 0
+    fi
+    TRACE_LEAVE $FUNCNAME
+}
+
+function imm_status() {
+    TRACE_ENTER $FUNCNAME
+    imm_object_name=$($CMD_IMMFIND -c NorthBound | head -1)
+
+    if [ -z $imm_object_name ] ; then
+        echo "$exit_failure_string"
+        exit $exit_failure
+    fi
+
+    teaming_status=$($CMD_IMMLIST $imm_object_name | grep teamingStatus | awk '{ print $3}')
+    if [ -z $teaming_status ] ; then
+        teaming_status=0
+    fi
+
+    echo $teaming_status
+    TRACE_LEAVE $FUNCNAME
+}
+
+
+function local_global_cluster_config_consistency_check() {
+    TRACE_ENTER $FUNCNAME
+    if [ $1 == "this" ] ; then
+        diff $CLUSTER_CONF $GLOBAL_CLUSTER_CONF &> /dev/null
+    else
+        ssh $PEER_NODE_NAME diff $CLUSTER_CONF $GLOBAL_CLUSTER_CONF &> /dev/null
+    fi
+
+    if [ $? -eq 0 ] ; then
+        echo 1
+    else
+        echo 0
+    fi
+    TRACE_LEAVE $FUNCNAME
+}
+
+function print_incorrect_usage() {
+    echo -n "Incorrect usage"
+    rifls_help
+}
+
+function rifls_help() {
+    echo -e "\nUsage: rifls"
+}
+
+function print_not_active() {
+    echo -e "$exit_NodeNotActive_String"
+}
+
+function print_status() {
+    TRACE_ENTER $FUNCNAME
+
+    echo -e "RELIABLE PUBLIC INTERFACE STATE\n"
+
+    echo "NODE  IP ADDRESS         STATE"
+
+# tab removed, printout obtained using only blank spaces:
+# NODE      IP ADDRESS    STATE
+# A    xxx.xxx.xxx.xxx    DEFINED
+# B        xx.xx.xx.xx    DEFINED
+	setPrintoutString
+    normalizedIP=$(printf "%-15s" $LextIP)
+    echo "$THIS_NODE_LETTER     $normalizedIP    $printoutstring"
+
+    normalizedIP=$(printf "%-15s" $RextIP)
+    echo "$PEER_NODE_LETTER     $normalizedIP    $printoutstring"
+
+    INFO "$LINENO: RIFLS -- Execution ended on node "$THIS_NODE_NAME" ($LextIP)"
+
+	
+    TRACE_LEAVE $FUNCNAME
+}
+
+function setPrintoutString() {
+    TRACE_ENTER $FUNCNAME
+	printoutstring=$state_rifls_failed_string
+	case $global_rifls_state in
+		$return_notconf ) 
+		printoutstring=$state_notconf_string
+		;;
+		$return_conf )
+		printoutstring=$state_conf_string
+		;;
+		$return_partdef )
+		printoutstring=$state_partdef_string
+		;;
+		$return_partrem )
+		printoutstring=$state_partrem_string
+		;;
+	esac
+    TRACE_LEAVE $FUNCNAME
+}
+
+##
+# Name:
+#	check_node_status
+# Description:
+#       Compares timestamp of last change in the given node with the 
+#    actual one, in order to know if a pre-existing incomplete configuration
+#    is still ongoing or can be deleted
+# Output:
+#	0 (return_notconf) if not configured -> NOT DEFINED
+#	1 (return_conf) if configured -> DEFINED
+#	2 (return_partdef) if partly configured and configuration ongoing -> DEFINING
+#	3 (return_partrem) if partly configured and removal ongoing -> REMOVING
+#	4 (return_rifls_failed) if partly configured and timestamp older than MAX_LATENCY_TIME -> FAILED
+#	4 (return_rifls_failed) if unexpected state -> FAILED
+function check_node_status(){
+    TRACE_ENTER $FUNCNAME
+    
+    get_apos_rif_state 1
+    localNodeStatus=$?
+    get_apos_rif_state 2
+    remoteNodeStatus=$?
+    CC_PEER_STATUS=$remoteNodeStatus
+    get_apos_rif_timestamp 1
+    localNodeTimestamp=$ReturnTimestampValue
+    get_apos_rif_timestamp 2
+    remoteNodeTimestamp=$ReturnTimestampValue
+    timestamp=$(date +%s)
+    INFO "$LINENO: Checking IMM status..."
+    IMM_STATUS=$(imm_status)
+
+	if [ $IMM_STATUS -eq 1 ] ; then   # CONFIGURED/PARTLY REMOVED
+        # If you are here it means that rif_status == 1, and the return value is evaluated
+        #     according to the following table ("xx" is any intermediate state):
+        # __________________________________
+        # | Node A | Node B | Return value |
+        # |--------+--------+--------------|
+        # |   1    |   1    |      1       |
+        # |--------+--------+--------------|
+        # |   0    |  xx    | 4 if TS>MAX* |
+        # |  xx    |   0    | 3 if TS<MAX* |
+        # |  xx    |  xx    |              |
+        # |--------+--------+--------------|
+        # |   0    |   1    |      4       |
+        # |   1    |   0    |      4       |
+        # |   0    |   0    |      4       |
+        # |   1    |  xx    |      4       |
+        # |  xx    |   1    |      4       |
+        # |________________________________|
+        #
+        # *) TS=timestamp / MAX=MAX_LATENCY_TIME
+
+        if [ $localNodeStatus -eq 1 ] && [ $remoteNodeStatus -eq 1 ] ; then
+            returnValue=$return_conf
+        elif ( [ $localNodeStatus -ne 1 ] && [ $remoteNodeStatus -eq 1 ] ) ||\
+		       ( [ $localNodeStatus -eq 1 ] && [ $remoteNodeStatus -ne 1 ] ) ||\
+		       ( [ $localNodeStatus -eq 0 ] && [ $remoteNodeStatus -eq 0 ] ) ; then
+            returnValue=$return_rifls_failed
+        elif [ $localNodeStatus -eq 0  ] && [ $(($timestamp-$remoteNodeTimestamp)) -gt $MAX_LATENCY_TIME ] ; then
+            returnValue=$return_rifls_failed
+        elif [ $remoteNodeStatus -eq 0  ] && [ $(($timestamp-$localNodeTimestamp)) -gt $MAX_LATENCY_TIME ] ; then
+            returnValue=$return_rifls_failed
+        elif [ $(($timestamp-$remoteNodeTimestamp)) -gt $MAX_LATENCY_TIME ] || [ $(($timestamp-$localNodeTimestamp)) -gt $MAX_LATENCY_TIME ] ; then
+            returnValue=$return_rifls_failed
+        else
+            returnValue=$return_partrem
+        fi
+    else #[ $IMM_STATUS -eq 0 ] # NOT CONFIGURED/PARTLY CONFIGURED
+    	# If you are here it means that rif_status == 0, and the return value is evaluated
+        #     according to the following table ("xx" is any intermediate state):
+        # __________________________________
+        # | Node A | Node B | Return value |
+        # |--------+--------+--------------|
+        # |   0    |   0    |      0       |
+        # |--------+--------+--------------|
+        # |   1    |  xx    | 2 if TS>MAX* |
+        # |  xx    |   1    | 3 if TS<MAX* |
+        # |  xx    |  xx    |              |
+        # |--------+--------+--------------|
+        # |   0    |   1    |      4       |
+        # |   1    |   0    |      4       |
+        # |   0    |   0    |      4       |
+        # |   0    |  xx    |      4       |
+        # |  xx    |   0    |      4       |
+        # |________________________________|
+        #
+        # *) TS=timestamp / MAX=MAX_LATENCY_TIME
+
+        if [ $localNodeStatus -eq 0 ] && [ $remoteNodeStatus -eq 0 ] ; then
+            returnValue=$return_notconf
+        elif ( [ $localNodeStatus -ne 0 ] && [ $remoteNodeStatus -eq 0 ] ) ||\
+		       ( [ $localNodeStatus -eq 0 ] && [ $remoteNodeStatus -ne 0 ] ) ||\
+		       ( [ $localNodeStatus -eq 1 ] && [ $remoteNodeStatus -eq 1 ] ) ; then
+            returnValue=$return_rifls_failed 
+        elif [ $localNodeStatus -eq 1  ] && [ $(($timestamp-$remoteNodeTimestamp)) -gt $MAX_LATENCY_TIME ] ; then
+            returnValue=$return_rifls_failed 
+        elif [ $remoteNodeStatus -eq 1  ] && [ $(($timestamp-$localNodeTimestamp)) -gt $MAX_LATENCY_TIME ] ; then
+            returnValue=$return_rifls_failed 
+        elif [ $(($timestamp-$remoteNodeTimestamp)) -gt $MAX_LATENCY_TIME ] || [ $(($timestamp-$localNodeTimestamp)) -gt $MAX_LATENCY_TIME ] ; then
+            returnValue=$return_rifls_failed 
+        else
+            returnValue=$return_partdef
+        fi
+    fi
+    INFO  returnValueIs $returnValue
+
+    CC_OWN_STATUS=$localNodeStatus
+    CC_PEER_STATUS=$remoteNodeStatus
+    TRACE_LEAVE $FUNCNAME
+    return $returnValue
+} 
+
+##############################################################################
+#################################### Main ####################################
+##############################################################################
+
+# Set the interpreter to exit if a non-initialized variable is used.
+set -u
+
+shelf_arch_val=$(get_shelf_architecture_attr)
+
+## New function for virtualization
+if [ $shelf_arch_val -eq 3 ]; then
+	echo -e "$exit_virtual_arch_string"
+	echo -e
+	exit $exit_virtual_arch
+fi
+
+## Inhibit command execution in SMX and Cableless architecture
+if [[ $shelf_arch_val -eq 4 || $(get_oam_access_attr) -eq 1 ]]; then
+	echo -e "$exit_CableLessDefined_string"
+	echo -e
+	exit $exit_CableLessDefined
+fi
+
+cnt=$#
+if [ $cnt -gt 0 ] ; then
+    print_incorrect_usage
+    exit $exit_usage
+fi
+
+if [ $($CMD_PRCSTATE) != "active" ] ; then
+    print_not_active
+    exit $exit_NodeNotActive
+fi
+
+
+#####   Initialization of vars xxx_node_letter, rif_xxx_status and debug
+rifls_initvar
+
+
+
+########## Check of IMM Status ##########
+#implemented in the following function
+#INFO "$LINENO: Checking IMM status..."
+#IMM_STATUS=$(imm_status)
+
+if [ $(get_oam_access_attr) -eq 1 ]; then
+   # CableLess configuration detected, always print Configured
+	global_rifls_state=$return_conf
+	print_status
+	exit $exit_success
+fi
+
+# check status from apos_rif.conf:
+check_node_status
+case $? in
+	0 ) 
+	# states are all equal to 0
+	global_rifls_state=$return_notconf
+	;;
+	1 )
+	# states are all equal to 1
+	global_rifls_state=$return_conf
+	;;
+	2 )
+	# states are correct and intermediate, and timestamp is closer than MAX_LATENCY
+	global_rifls_state=$return_partdef
+	print_status
+	exit $exit_success
+	;;
+	3 )
+	# states are correct and intermediate, and timestamp is closer than MAX_LATENCY
+	global_rifls_state=$return_partrem
+	print_status
+	exit $exit_success
+	;;
+	4 )
+	# states are not correct, or states are correct and intermediate, but timestamp is too old
+	global_rifls_state=$return_rifls_failed
+	print_status
+	exit $exit_success
+	;;
+esac
+ 
+INFO "$LINENO: IMM status => "$IMM_STATUS
+########## Check of IMM Status end ##########
+
+
+########## Check of Cluster Config and IFCONFIG Status on own node ##########
+########## Use content of apos_rif.conf file for peer node         ##########
+node_config_status
+
+print_status
+
+exit $exit_success
+##############################################################################
+#### END OF SCRIPT ### END OF SCRIPT ### END OF SCRIPT ### END OF SCRIPT #####
+##############################################################################

@@ -1,0 +1,1227 @@
+<?xml version="1.0" encoding="utf-8"?><!-- 
+  Copyright (c) 2011 Ericsson AB.
+  All rights reserved
+
+  DX ECIM Tool-chain generated this file on Oct 7, 2011 4:30:45 PM using 
+    * coremw.m2m (1.3.0.Release)
+    * coremw.m2t (1.3.0.Release)
+    * coremw.dsl (1.3.0.Release)
+    * coremw.imm (1.3.0.Release)
+--><imm:IMM-contents xmlns:imm="http://www.saforum.org/IMMSchema" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.saforum.org/IMMSchema SAI-AIS-IMM-XSD-A.01.01.xsd">
+
+	<object class="Role">
+        <dn>roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value> </value>
+        </attr>
+	     <attr>
+            <name>roleName</name>
+            <value>MscCpSystemAdministrator</value>
+        </attr>
+	</object>
+   
+    <object class="Rule">
+        <dn>ruleId=MscSaTop_1,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read only permission to ManagedElement MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement</value>
+        </attr>
+    </object>   
+
+	<object class="Rule">
+        <dn>ruleId=MscSaFunctions_1,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read only permission to AxeFunctions MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaHealthCheck_1,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-Write-Execute permissions to Health Check Management function MOM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,HealthCheckM,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaSystemHandling_1,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC SystemHandling</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaCpFileSystem_1,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to MOC CpFileSystemM MOM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,CpFileSystemM,*</value>
+        </attr>
+    </object>
+	
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaAlphaDevice_1,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read and action execute permissions to MOC AlphanumericDeviceM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>5</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,*</value>
+        </attr>
+    </object>
+	
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_1,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder etc used to export timezone information on File Transfer session</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=etc,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_2,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to the folder cp and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,*</value>
+        </attr>
+    </object>
+	
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_3,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/mml and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_4,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder cp/mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_5,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_6,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/files and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_7,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in cp/files</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_8,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/files</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_9,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/printouts and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=printouts.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_10,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder cp/printouts</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=printouts,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_11,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/printouts</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=printouts,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_12,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to the folder health_check and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=health_check,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_13,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder health_check and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=health_check.*</value>
+        </attr>
+    </object>	
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_14,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder health_check</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=health_check,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_15,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder health_check</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=health_check,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_16,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to the folder health_check and subtree (under data_transfer)</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=health_check,*</value>
+        </attr>
+    </object>
+		
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_17,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder data_transfer/source/health_check and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=health_check.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_18,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder data_transfer/source/health_check</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=health_check,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_19,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder data_transfer/source/health_check</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=health_check,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_20,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to the folder sw_package/CP and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=CP,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_21,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder sw_package/CP and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=CP.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_22,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder sw_package/CP</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=CP,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaFileManagement_23,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder sw_package/CP</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=CP,FileInformation,*</value>
+        </attr>
+    </object>
+
+        <object class="Rule">
+        <dn>ruleId=MscSaFileManagement_24,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to the folder /support_data and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,*</value>
+        </attr>
+    </object>
+
+        <object class="Rule">
+        <dn>ruleId=MscSaFileManagement_25,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder /support_data and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data.*</value>
+        </attr>
+    </object>
+
+        <object class="Rule">
+        <dn>ruleId=MscSaFileManagement_26,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder /support_data</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileGroup,*</value>
+        </attr>
+    </object>
+
+        <object class="Rule">
+        <dn>ruleId=MscSaFileManagement_27,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder /support_data</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSaApCmd_1,roleId=MscCpSystemAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Execute permission to some AP commands</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>regexp:acease|alist|alogfind|bupidls|cfeted|clhls|cmdlls|cpdtest|cpfls|cpfrm|cqrhils|cqrhlls|crdls|fixerls|misclhls|mml|tesrvls|mktr</value>
+        </attr>
+    </object>
+	
+	<object class="Role">
+        <dn>roleId=MscCpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value> </value>
+        </attr>
+	     <attr>
+            <name>roleName</name>
+            <value>MscCpSecurityAdministrator</value>
+        </attr>
+	</object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSecTop_1,roleId=MscCpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to ManagedElement MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSecFunctions_1,roleId=MscCpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to AxeFunctions MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSecSystemHandling_1,roleId=MscCpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC SystemHandling</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling</value>
+        </attr>
+    </object>
+	
+	
+	<object class="Rule">
+        <dn>ruleId=MscSecAlphaDevice_1,roleId=MscCpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read and action execute permissions to MOC AlphanumericDeviceM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>5</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscSecApCmd_1,roleId=MscCpSecurityAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Execute permission to AP command mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>regexp:mml</value>
+        </attr>
+    </object>
+	
+	<object class="Role">
+        <dn>roleId=MscCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value> </value>
+        </attr>
+	     <attr>
+            <name>roleName</name>
+            <value>MscCpPrivacyOperator</value>
+        </attr>
+	</object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscPriTop_1,roleId=MscCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC ManagedElement</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement</value>
+        </attr>
+    </object>
+
+	<object class="Rule">
+        <dn>ruleId=MscPriFunctions_1,roleId=MscCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC AxeFunctions</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscPriSystemHandling_1,roleId=MscCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC SystemHandling</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscPriAlphaDevice_1,roleId=MscCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read and action execute permissions to MOC AlphanumericDeviceM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>5</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscPriFileManagement_1,roleId=MscCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder etc used to export timezone information on File Transfer session</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=etc,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscPriFileManagement_2,roleId=MscCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to the folder cp and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscPriFileManagement_3,roleId=MscCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/mml and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscPriFileManagement_4,roleId=MscCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder cp/mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscPriFileManagement_5,roleId=MscCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscPriApCmd_1,roleId=MscCpPrivacyOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Execute permission to AP command mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>regexp:mml</value>
+        </attr>
+    </object>
+	
+	<object class="Role">
+        <dn>roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value> </value>
+        </attr>
+	     <attr>
+            <name>roleName</name>
+            <value>MscCpOperator</value>
+        </attr>
+	</object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeTop_1,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC ManagedElement</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeFunctions_1,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC AxeFunctions</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeSystemHandling_1,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to MOC SystemHandling</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeHealthCheck_1,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to Health Check Management function MOM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,HealthCheckM</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeHealthCheck_2,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to Category and it's child Mos under Health Check Management function MOM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,HealthCheckM,Category,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeHealthCheck_3,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to Job and it's child Mos under Health Check Management function MOM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,HealthCheckM,Job,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeHealthCheck_4,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to RuleFileManager MOM and it's child Mos</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,HealthCheckM,RuleFileManager,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeCpFileSystem_1,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to CpFileSystemM MOM and it's child MOs</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,CpFileSystemM,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeAlphaDevice_1,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read and action execute permissions to MOC AlphanumericDeviceM</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>5</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeFileManagement_1,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder etc used to export timezone information on File Transfer session</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=etc,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeFileManagement_2,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to the folder cp and subtree</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeFileManagement_3,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/mml and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeFileManagement_4,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in folder cp/mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeFileManagement_5,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,*</value>
+        </attr>
+    </object>
+		
+	<object class="Rule">
+        <dn>ruleId=MscOpeFileManagement_6,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read-only access to folder cp/files and full access to folders and files present in it</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files.*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeFileManagement_7,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any folder in cp/files</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files,FileGroup,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeFileManagement_8,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Full access to create any file in folder cp/files</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>7</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=files,FileInformation,*</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscOpeApCmd_1,roleId=MscCpOperator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Execute permission to some AP commands</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>regexp:alist|cpdtest|cpfls|cpfrm|crdls|fixerls|misclhls|mml</value>
+        </attr>
+    </object>
+	
+	<object class="Role">
+        <dn>roleId=MscCpChargingAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value> </value>
+        </attr>
+	     <attr>
+            <name>roleName</name>
+            <value>MscCpChargingAdministrator</value>
+        </attr>
+	</object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscChgApCmd_1,roleId=MscCpChargingAdministrator,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Execute permission to AP command mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>regexp:mml</value>
+        </attr>
+    </object>
+	
+	<object class="Role">
+        <dn>roleId=MscCpReadOnly,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value> </value>
+        </attr>
+	     <attr>
+            <name>roleName</name>
+            <value>MscCpReadOnly</value>
+        </attr>
+	</object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscRoSystemHandling_1,roleId=MscCpReadOnly,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read only permission to ManagedElement MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement</value>
+        </attr>
+    </object>
+	
+	
+	<object class="Rule">
+        <dn>ruleId=MscRoSystemHandling_2,roleId=MscCpReadOnly,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Read only permission to AxeFunctions MOC</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>ManagedElement,SystemFunctions,AxeFunctions</value>
+        </attr>
+    </object>
+	
+	<object class="Rule">
+        <dn>ruleId=MscRoApCmd_1,roleId=MscCpReadOnly,localAuthorizationMethodId=1</dn>
+        <attr>
+            <name>userLabel</name>
+            <value>Execute permission to AP commands alist and mml</value>
+        </attr>
+        <attr>
+            <name>permission</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>ruleData</name>
+            <value>regexp:alist|mml</value>
+        </attr>
+    </object>
+	
+	
+
+</imm:IMM-contents>

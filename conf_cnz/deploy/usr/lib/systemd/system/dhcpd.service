@@ -1,0 +1,7 @@
+[Unit]
+Description=ISC DHCPv4 Server
+
+[Service]
+ExecStart=/usr/bin/true
+Type=oneshot
+RemainAfterExit=no

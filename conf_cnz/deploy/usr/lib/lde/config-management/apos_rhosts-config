@@ -1,0 +1,130 @@
+#!/bin/bash -u
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       apos_rhosts-config
+# Description:
+#       The script will configure the ~/.rhosts file according
+#	to the APG needs.
+# Note:
+#	This script is intended to be deployed to the
+#	/usr/lib/lde/config-management/ directory.
+#
+#	It relies on the /opt/ap/apos/conf/apos_common.sh library.
+##
+# Changelog:
+# - Tue Apr 10 2012 - Francesco Rainone (efrarai)
+#	First version.
+##
+# LDE_deployment:
+# 	type:		config
+# 	priority:	540
+##
+
+##
+# libraries -------------------------------------------------------------- BEGIN
+if [ -r /opt/ap/apos/conf/apos_common.sh ]; then
+	. /opt/ap/apos/conf/apos_common.sh
+else
+	echo '/opt/ap/apos/conf/apos_common.sh not found or not readable!' >&2
+	exit 1
+fi
+# libraries ---------------------------------------------------------------- END
+##
+
+
+##
+# functions -------------------------------------------------------------- BEGIN
+function usage(){
+	cat << HEREDOC
+Usage: $0 <action> <phase> [<etc_root>]
+where:
+	<action> can be "start" or "stop" or "config"
+	<phase> can be "init" or "reload"
+	<etc_root> (optional) specifies the base folder where the configuration
+	           will be generated (/etc by default)
+HEREDOC
+}
+
+function do_start(){
+	# TO-DO: implement the start phase if needed.
+	return
+}
+
+function do_stop(){
+	# TO-DO: implement the stop phase if needed.
+	return
+}
+
+function do_config(){
+        local ETC_ROOT=/etc
+	file=/root/.rhosts
+        # Create /root/.rhosts
+        (
+        shopt -s nullglob
+        echo "localhost"
+        for NODE in $ETC_ROOT/cluster/nodes/all/*; do
+                echo $(<$ETC_ROOT/cluster/nodes/all/$(basename $NODE)/hostname)
+        done
+        for MIP in $ETC_ROOT/cluster/nodes/this/mip/*; do
+                echo $(<$ETC_ROOT/cluster/nodes/this/mip/$(basename $MIP)/name)
+        done
+        ) > $file
+
+        # Only allow root to read this file
+        chmod 0600 /root/.rhosts        
+}
+# functions ---------------------------------------------------------------- END
+##
+
+##
+# variables -------------------------------------------------------------- BEGIN
+
+# variables ---------------------------------------------------------------- END
+##
+
+##
+# main ------------------------------------------------------------------- BEGIN
+##
+# LDE config scripts called with the following:
+# param 1: action - start, stop or config
+# param 2: generate phase - init or reload
+# param 3: root path where config should be generated
+
+apos_intro $0
+
+if [ $# -lt 2 ]; then
+	usage
+	apos_abort 'missing parameter'
+fi
+
+if [ $(</etc/cluster/nodes/this/type) != 'control' ]; then
+	apos_abort 'this script must be run ONLY in control nodes'
+fi
+
+ACTION="$1"
+PHASE="$2"
+ETC_ROOT=${3:-"/etc"}
+
+case "$ACTION" in
+        start)
+                do_start
+                ;;
+        stop)
+                do_stop
+                ;;
+        config)
+                do_config
+                ;;
+        *)
+                usage
+                ;;
+esac
+
+apos_outro
+exit $TRUE
+# main --------------------------------------------------------------------- END
+##

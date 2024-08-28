@@ -1,0 +1,179 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       drbd_split_brain_recover.sh
+# Description:
+#       This script is the procedure to recovery the drbd split-brain         
+# Note:
+#       
+##
+# Usage:
+#       drbd_split_brain_recover
+##
+# Output:
+#       DRBD split-brain Recovery Successfull --> If it is success
+#       Spilt Brain Recovery Failed           --> If it is failed
+##
+# Changelog:
+#  - Wed Jul 18 2012 - Sameer Chandra (xsamech) 
+#  - Fri Jun 22 2012 - Uppada Pratap Reddy(xpraupp)
+#       First version.
+##
+
+
+# Global parameters
+LOG_TAG='drbd_split_brain_recover'
+drbd_overview=/usr/sbin/drbd-overview
+drbdadm=/sbin/drbdadm
+proc_drbd=/proc/drbd
+ping=/bin/ping
+nfs_state=1
+wfc_state=1
+split_brain=0
+
+# exit-code flags
+exit_sucs=0
+exit_fail=1
+exit_usag=2
+exit_conn=3
+
+# log to system-log
+function log(){
+        /bin/logger -t "$LOG_TAG" "$*"
+}
+
+# log and exit from the script
+function abort(){
+	console_print "Error when executing (general fault)"
+	log "ABORTING: <"ERROR: $1">"
+	log "END: <$0>"
+	exit $exit_fail
+}
+			
+function console_print(){
+	echo -e
+        echo -e "$1"
+        echo -e
+}
+
+function console_abort(){
+        console_print "$1"
+        exit $2
+}
+# parse command-line option if provided.
+function parse_args(){
+        if test $# -gt 0; then
+                echo "Incorrect Usage"
+                console_print "USAGE: drbd_split_brain_recover"
+                log "Incorrect Usage"
+                log "END: <$0>"
+                exit $exit_usag
+        fi
+
+        return $exit_sucs
+}
+
+function check_connection_status(){
+ 	peer_node=`cat /etc/cluster/nodes/peer/hostname`
+	$ping -c 1 $peer_node &> /dev/null
+	[ "$?" != "0" ] && console_abort "Unable to connect to peer node" $exit_conn
+}
+
+# This function makes current node  secondary
+# by first making  it first StandAlone ,then
+# connecting to the resource and lastly discarding 
+# all the data already present.
+function split_brain_victim(){
+	peer_node=`cat /etc/cluster/nodes/peer/hostname`
+	resource=`$drbd_overview |awk '{print $1}' |cut -d":" -f2`
+	[ "$wfc_status" == "Connected" ] && console_print "Split Brain Not Detected" && exit $exit_sucs
+	console_print "Recovery started..."
+	while [ "$nfs_state" == "1"  ]
+	do
+		# to check nfs server connection status
+		wfc_status=`$drbd_overview | cut -d " " -f 5`
+		nfs_status=`ssh $peer_node /etc/init.d/nfsserver status | grep nfs | cut -d "." -f3`
+		[ "$nfs_status" != "running" ] && {
+			continue
+		}		
+
+		while [ "$wfc_state" == "1" ]
+		do
+			wfc_status=`$drbd_overview | cut -d " " -f 5`
+			nfs_status=`ssh $peer_node /etc/init.d/nfsserver status | grep nfs | cut -d "." -f3`
+			if [ "$wfc_status" == "WFConnection" -a "$nfs_status" == "running" ];then
+				wfc_state=0;
+				nfs_state=0;
+				resource=`$drbd_overview | cut -d " " -f3 | cut -d ":" -f2 | cut -d "/" -f1`	
+				$drbdadm disconnect $resource &> /dev/null
+				# This command brings the device back into secondary role
+				# only one of the two peers may have primary role.
+				$drbdadm secondary $resource &> /dev/null
+				$drbdadm -- --discard-my-data connect $resource &> /dev/null
+
+			else
+				if [ "$wfc_status" == "StandAlone" -a "$nfs_status" == "running" ];then
+					wfc_state=0;
+		                	nfs_state=0;
+					resource=`$drbd_overview | cut -d " " -f3 | cut -d ":" -f2 | cut -d "/" -f1`
+					$drbdadm secondary $resource &> /dev/null
+	        	        	$drbdadm -- --discard-my-data connect $resource &> /dev/null
+				fi
+			fi
+		done
+	done
+
+	return $exit_sucs
+}
+
+# This function is used to detect that  whether
+# other node is also in Standalone state or not.
+# This step is  omitted if the node is already in the
+# WFConnection state.it will then reconnect automatically.
+function split_brain_survivor(){
+	peer_node=`cat /etc/cluster/nodes/peer/hostname`
+	peer_status=`ssh $peer_node $drbd_overview | cut -d " " -f 5`
+	if [ "$peer_status" == "StandAlone"  ];then
+	resource=$drbd_overview | cut -d " " -f3 | cut -d ":" -f2 | cut -d "/" -f1	
+	$drbdadm connect $resource &> /dev/null
+    		 if [ $? == 0 ];then
+                        log "Both nodes are connected"
+                else
+                        log "Connection Failed"
+                        console_abort "Connection Failed" $exit_conn
+                fi
+
+	fi
+        return $exit_sucs
+}
+
+# _____________________ _____________________
+#|    _ _   _  .  _    |    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |   | ) ) (_| | | )   |
+#|_____________________|_____________________|
+# Here begins the "main" function...
+
+log "START: <$0>"
+
+# parse command line
+parse_args $*
+
+# To check connection status 
+check_connection_status
+
+# To make a node as secondary
+split_brain_victim
+
+# To make the other as primary
+split_brain_survivor
+
+console_print "DRBD split-brain Recovery Successfull"
+
+log "END: <$0>"
+exit $exit_sucs
+
+# END

@@ -1,0 +1,4 @@
+sc_a;sca=ipna:192.168.169.56
+sc_a;sca=ipnb:192.168.170.56
+sc_b;scb=ipna:192.168.169.60
+sc_b;scb=ipnb:192.168.170.60

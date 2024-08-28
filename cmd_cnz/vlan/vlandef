@@ -1,0 +1,999 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       vlandef
+#
+# Description:
+#       This command is used to create vlan in the cluster
+#
+#Usage on NON BSP nodes
+#Usage : vlandef -v name, tag... [-f]
+#
+#Usage on BSP nodes
+#Usage : vlandef -v name, tag... [ -f]
+#        vlandef -q name, pcp ... [ -f] 
+#
+#Usage on VAPG
+#Usage : vlandef -a name,vnic,domain ... [ -f]  
+#
+##
+# Output:
+#       Command output is directly printed on console.
+##
+# Changelog:
+# - Wed 18 Jan 2017 - Neeraj Kasula (XNEEKAS)
+#    vlan command inhibition changes in virtualized environment
+# - Fri 11 Nov 2016 - Swapnika Baradi (XSWAPBA)
+#       Fix for TR HU79440(Adding ETX character at confirmation)
+# - Thu 19 Aug 2016 - Rajashekar Narla (XCSRAJN)
+#	1. Fix provided for TR HV16018
+# - Thu 28 Jul 2016 - Rajashekar Narla (XCSRAJN)
+#	1. Fixed minor issues 
+# - Wed 13 Jul 2016 - Rajashekar Narla (XCSRAJN)
+#	1. Fix provided for TR HV10189 
+# - Wed 12 Apr 2016 - Usha Manne (XUSHMAN)
+#   Added option -a to define vlans on VAPG
+# - Fri 6 Nov 2015 - PratapReddy Uppada(XPRAUPP)
+# Fix for TR HU27377
+# - Wed 9 Sep 2015 - Raghavendra Koduri (XKODRAG)
+#	1. Changed option -v to disable setting of PCP vlaues for APG vlans on BSP Nodes
+# - Mon 11 MAY 2015 - Sindhuja Palla (XSINPAL)
+#	1. Replaced option -e to option -v to define APG external vlans along with pcp values on BSP nodes
+#	2. Replaced option -i to option -q define APT vlans along with pcp values on BSP nodes
+# - Tue Apr 21 2015 - Sindhuja Palla(xsinpal)
+#	1. Fix provided for TR HT66461 
+# - Tue 22 Mar 2015 - Sindhuja Palla / Raghavendra Rao Koduri (XSINPAL / XKODRAG)
+#	1. Enable new option -e to define APG external vlans along with pcp values on BSP nodes
+#	2. Enable new option -i to define APT vlans along with pcp values on BSP nodes
+# - Thu 27 Nov 2014 - Madhu Muthyala (XMADMUT)
+#	Updated to inhibit vlandef command in virtualized architecture
+# - Fri May 16 2014 - Fabrizio Paglia (XFABPAG)
+#	Removed unused functions, variables and commented old code
+# - Thu May 8 2014 - Fabrizio Paglia (XFABPAG)
+#	Bug fixed
+# - Thu Apr 17 2014 - Fabrizio Paglia (XFABPAG)
+#	During Public VLAN definition, check if the VLAN adapter already exists,
+#	if it exists do not recreate it.
+#	This is to allow the following command sequence:
+#	vlandef -v Public,<TAG>
+#	vlanrm -v Public,<TAG>
+#	vlandef -v Public,<SAME_TAG>
+#	Note: this command sequence does not respect OPI AP, VLAN Administer
+# - Mon Mar 24 2014 - Fabrizio Paglia (XFABPAG)
+#	Adaptation to the new behaviour of VLAN Public:
+#	 When Public VLAN is defined, network settings are moved from
+#	 the native physical interface (eth1 or bond1) to the new VLAN
+#	Public VLAN can be defined as 'Public', 'public', 'pUbLiC' etc.
+#	Numbers are now allowed in VLAN name
+# - Tue Aug 19 2013 - Greeshmalatha C (xgrecha)
+#	1. Fix provided for TR HR58609 
+# - Thu Jun 20 2013 - Furquan Ullah(xfurull)
+#	1. Fix provided for TR HR48007 
+# - Tue May 28 2013 - Krishna Chaitanya(xchakri)
+#	Minor rework for printout formats
+# - Sat Jul 28 2012 - Malangsha Shaik(xmalsha)
+#       Heavy rework done to include
+#               1. Improve the code quality
+#               2. Create vlans in the cluster
+#               3. Removed own/ohter phrases
+# - Tue Mar 03 2011 - Satya Deepthi
+#	First version. 
+#
+
+# LOAD APOS COMMON FUNCTION
+APOS_COMMON="${AP_HOME:-/opt/ap}/apos/conf/apos_common.sh"
+source $APOS_COMMON
+
+# paths and files variables
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+LOG_TAG='vlandef'
+LOG_DIR=/tmp
+LOG_FILE=vlandef.log
+CLUSTER_CONF=/cluster/etc/cluster.conf
+PROC_VLAN=/proc/net/vlan
+VLAN_MAPING_CONF=/cluster/etc/ap/apos/vlan_adapter_maping.conf
+LOCK_FILE=$(apos_create_brf_folder clear)/.vlan_adapter_maping.lock
+
+# command-list
+CMD_CP=/bin/cp
+CMD_GREP=/usr/bin/grep
+CMD_AWK=/usr/bin/awk
+CMD_LOGGER=/bin/logger
+CMD_RM=/bin/rm
+CMD_GETOPT=/usr/bin/getopt
+CMD_SED=/usr/bin/sed
+CMD_HEAD=/usr/bin/head
+CMD_EGREP=/usr/bin/egrep
+CMD_CLUSTER_CONF=/opt/ap/apos/bin/clusterconf/clusterconf
+CMD_SSH=/usr/bin/ssh
+CMD_LS=/bin/ls
+CMD_CAT=/bin/cat
+CMD_CUT=/usr/bin/cut
+CMD_WC=/usr/bin/wc
+CMD_TOUCH=/usr/bin/touch
+CMD_PING=/bin/ping
+CMD_IMMLIST=/usr/bin/immlist
+CMD_IMMCFG=/usr/bin/immcfg
+CMD_TAIL=/usr/bin/tail
+CMD_HWTYPE='/opt/ap/apos/conf/apos_hwtype.sh'
+
+# script-wide variables
+OPT_FORCE=$FALSE
+OPT_VNAME_LIST=()
+OPT_VTAG_LIST=()
+VLAN_NAME=''
+VLAN_TAG=''
+VLAN_MAX_LEN=32
+TAG_MAX_SIZE=4094
+TAG_MIN_SIZE=1
+LOCK_TIME=10 # 10 seconds
+LHOST=''
+LNODE=''
+RHOST=''
+RNODE=''
+F_INFO=''
+NETWORK=''
+INTERFACE=''
+PEER_NODE_UP=''
+OPT_VLAN=$FALSE
+OPT_INTERNAL=$FALSE
+OPT_VAPG=$FALSE
+SHELF_ARCH=''
+VLAN_VNIC=''
+VNIC_MAX_LEN=5
+VLAN_DOMAIN=''
+VLAN_TYPE=''
+HW_TYPE=''
+CUSTOM_VNIC1='eth7'
+CUSTOM_VNIC2='eth8'
+VLAN_VNIC1="VNIC1"
+VLAN_VNIC2="VNIC2"
+
+# exit-flags
+exit_sucs=0
+exit_fail=1
+exit_usge=2
+exit_cmnd_abrt=3
+exit_cmdx_fail=4
+exit_clus_fail=5
+exit_ilgl_optn=20
+exit_ures_valu=22
+exit_publ_eror=23
+exit_vlan_exst=24
+exit_vlan_tagt=25
+exit_virtual_arch=44
+
+#----------------------------------------------------------------------------------------
+function INFO(){
+        echo "[$(date --utc +'%Y-%m-%d %H:%M:%S')] $@" >>$LOG_DIR/$LOG_FILE
+}
+
+#----------------------------------------------------------------------------------------
+function log(){
+        local PRIO='-p user.notice'
+        local MESSAGE="${*:-notice}"
+        ${CMD_LOGGER} $PRIO $LOG_TAG "$MESSAGE"
+}
+
+#----------------------------------------------------------------------------------------
+function log_error(){
+        local PRIO='-p user.err'
+        local MESSAGE="${*:-error}"
+        ${CMD_LOGGER} $PRIO $LOG_TAG "$MESSAGE"
+        INFO "$MESSAGE"
+}
+
+#----------------------------------------------------------------------------------------
+function abort(){
+        console_print "Error when executing (general fault)\n"
+        log_error "ABORTING: <"$1">"
+	unlock
+        exit $exit_fail
+}
+
+#----------------------------------------------------------------------------------------
+function console_print(){
+        echo -e "$1"
+}
+
+#----------------------------------------------------------------------------------------
+function console_abort(){
+	INFO "$1"
+        console_print "$1"
+	unlock
+        exit $2
+}
+
+#----------------------------------------------------------------------------------------
+function TRACE_ENTER(){
+        INFO "$1() >>"
+}
+
+#----------------------------------------------------------------------------------------
+function TRACE_LEAVE(){
+        INFO "$1() <<"
+}
+
+#----------------------------------------------------------------------------------------
+function usage(){
+if isBSP; then
+	$CMD_CAT << EOF
+Usage : vlandef -v name, tag ... [ -f]
+       	vlandef -q name, pcp ... [ -f]
+ 
+EOF
+elif isvAPG; then
+        $CMD_CAT << EOF
+Usage : vlandef -a name,vnic,domain ... [ -f]
+
+EOF
+else
+	$CMD_CAT << EOF
+Usage : vlandef -v name,tag ... [-f]
+
+EOF
+fi
+}
+
+#----------------------------------------------------------------------------------------
+function usage_error(){
+	INFO "$1"
+        console_print "$1"
+        usage
+        exit $2
+}
+
+#----------------------------------------------------------------------------------------
+function trylock(){
+
+	# check if the lock file exist first
+	[ ! -f $LOCK_FILE ] && return $exit_sucs
+      	local CNT=0	
+	while [ $CNT -le $LOCK_TIME ]
+	do
+		[ -f $LOCK_FILE ] && {
+			sleep 1
+			((CNT=CNT + 1))
+		}
+		[ ! -f $LOCK_FILE ] && break
+	done	
+	[ -f $LOCK_FILE ] && return $exit_fail
+	
+	return $exit_sucs
+}
+
+#----------------------------------------------------------------------------------------
+function lock(){
+
+	# check if we can lock the adapter-mapping configuration file.
+	if ! trylock; then
+		abort "Unable to lock the vlan-adapter mapping file"
+	fi	
+
+	# Ok. we can proceed with locking now.
+	$CMD_TOUCH $LOCK_FILE
+}
+
+#----------------------------------------------------------------------------------------
+function unlock(){
+	[ $OPT_INTERNAL -eq $FALSE ] && $CMD_RM -f $LOCK_FILE 
+}
+
+#----------------------------------------------------------------------------------------
+function vlandef_abort() {
+ local SIGNAL=$1
+  # Rolling back changes done so far, if any signal received
+  # 1. remove vlan entries in cluster.conf file
+  # 2. remove vlan entry in mapping file
+
+  trap '' SIGINT SIGTERM SIGHUP
+
+  if [ "$VLAN_NAME" != "Public" ] ; then
+		if [ -f /proc/net/vlan/$INTERFACE.$VLAN_TAG ]; then
+			ip link del $INTERFACE.$VLAN_TAG &>/dev/null
+			if [ $PEER_NODE_UP -eq $TRUE ]; then
+				$CMD_SSH $RHOST ip link del $INTERFACE.$VLAN_TAG &>/dev/null
+			fi
+    fi
+	fi
+
+  if [ "$VLAN_NAME" == "Public" ] ; then
+		# Remove alias
+		ALIAS_RULE_NO=$( ${CMD_CLUSTER_CONF} interface --display | grep alias | grep -w "$INTERFACE\.$VLAN_TAG" | $CMD_AWK '{print $1}' )
+		[ ! -z $ALIAS_RULE_NO ] && {
+			${CMD_CLUSTER_CONF} interface --m_delete $ALIAS_RULE_NO &>/dev/null \
+			|| console_abort "ERROR: Cluster configuration update failed" $exit_clus_fail
+		}
+
+		# Moving back MIP to native physical interface
+		MIP_RULE_NO=$( ${CMD_CLUSTER_CONF} mip --display | grep -w "public" | awk '{print $1}' )
+		local mip_rule=$(${CMD_CLUSTER_CONF} mip --display | grep "^\s\s*$MIP_RULE_NO\s" | awk '{ for (i=2; i<=NF; i++) print $i }' | tr '\n' ' ')
+		local new_rule=$(echo "$mip_rule" | sed "s/\(\s\s*\)$INTERFACE.$VLAN_TAG\(:\)/\1$INTERFACE\2/")
+		${CMD_CLUSTER_CONF} mip --m_modify $MIP_RULE_NO:$new_rule &> /dev/null \
+		|| console_abort "ERROR: Cluster configuration update failed" $exit_clus_fail
+
+		# Moving back IP addresses to native physical interface
+		INDEX=0;CNT=0
+		CNT=$( ${CMD_CLUSTER_CONF} ip --display | grep -w "public" | grep "\s\s*$INTERFACE.$VLAN_TAG\s\s*" | wc -l )
+		while [ $INDEX -lt $CNT ]; do
+			IP_RULE_NO=$( ${CMD_CLUSTER_CONF} ip --display | grep -w "public" | grep "\s\s*$INTERFACE.$VLAN_TAG\s\s*" | head -1 | awk '{print $1}')
+			local ip_rule=$(${CMD_CLUSTER_CONF} ip --display | grep "^\s\s*$IP_RULE_NO\s" | awk '{ for (i=2; i<=NF; i++) print $i }' | tr '\n' ' ')
+			local new_rule=$(echo "$ip_rule" | sed "s/\(\s\s*\)$INTERFACE.$VLAN_TAG\(\s\s*\)/\1$INTERFACE\2/")
+			${CMD_CLUSTER_CONF} ip --m_modify $IP_RULE_NO:$new_rule &> /dev/null \
+			|| console_abort "ERROR: Cluster configuration update failed" $exit_clus_fail
+			((INDEX=INDEX + 1))
+		done
+
+		# Verify cluster configuration is OK after updates
+    $CMD_CLUSTER_CONF mgmt --cluster --verify &> /dev/null || {
+			#Something wrong. Fallback with older cluster config
+			$CMD_CLUSTER_CONF mgmt --cluster --abort &> /dev/null
+			console_abort "ERROR: Cluster configuration updation failed\n" $exit_clus_fail
+		}
+
+		#Verify seems to be OK. Reload the cluster now.
+		$CMD_CLUSTER_CONF mgmt --cluster --reload --verbose &> /dev/null || {
+			#Something wrong. Fallback with older cluster config
+			$CMD_CLUSTER_CONF mgmt --cluster --abort &> /dev/null
+			console_abort "ERROR: Cluster configuration updation failed\n" $exit_clus_fail
+		}
+
+		#Things seems to be OK so-far. Commit cluster configration now.
+		$CMD_CLUSTER_CONF mgmt --cluster --commit &> /dev/null || console_abort "ERROR: Cluster configuration updation failed\n" $exit_clus_fail
+	fi
+
+	if ${CMD_CLUSTER_CONF} interface -D | grep -qw $INTERFACE.$VLAN_TAG &>/dev/null; then
+		RULE_NO=$( ${CMD_CLUSTER_CONF} interface -D | grep -w $INTERFACE.$VLAN_TAG | awk '{print $1}')
+		${CMD_CLUSTER_CONF} interface --delete $RULE_NO &>/dev/null \
+		|| console_abort "ERROR: Cluster configuration updation failed\n" $exit_clus_fail
+	fi
+
+	# remove entry in mapping file also
+	if [ -f $VLAN_MAPING_CONF ]; then
+		if is_defined $VLAN_NAME; then
+			sed -i "/\b\($VLAN_NAME\)\b/d" $VLAN_MAPING_CONF
+		fi
+	fi
+
+  abort "ERROR: Interrupt($SIGNAL) received, Aborting changes" $exit_clus_fail
+}
+
+#----------------------------------------------------------------------------------------
+function isBSP(){
+	[ $SHELF_ARCH -eq 2 ] && return $TRUE
+	return $FALSE
+}
+
+#----------------------------------------------------------------------------------------
+function isvAPG(){
+	[[ $SHELF_ARCH -eq 3 && $HW_TYPE == 'VM' ]] && return $TRUE
+	return $FALSE
+}
+
+
+#----------------------------------------------------------------------------------------
+function sanity_check(){
+	# trap the signals
+	trap "vlandef_abort SIGINT" SIGINT
+	trap "vlandef_abort SIGHUP" SIGHUP
+	trap "vlandef_abort SIGTERM" SIGTERM
+
+	# populate nodetype
+	SHELF_ARCH=$($CMD_IMMLIST -a apgShelfArchitecture axeFunctionsId=1 | ${CMD_AWK} -F "=" '{print $2}' 2>/dev/null)
+	[ -z $SHELF_ARCH ] && abort "ERROR: Failed to get apgShelfArchitecture"
+
+	HW_TYPE=$($CMD_HWTYPE 2>/dev/null)
+	[ -z "$HW_TYPE" ] && abort "ERROR: HW_TYPE not found"
+
+
+	[ -f $LOG_DIR/$LOG_FILE ] && ${CMD_RM} -f $LOG_DIR/$LOG_FILE
+	[ ! -f ${CLUSTER_CONF}  ] && abort "File [$CLUSTER_CONF] not found" 
+	F_INFO=$LOG_DIR/$LOG_FILE
+
+	# keep the node info ready for later use.
+	LHOST=$(</etc/cluster/nodes/this/hostname)
+	LNODE=$(</etc/cluster/nodes/this/id)
+	RHOST=$(</etc/cluster/nodes/peer/hostname)
+	RNODE=$(</etc/cluster/nodes/peer/id)
+	if ! isvAPG; then
+	  NETWORK='public'
+	  INTERFACE=$(${CMD_GREP} ^ip $CLUSTER_CONF | ${CMD_GREP} -w $NETWORK | ${CMD_HEAD} -1 | ${CMD_AWK} '{ print $3}' | ${CMD_AWK} -F'.' '{ print $1 }')
+	  [ -z $INTERFACE ] && abort "Public adaptor not found"
+	fi
+
+	# check if the mapping file exists, if not create
+	# an empty file
+	if [ ! -f $VLAN_MAPING_CONF ] ; then
+	  $CMD_TOUCH $VLAN_MAPING_CONF &>/dev/null
+	  [ $? -ne 0 ] && abort "ERROR: failed to create the file $VLAN_MAPING_CONF" 
+	fi 
+
+}
+
+#----------------------------------------------------------------------------------------
+function parse_args(){
+	TRACE_ENTER $FUNCNAME
+
+	ARG_CNT=$#
+	local OPTIONS='a: v: q: f'
+	$CMD_GETOPT --quiet --quiet-output --options="$OPTIONS" -- "$@"
+	[ $? -ne $TRUE ] && usage_error "Incorrect usage" $exit_usge
+	local INDEX=0
+
+	while [ $# -gt 0 ]; do
+		case "$1" in
+	      	        '-a')
+				! isvAPG && usage_error "Illegal option in this system configuration\n" $exit_ilgl_optn
+		    		OPT_VAPG=$TRUE
+	 		        # vlan name and tag is to be defined separated by comma
+			        OPT_ARG=${2:-''}
+			        OPT_ARG_CNT=$( echo $OPT_ARG | ${CMD_AWK} -F "," '{print NF}' )
+		                [ $OPT_ARG_CNT -gt 3 ] && usage_error "Incorrect usage" $exit_usge
+
+ 			        OPT_VNAME_LIST[$INDEX]=$( echo $OPT_ARG | ${CMD_AWK} -F "," '{print $1}')
+			        OPT_VNIC_LIST[$INDEX]=$( echo $OPT_ARG | ${CMD_AWK} -F "," '{print $2}')
+			        OPT_DOMAIN_LIST[$INDEX]=$( echo $OPT_ARG | ${CMD_AWK} -F "," '{print $3}')
+
+	    		        # check if any of the value given is null
+ 			        [[ -z ${OPT_VNAME_LIST[$INDEX]} ||  -z  ${OPT_VNIC_LIST[$INDEX]} ||  -z  ${OPT_DOMAIN_LIST[$INDEX]} ]] &&
+			        usage_error "Incorrect usage" $exit_usge
+			        ((INDEX=INDEX + 1))
+ 		                shift
+			;;
+			'-v')
+				isvAPG && usage_error "Illegal option in this system configuration\n" $exit_ilgl_optn
+				OPT_VLAN=$TRUE
+				# vlan name and tag is to be defined separated by comma
+				OPT_ARG=${2:-''}
+				OPT_ARG_CNT=$( echo $OPT_ARG | ${CMD_AWK} -F "," '{print NF}' )
+				[ $OPT_ARG_CNT -gt 2 ] && usage_error "Incorrect usage" $exit_usge
+				local vlan_name=$( echo $OPT_ARG | ${CMD_AWK} -F "," '{print $1}')
+				local vlan_name_lowercase=$(echo "$vlan_name" | ${CMD_AWK} '{ print tolower($0) }')
+				if [ "$vlan_name_lowercase" == "public" ] ; then
+					vlan_name="Public"
+				fi
+
+				OPT_VNAME_LIST[$INDEX]="$vlan_name"
+				OPT_VTAG_LIST[$INDEX]=$( echo $OPT_ARG | ${CMD_AWK} -F "," '{print $2}')	
+				
+				
+				# check if any of the value given is null
+				[[ -z ${OPT_VNAME_LIST[$INDEX]} ||  -z  ${OPT_VTAG_LIST[$INDEX]} ]] &&
+			       	usage_error "Incorrect usage" $exit_usge	
+				((INDEX=INDEX + 1))
+				shift
+			;;
+			'-q')
+				! isBSP && usage_error "Illegal option in this system configuration\n" $exit_ilgl_optn
+				OPT_INTERNAL=$TRUE
+				# vlan name and tag is to be defined separated by comma
+				OPT_ARG=${2:-''}
+				OPT_ARG_CNT=$( echo $OPT_ARG | ${CMD_AWK} -F "," '{print NF}' )
+				[ $OPT_ARG_CNT -gt 2 ] && usage_error "Incorrect usage" $exit_usge
+				VLAN_NAME=$( echo $OPT_ARG | ${CMD_AWK} -F "," '{print $1}')
+				PCP=$( echo $OPT_ARG | ${CMD_AWK} -F "," '{print $2}')
+				[ $OPT_ARG_CNT -eq 2 ] && PCP=$( echo $OPT_ARG | ${CMD_AWK} -F "," '{print $2}')
+				OPT_VNAME_LIST[$INDEX]="$VLAN_NAME"
+				OPT_PCP_LIST[$INDEX]=$PCP
+				# check if any of the value given is null
+				[[ -z ${OPT_VNAME_LIST[$INDEX]} ||  -z  ${OPT_PCP_LIST[$INDEX]} ]] &&
+				usage_error "Incorrect usage" $exit_usge
+				((INDEX=INDEX + 1))
+				shift
+        		;;
+			'-f')
+				OPT_FORCE=$TRUE
+			;;
+			*)
+				usage_error "Incorrect usage" $exit_usge
+			;;
+		esac	
+		shift
+	done
+
+	# error checking
+	[ $ARG_CNT -eq 0 ] && usage_error "Incorrect usage" $exit_usge
+	[[ $OPT_VLAN -eq $TRUE && $OPT_INTERNAL -eq $TRUE ]] && usage_error "Incorrect usage" $exit_usge
+	[[ $OPT_FORCE -eq $TRUE  && $ARG_CNT -lt 3 ]] && usage_error "Incorrect usage" $exit_usge
+	[[ $OPT_FORCE -eq $FALSE && $ARG_CNT -lt 2 ]] && usage_error "Incorrect usage" $exit_usge
+
+	if isvAPG; then
+		[[ $OPT_VAPG -eq $FALSE || $OPT_VLAN -eq $TRUE || $OPT_INTERNAL -eq $TRUE ]] && usage_error "Incorrect usage" $exit_usge
+	fi
+
+	TRACE_LEAVE $FUNCNAME
+	return $exit_sucs
+}
+
+#----------------------------------------------------------------------------------------
+function check_args(){
+ 	 TRACE_ENTER $FUNCNAME
+	
+	 # check vlan name
+	[ -z $VLAN_NAME ] && console_abort "Unreasonable value <$VLAN_NAME>\n" $exit_ures_valu
+
+	# check vlan name length
+	LEN=$(expr length $VLAN_NAME)
+	[ $LEN -gt $VLAN_MAX_LEN ] && console_abort "Unreasonable value <$VLAN_NAME>\n" $exit_ures_valu
+
+	# check if the name contatins only alphabets
+	$( echo $VLAN_NAME | ${CMD_GREP} -Eq "^[a-zA-Z0-9][a-zA-Z0-9_-]*$") ||  console_abort "Unreasonable value <$VLAN_NAME>\n" $exit_ures_valu
+
+	if isvAPG; then
+	  # check if the vlan is already defined
+          is_defined $VLAN_NAME && {
+            echo -e "Error when executing <VLAN with name $VLAN_NAME already exists>"
+	    echo -e "INFO: No VLAN added\n"
+            unlock
+            exit $exit_vlan_exst
+	  }
+
+	  # check vnic name
+          [ -z $VLAN_VNIC ] && console_abort "Unreasonable value <$VLAN_VNIC>\n" $exit_ures_valu
+
+          # check vnic length
+          VNIC_LEN=$(expr length $VLAN_VNIC)
+          [ $VNIC_LEN -gt $VNIC_MAX_LEN ] && console_abort "Unreasonable value <$VLAN_VNIC>\n " $exit_ures_valu
+		
+	  if [ $VLAN_DOMAIN == 'AP' ]; then
+		  $( echo $VLAN_VNIC  | ${CMD_GREP} -Eq "^VNIC[1-2]$") || console_abort "Unreasonable value <$VLAN_VNIC>\n " $exit_ures_valu
+	  else
+		  # check if the name ends with only numerics
+		  $( echo $VLAN_VNIC  | ${CMD_GREP} -Eq "^VNIC[1-8]$") || console_abort "Unreasonable value <$VLAN_VNIC>\n " $exit_ures_valu
+	  fi
+
+	  local CNT=0
+	  # check domain name
+	  [ -z $VLAN_DOMAIN ] && console_abort "Unreasonable value <$VLAN_DOMAIN>\n" $exit_ures_valu
+	  [[ $VLAN_DOMAIN == 'CP' || $VLAN_DOMAIN == 'AP' ]] || console_abort "Unreasonable value <$VLAN_DOMAIN>\n" $exit_ures_valu
+
+	  #Check if two AP vlans already exist
+	  if [ -f $VLAN_MAPING_CONF ]; then
+  	    while read line
+              do
+	        local L_DOMAIN=$( echo $line | $CMD_AWK -F " " '{print $2}')
+		local L_VNIC=$( echo $line | $CMD_AWK -F " " '{print $3}' )
+		if [ $VLAN_DOMAIN == 'AP' ]; then
+		  [ "$L_DOMAIN" == "$VLAN_DOMAIN" ] && ((CNT=CNT + 1))
+                  [ $CNT -eq 2 ] && console_abort "Cannot create more than two custom networks for domain <$VLAN_DOMAIN>\n" $exit_ures_valu
+		  L_VNIC=$( echo $L_VNIC | ${CMD_CUT} -d . -f1 )
+		  [[ "$L_VNIC" == "$VLAN_VNIC" && "$L_DOMAIN" == "$VLAN_DOMAIN" ]] && console_abort "Error when executing <VNIC with value $VLAN_VNIC already exists>\nINFO: No VLAN added\n" $exit_ures_valu
+		else
+		  # Check if VNIC already exists for CP
+		  [[ "$L_VNIC" == "$VLAN_VNIC" && "$L_DOMAIN" == "$VLAN_DOMAIN" ]] && console_abort "Error when executing <VNIC with value $VLAN_VNIC already exists>\nINFO: No VLAN added\n" $exit_ures_valu
+		fi
+              done < $VLAN_MAPING_CONF
+    	  fi
+
+	else
+	  #check vlan name is not defined earlier for APT/APZ vlans also on BSP Node
+	  setVlanType
+	
+	  if isBSP  && [ ! -z $VLAN_TYPE ]; then
+	    console_abort "Error when executing <VLAN with name $VLAN_NAME already exists>\nINFO: No VLAN added\n" $exit_vlan_exst
+	  fi
+
+	  # check if Internal vlan is defined in non BSP
+	  if ! isBSP && [ $OPT_INTERNAL -eq $TRUE ]; then
+	    console_abort "Illegal option in this system configuration\n" $exit_ures_valu
+	  fi	
+	  [ $OPT_INTERNAL -eq $TRUE ] && check_vlanqos_params
+	  [ $OPT_INTERNAL -eq $FALSE ] && check_vlantag_params
+	fi
+
+	TRACE_LEAVE $FUNCNAME
+	return $exit_sucs
+}
+
+#----------------------------------------------------------------------------------------
+function check_vlantag_params(){
+	# check if vlan tag is null
+	[ -z $VLAN_TAG ] && console_abort "Unreasonable value <$VLAN_TAG>\n" $exit_ures_valu
+
+	# check if the tag contains only numerics.
+	$( echo $VLAN_TAG  | ${CMD_GREP} -Eq "^[1-9][0-9]*$") ||
+	console_abort "Unreasonable value <$VLAN_TAG>\n" $exit_ures_valu
+
+	# check if tag lenth is exceeding the size
+	[[ $VLAN_TAG -gt $TAG_MAX_SIZE || $VLAN_TAG -lt $TAG_MIN_SIZE ]] &&
+	console_abort "Unreasonable value <$VLAN_TAG>\n" $exit_ures_valu
+
+	# check if the vlan tag(VLANID) is unique on local node
+	for VLAN_ID in $(${CMD_CLUSTER_CONF} interface --display | ${CMD_GREP} -w vlan | 
+	  ${CMD_GREP} $INTERFACE | ${CMD_AWK} '{print $4}' |
+	  ${CMD_CUT} -d . -f2)
+	do
+	  if [ $VLAN_ID == $VLAN_TAG ]; then
+	    echo -e "Error when executing <VLAN with ID $VLAN_TAG already exists>"
+	    echo -e "INFO: No VLAN added\n"
+	    unlock
+	    exit $exit_vlan_tagt
+	  fi
+	done
+
+	# check if the vlan is already defined
+	[ $VLAN_NAME != "Public" ] && {
+	  ! is_defined 'Public' && console_abort "VLAN with name Public missing\n" $exit_publ_eror
+	  is_defined $VLAN_NAME && {
+	    echo -e "Error when executing <VLAN with name $VLAN_NAME already exists>"
+	    echo -e "INFO: No VLAN added\n"
+	    unlock
+	    exit $exit_vlan_exst
+  	  }
+	}
+		
+        #check if public vlan is already defined	
+	[ $VLAN_NAME == "Public" ] && {
+	  is_defined 'Public' && {
+	    echo -e "Error when executing <VLAN with name $VLAN_NAME already exists>"
+	    echo -e "INFO: No VLAN added\n"
+	    unlock
+	    exit $exit_vlan_exst
+	  }
+	}	
+}
+
+#----------------------------------------------------------------------------------------
+function check_vlanqos_params(){
+	
+	# check pcp value
+	[ -z $VLAN_PCP ] && console_abort "Unreasonable value <$VLAN_PCP>" $exit_ures_valu
+
+	# check if the PCP value is inbetween 0 to 7 .
+	$( echo $VLAN_PCP  | ${CMD_GREP} -Eq "^[0-7]$") ||
+	  console_abort "Unreasonable value <$VLAN_PCP>\n" $exit_ures_valu
+
+}
+
+#----------------------------------------------------------------------------------------
+function setVlanType(){
+	VLAN_TYPE=''
+
+	if  grep -wq "$VLAN_NAME" $VLAN_MAPING_CONF &>/dev/null ; then
+		VLAN_TYPE='APG'
+	fi
+
+	if [ -z $VLAN_TYPE ]; then
+		#check vlan object from vlan table in imm 
+		local l_VLANTYPE=$($CMD_IMMLIST -a "vlanType"  vlanId=$VLAN_NAME,vlanCategoryId=1,AxeEquipmentequipmentMId=1 2>/dev/null | awk -F'=' '{ print($2) }' 2>/dev/null)
+
+		if [ ! -z  $l_VLANTYPE ]; then
+			#set vlantype APT/APZ   
+			[ $l_VLANTYPE -eq 0 ] && VLAN_TYPE='APZ'
+			[ $l_VLANTYPE -eq 1 ] && VLAN_TYPE='APT'
+		fi
+	fi 
+}
+
+#----------------------------------------------------------------------------------------
+function is_defined(){
+
+	TRACE_ENTER $FUNCNAME
+	local l_VNAME
+	local l_PARAM=$1
+	# checking if the vlan name is present in mapping file
+	while read line
+	do	
+		l_VNAME=$( echo $line | ${CMD_CUT} -d " " -f1)
+		[ "$l_VNAME" == "$l_PARAM" ] && return $TRUE	
+	done < $VLAN_MAPING_CONF		
+
+	TRACE_LEAVE $FUNCNAME
+	return $FALSE
+}
+
+#----------------------------------------------------------------------------------------
+function confirm(){
+        TRACE_ENTER $FUNCNAME
+        CMD=''
+        local rCode
+        while [ "$CMD" != "y" ] && [ "$CMD" != "n" ]; do
+                echo -e "Are you sure you want to do these changes:"
+                echo -en "[y=yes, n=no]?\003:"
+                read CMD
+        done
+
+        if [ "$CMD" == "y" ]; then
+                rCode=0
+        else
+                rCode=1
+        fi
+
+        TRACE_LEAVE $FUNCNAME
+        return $rCode
+}
+
+#----------------------------------------------------------------------------------------
+function add_mapping(){
+	TRACE_ENTER $FUNCNAME
+	[ -f $VLAN_MAPING_CONF ] && echo -e "$1\t\t$2" >> $VLAN_MAPING_CONF
+	TRACE_LEAVE $FUNCNAME
+}
+
+#----------------------------------------------------------------------------------------
+function add_mapping_v2(){
+	TRACE_ENTER $FUNCNAME
+	local ARG3_interface=''
+	local ARG2_domain=''
+	local NICX=$3.$CUSTOM_VNIC1
+
+	if [ -f $VLAN_MAPING_CONF ]; then
+		while read line
+		do
+			if [ $2 == 'AP' ]; then
+				ARG3_interface=$( echo $line | $CMD_AWK -F " " '{print $3}' | ${CMD_CUT} -d . -f2 )
+				ARG2_domain=$( echo $line | $CMD_AWK -F " " '{print $2}')
+				if [ $ARG2_domain == "$2" ];then
+					if [ $ARG3_interface == "$3" ]; then
+						console_abort "ERROR: Error creating VLAN, no changes done" $exit_cmdx_fail
+					fi
+				fi
+			fi
+		done < $VLAN_MAPING_CONF
+	fi	
+	
+	 if [ $2 == "AP" ]; then
+		 [ "$3" == "$VLAN_VNIC1" ] && NICX="$3.$CUSTOM_VNIC1"
+		 [ "$3" == "$VLAN_VNIC2" ] && NICX="$3.$CUSTOM_VNIC2"
+	 fi
+
+	[ $2 == 'CP' ] && echo -e "$1\t\t$2\t\t$3" >> $VLAN_MAPING_CONF
+  	[ $2 == 'AP' ] && echo -e "$1\t\t$2\t\t$NICX" >> $VLAN_MAPING_CONF	
+	TRACE_LEAVE $FUNCNAME
+}
+
+#----------------------------------------------------------------------------------------
+function vlandef(){
+	TRACE_ENTER $FUNCNAME
+	
+	local add_vlan_adapter=$TRUE
+	# Ok. error handling is done. Proceed with adding vlan in cluster
+	VLAN_CMD="ip link add link $INTERFACE name $INTERFACE.$VLAN_TAG type vlan id $VLAN_TAG"
+	
+	if [ "$VLAN_NAME" == "Public" ] ; then
+		if ifconfig $INTERFACE.$VLAN_TAG &> /dev/null ; then
+			add_vlan_adapter=$FALSE
+		fi
+	fi
+	
+	if [ $add_vlan_adapter -eq $TRUE ] ; then
+		# launch the command on the local node
+		$($VLAN_CMD 2>$F_INFO)
+		[ $? -ne 0 ] && console_abort "ERROR: Error creating VLAN, no changes done\n" $exit_cmdx_fail
+
+		if [ $PEER_NODE_UP -eq $TRUE ]; then	
+			$(${CMD_SSH} $RHOST $VLAN_CMD 2>$F_INFO)
+			[ $? -ne 0 ] && console_abort "ERROR: Error creating VLAN, no changes done\n" $exit_cmdx_fail
+		fi
+	fi
+
+	if [ "$VLAN_NAME" != "Public" ] ; then
+		${CMD_CLUSTER_CONF} interface --add control $INTERFACE.$VLAN_TAG vlan &>/dev/null
+		[ $? -ne 0 ] && console_abort "ERROR: Cluster configuration updation failed\n" $exit_clus_fail
+	else
+		vlandef_public
+	fi
+
+	TRACE_LEAVE $FUNCNAME
+	return $exit_sucs
+}
+
+#----------------------------------------------------------------------------------------
+function ping_peer(){
+
+	PEER_NODE_UP=$FALSE
+	${CMD_PING} -c 1 -W 1 $RHOST &>/dev/null
+	[ $? -eq 0 ] && PEER_NODE_UP=$TRUE
+}
+
+#----------------------------------------------------------------------------------------
+function vlandef_apg()
+{
+	# lock vlan-adapter mapping file
+	lock
+
+	# iterate through each vlan to create
+	for (( INDEX=0; INDEX<${#OPT_VNAME_LIST[@]}; INDEX++ ))
+	do
+		VLAN_NAME=${OPT_VNAME_LIST[$INDEX]}
+		VLAN_TAG=${OPT_VTAG_LIST[$INDEX]}
+
+		
+		# check if the provided argument list is valid.
+		check_args
+
+		# create vlan
+		echo "Creating VLAN:$VLAN_NAME ID:$VLAN_TAG"
+		vlandef
+		console_print "Successfully created VLAN:$VLAN_NAME ID:$VLAN_TAG\n"
+		add_mapping $VLAN_NAME $INTERFACE.$VLAN_TAG	
+	done
+
+	# unlock vlan-adapter mapping file
+	unlock
+}
+
+#----------------------------------------------------------------------------------------
+function VLANDEF_v2()
+{
+	# lock vlan-adapter mapping file
+	lock
+
+	# iterate through each vlan to create
+	for (( INDEX=0; INDEX<${#OPT_VNAME_LIST[@]}; INDEX++ ))
+	do
+		VLAN_NAME=${OPT_VNAME_LIST[$INDEX]}
+		VLAN_VNIC=${OPT_VNIC_LIST[$INDEX]}
+		VLAN_DOMAIN=${OPT_DOMAIN_LIST[$INDEX]}
+
+		# check if the provided argument list is valid.
+		check_args
+
+		# create vlan
+		echo "Creating VLAN:$VLAN_NAME VNIC:$VLAN_VNIC DOMAIN:$VLAN_DOMAIN"
+		add_mapping_v2 $VLAN_NAME $VLAN_DOMAIN $VLAN_VNIC
+
+		# assign VLAN_TYPE for VLAN DOMAIN
+		[ $VLAN_DOMAIN == 'AP' ] && VLAN_TYPE=0
+		[ $VLAN_DOMAIN == 'CP' ] && VLAN_TYPE=1
+
+		#Storing vlan info on imm vlan table
+		$( $CMD_IMMCFG -c AxeEquipmentVlan -a name=$VLAN_NAME -a vNICName=$VLAN_VNIC -a vlanType=$VLAN_TYPE "vlanId=$VLAN_NAME,vlanCategoryId=1,AxeEquipmentequipmentMId=1" &> /dev/null )
+		[ $? -ne 0 ] && console_abort "ERROR: Error creating VLAN, no changes done" $exit_cmdx_fail
+		console_print "Successfully created VLAN:$VLAN_NAME VNIC:$VLAN_VNIC DOMAIN:$VLAN_DOMAIN\n"
+	done
+
+	# unlock vlan-adapter mapping file
+	unlock
+}
+
+#----------------------------------------------------------------------------------------
+
+function vlandef_apt(){
+	#iterate through each vlan to create
+	for (( INDEX=0; INDEX<${#OPT_VNAME_LIST[@]}; INDEX++ ))
+	do
+		VLAN_NAME=${OPT_VNAME_LIST[$INDEX]}
+		VLAN_PCP=${OPT_PCP_LIST[$INDEX]}
+		
+		# check if the provided argument list is valid.
+		check_args
+		
+		#Storing APT VLan info on imm vlan table
+		$( $CMD_IMMCFG -c AxeEquipmentVlan -a name=$VLAN_NAME -a stack=-1 -a pcp=$VLAN_PCP -a vlanType=1 -a reserved=0 "vlanId=$VLAN_NAME,vlanCategoryId=1,AxeEquipmentequipmentMId=1" &> /dev/null )
+		[ $? -ne 0 ] && console_abort "ERROR: Error creating VLAN, no changes done" $exit_cmdx_fail
+
+		echo "Creating VLAN:$VLAN_NAME PCP:$VLAN_PCP"
+		console_print "Successfully created VLAN:$VLAN_NAME PCP:$VLAN_PCP\n"
+	done
+	return $exit_sucs
+}
+
+#----------------------------------------------------------------------------------------
+function VLANDEF_v1(){
+  TRACE_ENTER $FUNCNAME
+
+	# check if the remote node is up
+	ping_peer
+
+	if  [ $OPT_VLAN -eq $TRUE ];then
+		vlandef_apg
+	else
+		vlandef_apt
+	fi	
+
+	TRACE_LEAVE $FUNCNAME
+	return $exit_sucs
+}
+
+#----------------------------------------------------------------------------------------
+function invoke(){
+	TRACE_ENTER $FUNCNAME
+
+	[ $OPT_FORCE -eq $FALSE ] &&
+	if ! confirm; then
+		console_abort "INFO: No changes done\n" $exit_cmnd_abrt
+	fi
+
+	if ! isvAPG; then 
+		VLANDEF_v1
+	else 
+		VLANDEF_v2
+	fi	
+
+	TRACE_LEAVE $FUNCNAME
+	return $exit_sucs
+}
+
+
+#######################################################################
+# function vlandef_public();                                          #
+#                                                                     #
+# Moves network settings from physical interface (eth1 or bond1) to   #
+# a newly defined VLAN interface                                      #
+#######################################################################
+function vlandef_public() {
+	TRACE_ENTER $FUNCNAME
+	
+	#Add VLAN interface
+	${CMD_CLUSTER_CONF} interface --m_add control $INTERFACE.$VLAN_TAG vlan &>/dev/null
+	
+	#Add VLAN alias
+	${CMD_CLUSTER_CONF} interface --m_add control $INTERFACE.$VLAN_TAG:1 alias &>/dev/null
+	
+	#Modify Node A ip rule
+	local nodeA_rule_number=$($CMD_CLUSTER_CONF ip -D | grep " 1 ..* public " | awk -F' ' '{ print $1 }')
+	local nodeA_old_rule=$($CMD_CLUSTER_CONF ip --display | grep "^\s\s*$nodeA_rule_number\s" | awk '{ for (i=2; i<=NF; i++) print $i }' | tr '\n' ' ')
+	local nodeA_rule=$(echo "$nodeA_old_rule" | sed "s/\(\s\s*\)$INTERFACE\(\s\s*\)/\1$INTERFACE.$VLAN_TAG\2/")
+	$CMD_CLUSTER_CONF ip --m_modify $nodeA_rule_number:$nodeA_rule &> /dev/null
+	
+	#Modify Node B ip rule
+	local nodeB_rule_number=$($CMD_CLUSTER_CONF ip -D | grep " 2 ..* public " | awk -F' ' '{ print $1 }')
+	local nodeB_old_rule=$($CMD_CLUSTER_CONF ip --display | grep "^\s\s*$nodeB_rule_number\s" | awk '{ for (i=2; i<=NF; i++) print $i }' | tr '\n' ' ')
+	local nodeB_rule=$(echo "$nodeB_old_rule" | sed "s/\(\s\s*\)$INTERFACE\(\s\s*\)/\1$INTERFACE.$VLAN_TAG\2/")
+	$CMD_CLUSTER_CONF ip --m_modify $nodeB_rule_number:$nodeB_rule &> /dev/null
+	
+	#Modify MIP rule
+	local mip_rule_number=$($CMD_CLUSTER_CONF mip -D | grep " nbi " | awk -F' ' '{ print $1 }')
+	local mip_old_rule=$($CMD_CLUSTER_CONF mip --display | grep "^\s\s*$mip_rule_number\s" | awk '{ for (i=2; i<=NF; i++) print $i }' | tr '\n' ' ')
+	local mip_rule=$(echo "$mip_old_rule" | sed "s/\(\s\s*\)$INTERFACE\(:\)/\1$INTERFACE.$VLAN_TAG\2/")
+	$CMD_CLUSTER_CONF mip --m_modify $mip_rule_number:$mip_rule &> /dev/null
+	
+	#Verify cluster configuration is OK after updates
+	$CMD_CLUSTER_CONF mgmt --cluster --verify &> /dev/null || {
+		#Something wrong. Fallback with older cluster config
+		$CMD_CLUSTER_CONF mgmt --cluster --abort &> /dev/null
+		console_abort "ERROR: Cluster configuration updation failed\n" $exit_clus_fail
+	}
+
+  #Verify seems to be OK. Reload the cluster now.
+  $CMD_CLUSTER_CONF mgmt --cluster --reload --verbose &> /dev/null || {
+    #Something wrong. Fallback with older cluster config
+    $CMD_CLUSTER_CONF mgmt --cluster --abort &> /dev/null
+    console_abort "ERROR: Cluster configuration updation failed\n" $exit_clus_fail
+  }
+
+  #Things seems to be OK so-far. Commit cluster configration now.
+  $CMD_CLUSTER_CONF mgmt --cluster --commit &> /dev/null || console_abort "ERROR: Cluster configuration updation failed\n" $exit_clus_fail
+	
+	TRACE_LEAVE $FUNCNAME
+	return $exit_sucs
+}
+
+
+# _____________________
+#|    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |
+#|_____________________|
+# Here begins the "main" function...
+# Set the interpreter to exit if a non-initialized variable is used.
+set -u
+
+# Log the parameters in the system log
+log "START: <$0 $*>"
+
+if is_vAPG; then
+  console_print "$exit_virtual_arch_string"
+  console_print ""
+else
+# sanity check to see if things are in place
+  sanity_check
+
+# parse the command-line paramters
+  parse_args $*
+
+# invoke the command
+  invoke
+
+fi
+
+log "END: <$0 $*>"
+
+#  the script returns the status of the last invoked function
+exit $exit_sucs
+

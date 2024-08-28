@@ -1,0 +1,93 @@
+#!/bin/bash
+# 
+# Header Information
+#
+#
+#
+#
+#Author(s): Malangsha Shaik
+
+TEMPLATE_DIR="/vobs/cm4ap/apos/ha_cnz/ha_appdemo/tools/template"
+TEMPLATE_2N_FILE=$TEMPLATE_DIR/"2N_AppConfig_Template.xml"
+TEMPLATE_No_RED_FILE=$TEMPLATE_DIR/"No_Red_AppConfig_Template.xml"
+APP_CFG_FILE="./applicationConfiguration.cfg"
+AP_DIR="\/opt\/ap"
+
+die() {
+	echo "ERROR: $*" >&2
+	exit 1
+}
+
+info () {
+	echo "$1" >&2
+	#         ^^^ to stderr
+}
+
+# Source application configuration file
+if [ ! -f $APP_CFG_FILE ]; then
+	die "$APP_CFG_FILE Not Found!"
+fi
+
+. $APP_CFG_FILE      #sourcing the config file
+
+#validation part begin
+if [ -z $SUBSYS_NAME -o "$SUBSYS_NAME" = "none" ]; then
+	die "SUBSYS NAME not provided in Config File [applicationConfiguration.cfg]"
+fi
+	
+if [ -z $BLOCK_NAME -o "$BLOCK_NAME" = "none" ]; then
+	die "BLOCK_NAME not provided in Config File [applicationConfiguration.cfg]"
+fi
+
+if [ -z $APP_NAME -o "$APP_NAME" = "none" ]; then
+	die "APP_NAME not provided in Config File [applicationConfiguration.cfg]"
+fi
+
+if [ -z $RED_MODEL ]; then
+	die "RED_MODEL not provided in Config File [applicationConfiguration.cfg]"
+fi
+
+#generate clc name
+if [ ! -z $APPL_FUNCTIONTY  -a "$APPL_FUNCTIONTY" != "none" ]; then
+	APP_CLC="$SUBSYS_NAME"_"$BLOCK_NAME"_"$APPL_FUNCTIONTY"_clc
+	xml_name="./ha_"$SUBSYS_NAME"_"$BLOCK_NAME"_"$APPL_FUNCTIONTY"_objects.xml"
+else
+	APP_CLC="$SUBSYS_NAME"_"$BLOCK_NAME"_clc
+	xml_name="./ha_"$SUBSYS_NAME"_"$BLOCK_NAME"_objects.xml"
+fi
+
+#generate the bundle path string
+BUNDLE_PATH_PREFIX="$AP_DIR\/$SUBSYS_NAME\/bin"
+
+#generate callback timeout
+if [ -z $CALLBACK_TIMEOUT -o "$CALLBACK_TIMEOUT" = "none" ] ; then
+	CALLBACK_TIMEOUT="10000000000"
+fi
+
+#generate the health check key
+APP_HCHCK_KEY="$DAEMON_NAME"_hck
+
+#generate health check period
+if [ -z $HEALTH_CHECK_PERIOD -o "$HEALTH_CHECK_PERIOD" = "none" ]; then
+	HEALTH_CHECK_PERIOD="10000000000"
+fi
+
+#generate health check max duration
+if [ -z $HEALTH_CHECK_MAX_DURATION -o "$HEALTH_CHECK_MAX_DURATION" = "none" ]; then
+	HEALTH_CHECK_MAX_DURATION="6000000000"
+fi
+
+#Template file
+if [ "$RED_MODEL" = "2N" ]; then
+	TEMPLATE_FILE="$TEMPLATE_2N_FILE"
+	RED_MODEL="2NSG"
+elif [ "$RED_MODEL" = "NORED" ]; then
+	TEMPLATE_FILE="$TEMPLATE_No_RED_FILE"
+	RED_MODEL="NoRedSG"
+else
+	die "Invalid Redundancy Model provided in Config File [applicationConfiguration.cfg]"
+fi
+
+cat $TEMPLATE_FILE | sed s'/APPTOKEN/'"$APP_NAME"'/g' | sed s'/APPNAME_TOKEN/'"$APP_NAME"'/g' | sed s'/RED_MODEL/'"$RED_MODEL"'/g' | sed s'/CALLBACK_TIMEOUT_TOKEN/'"$CALLBACK_TIMEOUT"'/g'| sed s'/APP_CLC_TOKEN/'"$APP_CLC"'/g' | sed s'/APP_HCHCK_KEY_TOKEN/'"$APP_HCHCK_KEY"'/g' | sed s'/BUNDLE_PATH_PREFIX_TOKEN/'"$BUNDLE_PATH_PREFIX"'/g' | sed s'/APP_HCHCK_PERIOD_TOKEN/'"$HEALTH_CHECK_PERIOD"'/g'| sed s'/APP_HCHCK_MAX_DURATION_TOKEN/'"$HEALTH_CHECK_MAX_DURATION"'/g' >"$xml_name"
+
+info "$xml_name generated"

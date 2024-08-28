@@ -1,0 +1,11 @@
+[Unit]
+Description=APOS finalize system configuration 
+After=apos-drbd.service lde-imm.service lde-rpm.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/systemd/scripts/apos-finalize-system-conf.sh start
+RemainAfterExit=yes
+
+[Install]
+WantedBy=lde-nodetype@control.target

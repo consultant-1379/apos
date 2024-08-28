@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+	Copyright (c) 2020 Ericsson AB.
+	All rights reserved
+
+	DX ECIM Tool-chain generated this file on Dec 8, 2020 11:45:31 PM using:
+	* com.ericsson.ecim.coremw.m2m 3.13.0.202006261811
+	* com.ericsson.ecim.coremw.dsl 3.13.0.202006261811
+	* com.ericsson.ecim.coremw.imm 3.13.0.202006261811
+--><imm:IMM-contents xmlns:imm="http://www.saforum.org/IMMSchema" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.saforum.org/IMMSchema SAI-AIS-IMM-XSD-A.01.01.xsd">
+    <object class="AxeFunctions">
+        <dn>axeFunctionsId=1</dn>
+        <attr>
+            <name>systemType</name>
+            <value>0</value>
+        </attr>
+        <attr>
+            <name>apNodeNumber</name>
+            <value>1</value>
+        </attr>
+        <attr>
+            <name>apgShelfArchitecture</name>
+            <value>0</value>
+        </attr>
+        <attr>
+            <name>apzProtocolType</name>
+            <value>4</value>
+        </attr>
+        <attr>
+            <name>axeApplication</name>
+            <value>2</value>
+        </attr>
+    </object>
+    <object class="SystemHandling">
+        <dn>systemHandlingId=1,axeFunctionsId=1</dn>
+    </object>
+    <object class="SecurityHandling">
+        <dn>securityHandlingId=1,axeFunctionsId=1</dn>
+    </object>
+    <object class="DataOutputHandling">
+        <dn>dataOutputHandlingId=1,axeFunctionsId=1</dn>
+    </object>
+    <object class="SupervisionHandling">
+        <dn>supervisionHandlingId=1,axeFunctionsId=1</dn>
+    </object>
+    <object class="SystemComponentHandling">
+        <dn>systemComponentHandlingId=1,axeFunctionsId=1</dn>
+    </object>
+</imm:IMM-contents>

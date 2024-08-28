@@ -1,0 +1,28 @@
+Usage:  bspmngr set bootdev [--verbose] [--help]
+                  --eth=<interface>|--disk=<device> <board>
+
+Set the first boot device of the specified board (only apub boards are
+supported).
+
+--eth=<interface>       set the board to start from the specified ethernet
+                        interface (i.e. eth3, eth4, etc.). Available interfaces
+			are listed in the lib/common/bootdev.dat file.
+			
+--disk=<device>         set the board to start from the specified disk device
+                        (i.e. systemdisk, flashdisk, etc.). Available devices
+			are listed in the lib/common/bootdev.dat file.
+			
+<board>                 represents the board the command will operate on. It
+                        can assume one of the following values:				                
+		                <board_name>
+		                <slot_number>
+				
+<board_name>            can assume one of the following values (the supported
+                        logical names are found in lib/common/slot_by_name.dat
+                        under the bspmngr root directory):
+	                        apub_a, apa
+		                apub_b, apb		                
+
+<slot_number>           must be an unsigned integer mapped to one of the apub
+                        boards in the slot_by_name.dat file.
+

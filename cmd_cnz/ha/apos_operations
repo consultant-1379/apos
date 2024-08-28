@@ -1,0 +1,986 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2011 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# apos_operations
+# A script that acts as the APOS frontend for HA failover operations.
+##
+# Usage:
+# apos_operations --startup|-s
+# apos_operations --failover|-f <ACTIVE|PASSIVE>
+# apos_operations --activate-mips|-a
+# apos_operations --deactivate-mips|-d
+# apos_operations --cleanup|-c
+# apos_operations --help|-h
+##
+# Changelog:
+# - Tue Mar 08 2022 - Amrutha Padi (zpdxmrt)
+#       Updated fetch_mip_list functionality.
+# - Fri Feb 11 2022 - Amrutha Padi (zpdxmrt)
+#       Fix for NBI socket failure cases.
+# - Wed Jun 09 2021 - Swapnika Baradi (xswapba)
+#       Improved logging for mount failure cases
+# - Fri Mar 20 2020 - Pratap Reddy (xpraupp)
+#     Changes in fetch_mip_list function for IPv6 
+# - Thu Jul 24 2019 -Naveen G (zgxxnav)
+#       As part of gnsh feature enhancements in passive2active()
+#       func removed copying ssl.conf from cluster and 
+#       active2passive() func empty /etc/apache2/conf.d/ssl.conf 
+# - Sat Jul 20 2019 - Yeswanth Vankayala (xyesvan)
+#    Removed changes for tipc config 
+# - Mon Jun 10 2019 - zbhegna
+#   called get_storage_config_paths to perform apache related operations during failover
+# - Mon Apr 29 2019 - Sowjanya Medak (xsowmed)
+#   Moved the start and stop of racoon and strongswan to asecbin service
+# - Thu Jan 17 2019 - Sindhura Chintakindi (zchisin)
+#       Added Strongswan service start/stop to make it as 2N service.
+# - Tue Feb 14 2018 - Nazeema Begum (xnazbeg)
+#	Handling of nfs thread count during failover in GEP1
+#       Handling tipc flickering issue during failover in GEP1 and GEP2
+# - Wed Mar 08 2017 - Baratam Swetha (xswebar)
+#       Added strat/stop of apg-atftps on AP2
+# - Tue Jul 26 2016 - Alessio Cascone (ealocae)
+#   	Added impacts to use mount bind for SSSD databases.
+# - Tue Mar 29 2016 - Alessio Cascone (ealocae)
+#   	Added impacts for Cached Credentials on SLES12.
+# - Tue Apr 05 2016 - Claudio Elefante (xclaele)
+# 	Updated passive2active and active2passive functions to handle symbolic link to Smart Image in TFTP area
+# - Tue Mar 29 2016 - Nikhila Sattala (xniksat)
+#       Included ipsec racoon setkey service restart 
+# - Tue Feb 09 2016 - Crescenzo Malvone (ecremal)
+#   	removed start/stop apg-atftps on AP2
+# - Wed Jan 27 2016 - Antonio Buonocunto (eanbuon)
+#   	modified functions drbd and md cleanup.
+# - Fri Jan 22 2016 - Francesco Rainone & Fabio Ronca (efrarai, efabron)
+#   	SLES12 Adaptation.
+#   	patch_comea is removed.
+# - Mon 02 Jan 2015 - Madhu Muthyala (XMADMUT)
+#   	Updated fetch_mip_list function to fetch optinal networks [ex: cdr, li... ] for virtualization POC
+# - Mon Oct 20 2014 - Fabio Imperato (xfabimp) / Fabrizio Paglia (xfabpag)
+#   	New handling of the reload of web server configuration files
+# - Sat Oct 18 2014 - Fabrizio Paglia (xfabpag)
+#   	Bugs fixed in web server handling
+# - Mon Oct 16 2014 - Francesco Rainone (efrarai)
+#   	patch_comea is now executed in AP2 case too.
+# - Wed Oct 15 2014 - Fabio Imperato (xfabimp)
+#       Removed handling of Restore scenario for http server start
+#  	New function get_http_configfile_path introduced
+# - Thu Sep 25 2014 - Fabio Imperato (xfabimp)
+#   	Deleted apos_abort() into handle_ldap function and racoon service restart (TR HS98027)
+# - Wed Sep 24 2014 - Torgny Wilhelmsson (xtorwil) / Fabio Imperato (xfabimp)
+#   	Improvement of http server handling
+# - Fri Sep 19 2014 - Fabio Imperato (xfabimp)
+#   	Added HTTP server handle in failover operations
+# - Fri Aug 08 2014 -  Malangsha Shaik (xmalsha)
+#	update with umount_all function		
+# - Fri May 23 2014 - Antonio Buonocunto (eanbuon)
+# 	Include LDAP handling
+# - Fri Apr 25 2014 - Pratap Reddy (xpraupp)
+# 	update with activate_mip function
+# - Tue Feb 04 2014 - Gianluigi Crispino (xgiacri)
+#	Fixed TR: HS27454
+# - Fri Sep 20 2013 - Claudia Atteo (xclaatt)
+#	Added IPSec handle in failover operations
+# - Mon Jul 22 2013 - Tanu Aggarwal (xtanagg)
+#	Added get_storage_type function
+# - Tue Jul 16 2013 - Tanu Aggarwal (xtanagg)
+#	Removed mip activation and deactivation for drbd.
+# - Mon Apr 01 2013 - Tanu Aggarwal (xtanagg)
+#   	Replace RAID with drbd1.
+# - Tue Mar 20 2012 - Paolo Palmieri (epaopal)
+#	Introduction of nbi mgmt on default ftp site.
+# - Mon Jan 30 2012 - Malangsha Shaik (xmalsha)
+#	SIGUSR2 phase removed.
+# - Fri Dec 23 2011 - Francesco Rainone (efrarai)
+#	Virtual directories configuration file updated.
+# - Tue Dec 20 2011 - Malangsha Shaik (xmalsha)
+#	Minor changes.
+# - Wed Nov 30 2011 - Francesco Rainone (efrarai)
+#	Rework according to the Malangsha Shaik's proposals.
+# - Tue Oct 25 2011 - Paolo Palmieri (epaopal)
+#	Introduction of cleanup feature.
+# - Mon Jul 25 2011 - Paolo Palmieri (epaopal)
+#	Introduction of ftp server mgmt.
+# - Fri May 27 2011 - Paolo Palmieri (epaopal)
+#	Rework!
+# - Wed May 25 2011 - Francesco Rainone (efrarai)
+#	Heavy rework to match APOS needs.
+# - Tue May 24 2011 - Malangsha Shaik (xmalsha)
+#	First version.
+##
+
+set -u
+
+APOS_COMMON="${AP_HOME:-/opt/ap}/apos/conf/apos_common.sh"
+source $APOS_COMMON
+ETC_APACHE2_CONFD_SSL_CONF_PATH="/etc/apache2/conf.d/ssl.conf"
+EXIT_SUCCESS=$TRUE
+EXIT_FAILURE=$FALSE
+LOCAL_LOG_FILE='/var/log/acs/tra/logging/apos_operations.log'
+LOG_TAG='apos: apos_operations'
+CMD_CAT='/bin/cat'
+CMD_AWK='/usr/bin/awk'
+CMD_GREP='/usr/bin/grep'
+CMD_CLUSTER='/usr/bin/cluster'
+CMD_CLUSTERCONF='/opt/ap/apos/bin/clusterconf/clusterconf'
+HTTP_ETC_PATH="/etc/apache2"
+HTTP_CONFIGURATION_FILE_PATH=""
+HTTP_CONFIGURATION_FILE="http_config_file"
+HTTP_SECURITY_OPTION="https_status"
+HTTP_STATUS="http_status"
+LDAP_CACHE_CLUSTER_FOLDER="$(apos_create_brf_folder clear)/sssd_db/"
+LDAP_CACHE_LOCAL_FOLDER='/var/lib/sss/db/'
+CMD_MOUNT=$(which mount)
+CMD_UMOUNT=$(which umount)
+
+function echo_done(){
+	COLUMNS=$(tput cols)
+	esc=$(echo -en "\033")
+	done="${esc}[1;32m"
+	norm=$(echo -en "${esc}[m\017")
+	stat=$(echo -en "\015${esc}[${COLUMNS}C${esc}[10D")
+
+	echo "${stat}${done}done${norm}"
+}
+
+function log(){	
+	/bin/logger -t "$LOG_TAG" "$*"
+}
+
+function log_error(){
+  /bin/logger -t "$LOG_TAG" -p error "$*"
+}
+
+function local_log(){
+	echo "[$(date --utc)] $@" >> $LOCAL_LOG_FILE
+}
+
+function sanity_checks(){
+	if [ ! -d $(dirname $LOCAL_LOG_FILE) ]; then
+		mkdir -p $(dirname $LOCAL_LOG_FILE)
+	fi
+
+#	if [ -f $LOCAL_LOG_FILE ]; then
+#		rm -f $LOCAL_LOG_FILE
+#	fi
+
+	local_log 'Function invoked: sanity_checks()'
+}
+
+function abort(){
+	local_log 'Function invoked: abort()'
+
+	local MESSAGE=${@:-"An error occurred. Exiting!"}
+	log $MESSAGE
+	local_log $MESSAGE
+	echo -e $MESSAGE
+	exit $EXIT_FAILURE
+}
+
+function check_exit_code(){
+	local ERROR_MSG=${1:-"Non-zero exit code detected!"}	
+	if [ $? -ne 0 ]; then		
+		abort $ERROR_MSG;
+	fi
+}
+
+# The apos_get_ap_type of apos_common is not used since the following one is faster 
+function apos_get_ap_type() {
+
+	local PARMTOOL_COMMAND="/opt/ap/apos/bin/parmtool/parmtool"
+	local CONFIG_PATH="/usr/share/pso/storage-paths/config"
+	local AP_TYPE="AP1"
+	local STORAGE_PATH=$(<$CONFIG_PATH)
+
+	[ -z  "$STORAGE_PATH" ] && abort "unable to read pso storage path"
+	local AP_TYPE_CONF="$STORAGE_PATH/apos/aptype.conf"
+
+	if [ -f $PARMTOOL_COMMAND ]; then
+			AP_TYPE=$($PARMTOOL_COMMAND get --item-list ap_type | $CMD_AWK -F '=' '{print $2}')
+			if [ $? -ne 0 ]; then
+				log "unable to get ap_type value from paramtool... setting to default value"
+				AP_TYPE="AP1"
+			fi
+	else
+			if [ -f $AP_TYPE_CONF ]; then 
+				AP_TYPE=$(cat $AP_TYPE_CONF)
+				[ -z "$AP_TYPE" ] && AP_TYPE="AP1"
+			else
+				 log "$AP_TYPE_CONF not found"
+				 AP_TYPE="AP1"
+			fi
+	fi
+	echo "$AP_TYPE"
+}
+
+function get_storage_config_paths() {
+        local config_path=$(cat /usr/share/pso/storage-paths/config)
+        
+        [[ -z "$config_path" ]] && abort "unable to read pso storage path" 
+        HTTP_CONFIGURATION_FILE_PATH="$config_path/apos/"
+        IPSEC_CONFIGURATION_PATH="$config_path/asec/ipsec"
+}
+
+function fetch_mip_list() {
+  local MIP_LIST="primary_sc-a primary_sc-b nbi"
+
+  local OPTIONAL_LIST=''
+  ## check shelf architecture for virtualization
+  if [ $(get_shelf_architecture_attr) -eq 3 ]; then
+    DYNAMIC_MIP_LIST=$($CMD_CLUSTERCONF mip -D | $CMD_GREP -wE "nbi|nbi_v6" | $CMD_AWK '{print $4}' | tr '\n' ' ')
+    MIP_LIST="primary_sc-a primary_sc-b ${DYNAMIC_MIP_LIST}"
+    LIST_TO_IGNORE="public|public_v6|ipn[a-b]|internal|present"
+    OPTIONAL_LIST=$( $CMD_CLUSTERCONF mip -D | $CMD_GREP -vwE "$LIST_TO_IGNORE" | $CMD_AWK '{print $4}' | tr '\n' ' ')
+  else
+    OPTIONAL_LIST="public_cdr public_li primary_ps public_vlan"
+  fi
+
+  for MIP in $OPTIONAL_LIST; do
+  if $CMD_CLUSTERCONF mip --display | grep -q $MIP; then
+    if [ "$MIP" == "public_vlan" ]; then
+      MIP=$( find /etc/cluster/nodes/this/mip/ -maxdepth 1 -name "public_vlan*" -exec basename {} \;)
+      MIP_LIST="$MIP_LIST $MIP"
+    else
+      MIP_LIST="$MIP_LIST $MIP"
+    fi
+  fi
+  done
+  echo $MIP_LIST
+
+}
+
+function is_mounted_on () {
+        local MOUNT_POINT="$1"
+        mount | grep -E "[[:space:]]+on[[:space:]]+${MOUNT_POINT}[[:space:]]+" &>/dev/null
+        return $?
+}
+
+# Invoked with --cleanup
+function cleanup_drbd1_active_users(){
+	local_log 'Function invoked: cleanup_drbd1_active_users()'
+        log "Function invoked: cleanup_drbd1_active_users()"
+	local procs=''
+	# Collect pids for processes involved in data disks usage
+        procs=$(/usr/bin/lsof -Fpc0 /dev/drbd1 2>/dev/null)
+        
+	if [ ! -z "$procs" ]; then
+		log "Active Process before SIGKILL: $procs"
+                for proc in $procs; do
+                        pid=$(echo $proc | awk -F'c' '{print $1}')
+                        pid=${pid:1}
+                        pname=$(echo $proc | awk -F'c' '{print $2}')
+                        log "Sending SIGKILL to $pname, pid: $pid"
+                        /bin/kill -s SIGKILL $pid
+                done
+		
+		sleep 2
+		sync;sync;sync
+	fi
+	log "cleanup_drbd1_active_users(): No active users on drbd1"
+	return $EXIT_SUCCESS
+}
+
+function umount_all(){
+	local_log 'Function invoked: umount_all()'
+        log "Function invoked: umount_all()"
+	mountpoints=$(grep -E '^[^[:space:]]+[[:space:]]\/data\/|^[^[:space:]]+[[:space:]]\/var\/cpftp\/' /proc/mounts | awk '{print $2}')
+	for mount_point in $mountpoints; do
+		log "unmounting \"$mount_point\"..."
+		local attempts=0
+		local max_attempts=3
+		SIGINT_TMOUT=2
+		SIGKILL_TMOUT=4
+		local UMOUNT_CMD="/usr/bin/timeout --signal=INT --kill-after=$SIGKILL_TMOUT $SIGINT_TMOUT /bin/umount $mount_point &>/dev/null"
+		# executes the umount instruction
+		$UMOUNT_CMD
+		local RETURN_CODE=$?
+		while [[ $RETURN_CODE -ne 0 && $attempts -lt $max_attempts ]]; do
+			log "unable to unmount $mount_point... retrying"
+			### DEBUG START ###
+			procs=$(/usr/bin/lsof -Fpc0 $mount_point 2>/dev/null)
+			log "Active Process on mount point: \"$mount_point\": $procs"
+			### DEBUG END ###			
+			attempts=$(( $attempts + 1 ))
+			# sleeps only if the umount command hasn't timed-out (RETURN_CODE!=124)
+			[ $RETURN_CODE -ne 124 ] && /bin/sleep 0.5
+			
+			# tries to umount once more
+			$UMOUNT_CMD
+			RETURN_CODE=$?
+		done
+	
+		# check if the mount point is unmounted; if not, log error
+		if mountpoint -q $mount_point; then
+			log "unable to unmount \"$mount_point\" after $max_attempts attempts!"
+			### DEBUG START ###			
+			#Check who are using the mount point
+			procs=$(/usr/bin/lsof -Fpc0 $mount_point 2>/dev/null)      
+			if [ ! -z "$procs" ]; then
+				log "Active Process on mount point: \"$mount_point\": $procs"
+	                	for proc in $procs; do
+	                        	pid=$(echo $proc | awk -F'c' '{print $1}')
+	                        	pid=${pid:1}
+	                        	pname=$(echo $proc | awk -F'c' '{print $2}')
+	                        	log "Sending SIGKILL to $pname, pid: $pid"
+	                        	/bin/kill -s SIGKILL $pid
+	                	done
+				sleep 2
+				sync;sync;sync
+			fi
+			$UMOUNT_CMD
+			RETURN_CODE=$?
+			if [ $RETURN_CODE -ne 0 ]; then 
+				log "unable to unmount \"$mount_point\""
+			else
+				log "\"$mount_point\" successfully unmounted"
+			fi
+			### DEBUG END ###
+		else
+			log "\"$mount_point\" successfully unmounted"
+		fi	
+	done
+}
+
+# Invoked with --cleanup
+function cleanup_drbd1_active_mounts(){
+	local_log 'Function invoked: cleanup_drbd1_active_mounts()'
+	log "Function invoked: cleanup_drbd1_active_mounts()"
+	umount_all	
+	return $EXIT_SUCCESS
+}
+
+# Invoked with --cleanup
+function cleanup_md0_active_users(){
+	local_log 'Function invoked: cleanup_md0_active_users()'
+        local procs=''
+	# Collect pids for processes involved in data disks usage
+        procs=$(/usr/bin/lsof -Fpc0 /dev/md0 2>/dev/null)
+        
+	if [ ! -z "$procs" ]; then
+		log "Active Process before SIGKILL: $procs"
+                for proc in $procs; do
+                        pid=$(echo $proc | awk -F'c' '{print $1}')
+                        pid=${pid:1}
+                        pname=$(echo $proc | awk -F'c' '{print $2}')
+                        log "Sending SIGKILL to $pname, pid: $pid"
+                        /bin/kill -s SIGKILL $pid
+                done
+		
+		sleep 2
+		sync;sync;sync
+	fi
+	local_log 'Function exited: cleanup_md0_active_users()'
+	return $EXIT_SUCCESS
+}
+
+# Invoked with --cleanup
+function cleanup_md0_active_mounts(){
+	local_log 'Function invoked: cleanup_md0_active_mounts()'
+	umount_all	
+	return $EXIT_SUCCESS
+}
+
+# Function to activate mips
+function activate_mip() {
+	local_log 'Function invoked: activate_mip()'
+	[ -z $1 ] && return $FALSE
+	local MIP="$1"
+	if [ ! -d /etc/cluster/nodes/this/mip/$MIP ]; then
+		abort "Invalid moveable IP name: $MIP"
+	else
+		INTF=$(cat /etc/cluster/nodes/this/mip/$MIP/interface/name)
+		IP=$(cat /etc/cluster/nodes/this/mip/$MIP/address)
+		VERSION=$(</etc/cluster/nodes/this/mip/$MIP/network/version)
+
+		echo -n "Activating moveable IP $MIP "
+		if ! ip -$VERSION addr show dev $INTF | grep -w $IP; then
+			$CMD_CLUSTER ip --activate $MIP
+			check_exit_code
+                        log "Activating $MIP was done Successfully.."
+		fi
+		echo_done
+	fi
+	local_log 'Function exited: activate_mip()'
+	return $TRUE
+}
+
+# fuction to deactivate mips
+function deactivate_mip() {
+	local_log 'Function invoked: deactivate_mip()'
+	[ -z $1 ] && return $FALSE
+	local MIP="$1"
+	if [ ! -d /etc/cluster/nodes/this/mip/$MIP ]; then
+		abort "Invalid moveable IP name: $MIP"
+	else
+		INTF=$(cat /etc/cluster/nodes/this/mip/$MIP/interface/name)
+		IP=$(cat /etc/cluster/nodes/this/mip/$MIP/address)
+		VERSION=$(</etc/cluster/nodes/this/mip/$MIP/network/version)
+
+		echo -n "Deactivating moveable IP $MIP "
+		if ip -$VERSION addr show dev $INTF | grep -w $IP; then
+			$CMD_CLUSTER ip --deactivate $MIP
+			check_exit_code
+                        log "Deactivating $MIP was done Successfully.."
+		fi
+		echo_done
+	fi
+	local_log 'Function exited: deactivate_mip()'
+	return $TRUE
+}
+
+# activate list of MIPs
+function activate_all_mips() {
+	local_log 'Function invoked: activate_all_mips()'
+	local MIP_LIST=$(fetch_mip_list)
+	for MIP in $MIP_LIST; do
+		activate_mip "$MIP" || abort "error while trying to activate $MIP movable ip"
+	done
+	local_log 'Moveable IPs activated'
+	return $EXIT_SUCCESS
+}
+
+# deactivate list of MIPs
+function deactivate_all_mips() {
+	local_log 'Function invoked: deactivate_all_mips()'
+	local MIP_LIST=$(fetch_mip_list)
+	for MIP in $MIP_LIST; do
+		deactivate_mip "$MIP" || abort "error while trying to deactivate $MIP movable ip"
+	done
+	local_log 'Moveable IPs deactivated'
+	return $EXIT_SUCCESS
+}
+
+function handle_ldap() {
+	local_log 'Function invoked: handle_ldap()'
+	if [ "$AP_TYPE" == "AP1" ];then 
+		[ $# -ne 1 ] && abort "handle_ldap: parameter is required"
+		[[ ! $1 =~ (stop|start) ]] && abort "handle_ldap: only stop/start parameters are allowed"
+		local COMMAND=$1
+		apos_servicemgmt ${COMMAND} apg-ldap.service &>/dev/null
+		check_exit_code
+		local_log 'LDAP server daemon ${COMMAND} success'
+	else
+		local_log 'handle_ldap: nothing to do on AP2'
+	fi
+}
+
+function isAP1(){
+  [ "$AP_TYPE" == "AP1" ] && return $TRUE
+  return $FALSE
+}
+
+function patch_acs(){
+  local_log 'Function invoked: patch_acs()'
+  if isAP1 ; then
+    local APOS_ACS_CONF=/usr/lib/lde/config-management/apos_secacs-config
+    if [ -x $APOS_ACS_CONF ]; then
+      $APOS_ACS_CONF config reload || abort "failure while executing \"$APOS_ACS_CONF config reload\""
+    else
+      abort "$APOS_ACS_CONF not found or not executable"
+    fi	
+  else
+    local_log 'No patching of SEC-ACS on AP2'
+  fi
+}
+
+# Invoked with --failover PASSIVE
+function passive2active(){
+	local_log 'Function invoked: passive2active()'
+
+  AP_TYPE=$(apos_get_ap_type)
+	
+	#Edited by Ronca, approved by Buonocunto and checked by Rainone
+	local NBI_FOLDER_PATH='/data/opt/ap/nbi_fuse'
+	if [ -d "$NBI_FOLDER_PATH" ]; then
+		chmod 777 $NBI_FOLDER_PATH &>/dev/null
+	fi
+
+	# APG dhcpd stop 
+	# following dhcp stop can be removed as dhcp should not be running on passive node.
+	# unless if it gets started manually by someone.
+	apos_servicemgmt stop apg-dhcpd.service &>/dev/null
+	check_exit_code
+	local_log 'APG DHCP server daemon stopped'
+
+	# acs-agent SEC script patch
+	patch_acs
+
+	# If caching is enabled, stop SSSD service, mount the DB folder under cluster and start SSSD. 
+	if [ $(apos_get_cached_creds_duration) -ne 0 ]; then
+		local_log "Cache is enabled on the node!"
+		if [ ! -d "$LDAP_CACHE_CLUSTER_FOLDER" ]; then
+			local_log "Folder '$LDAP_CACHE_CLUSTER_FOLDER' not existing, creating it!"
+			mkdir -p $LDAP_CACHE_CLUSTER_FOLDER &> /dev/null
+      [ $? -ne $TRUE ] && abort "Failed to create the $LDAP_CACHE_CLUSTER_FOLDER folder"
+		fi
+		apos_servicemgmt stop sssd.service
+		${CMD_MOUNT} --bind $LDAP_CACHE_CLUSTER_FOLDER $LDAP_CACHE_LOCAL_FOLDER
+		check_exit_code "Failed to mount the folder $LDAP_CACHE_CLUSTER_FOLDER to $LDAP_CACHE_LOCAL_FOLDER!"
+		apos_servicemgmt start sssd.service
+		local_log "sssd is started on the node!"
+	fi
+
+	# activating all list of MIPS
+	local STORAGE_TYPE=$(get_storage_type)
+	[ $STORAGE_TYPE == 'MD' ] && activate_all_mips
+
+  # atftpd start (legacy -> legacy, 169.1/2, 170.1/2, 169.33, 170.33)
+  apos_servicemgmt start apg-atftps.service &>/dev/null
+  check_exit_code
+  local_log 'ATFTP server daemon started'
+  if isAP1; then
+    # Creates symbolic link to Smart Image in TFTP area
+	  ln -fs /opt/ap/apos/conf/tinycore/default/ /data/apz/data/default
+	  [ $? -ne $TRUE ] && log_error "Failure while symlinking /opt/ap/apos/conf/tinycore/default/ to /data/apz/data/default"
+  fi
+  # APG dhcpd start (bond0 -> bond0, eth3, eth4)
+	apos_servicemgmt start apg-dhcpd.service &>/dev/null	
+	check_exit_code
+	local_log 'DHCP server daemon started'
+	
+	
+	# Virtual directory management mgmt (mount --bind)
+	vdconfile=/opt/ap/apos/conf/vdir/vd-conf
+	if [ -f $vdconfile ]; then
+	   	exec<$vdconfile
+	   	while read line; do
+			if [ $(echo $line | wc -w) -eq 3 ]; then
+				set -- $line
+				ftp_dir=$1
+				ftp_alias=$2
+				ftp_destfolder=$3
+				ftp_root=${ftp_destfolder:0:6}
+				if [[ $ftp_root == "/data/" && -d $ftp_dir ]]; then
+					! is_mounted_on "$ftp_dir/$ftp_alias" && mount --bind $ftp_destfolder $ftp_dir/$ftp_alias
+				fi
+			else
+				abort 'Wrong configuration file for virtual directories'
+			fi
+		done
+	else
+		abort 'No configuration file for virtual directories'
+	fi
+
+  # Internal vsftpd services are only deployed on AP1
+  if isAP1; then 
+    # Fix for TR HY37860 vsftpd mgmt (APG internal network ftp mgmt)
+    apos_servicemgmt start apg-vsftpd-APIO_1.socket &>/dev/null
+    [ $? -ne $TRUE ] && abort 'Failure while starting apg-vsftpd-APIO_1.socket'
+    local_log 'apg-vsftpd-APIO_1.socket succesfully started'
+
+    # Fix for TR HY37860 vsftpd mgmt (APG internal network ftp mgmt)
+    apos_servicemgmt start apg-vsftpd-APIO_2.socket &>/dev/null
+    [ $? -ne $TRUE ] && abort 'Failure while starting apg-vsftpd-APIO_2.socket'
+    local_log 'apg-vsftpd-APIO_2.socket succesfully started'
+  fi 
+        
+	# vsftpd mgmt (public's ftp mgmt)
+	apos_servicemgmt start apg-vsftpd.socket &>/dev/null
+	[ $? -ne $TRUE ] && abort 'Failure while starting apg-vsftpd.socket'
+	local_log 'apg-vsftpd.socket succesfully started'
+
+	# vsftpd mgmt (nbi's ftp mgmt)
+	apos_servicemgmt start apg-vsftpd-nbi.socket &>/dev/null
+	[ $? -ne $TRUE ] && abort 'Failure while starting apg-vsftpd-nbi.socket'
+	local_log 'apg-vsftpd-nbi.socket succesfully started'
+
+
+
+  
+  ## check shelf architecture for virtualization
+  if [ $(get_shelf_architecture_attr) -eq 3 ]; then
+    # netconf-beep mgmt 
+    apos_servicemgmt start apg-netconf-beep.socket &>/dev/null
+    [ $? -ne $TRUE ] && abort 'Failure while starting apg-netconf-beep.socket'
+    local_log 'apg-netconf-beep.socket succesfully started'
+  fi
+   #Configure the NFS attribute value overwritten by LDE during failover
+    NFS_FILE="/etc/sysconfig/nfs"
+    HW_TYPE=$(/opt/ap/apos/conf/apos_hwtype.sh)
+    CMD_SSH='/usr/bin/ssh'
+    SYSTEMCTL_CMD='/usr/bin/systemctl'
+    peer_hostname=$(cat /etc/cluster/nodes/peer/hostname)
+    this_hostname=$(cat /etc/cluster/nodes/this/hostname)
+
+    [ -z "$HW_TYPE" ] && apos_abort 1 'HW_TYPE not found'
+        if [ "$HW_TYPE" == "GEP1" ]; then
+          [[ -f "$NFS_FILE" ]] || apos_abort 1 "file \"$NFS_FILE\"  not found"
+		      sed -i "s/USE_KERNEL_NFSD_NUMBER.*/USE_KERNEL_NFSD_NUMBER=4/g" $NFS_FILE || apos_abort "failure while editing the $NFS_FILE file"
+          ${CMD_SSH} ${peer_hostname} sed -i "s/USE_KERNEL_NFSD_NUMBER.*/USE_KERNEL_NFSD_NUMBER=4/g" $NFS_FILE || apos_abort "failure while editing the $NFS_FILE file"
+
+                #Restart nfs-server only if active
+                status=$(${SYSTEMCTL_CMD} is-active nfs-server)
+
+                if [ "$status" == "active" ]; then
+                	/usr/bin/systemctl restart nfs-server.service &>/dev/null || apos_abort 'failure while restarting nfs service'
+        	else
+                	apos_log "NFS service restart was not performed..."
+        	fi
+
+	fi
+  
+	get_storage_config_paths
+	# ldap start
+	handle_ldap start
+	# apache server restart	
+	if [ -f "$HTTP_CONFIGURATION_FILE_PATH$HTTP_CONFIGURATION_FILE" ]; then
+		local_log 'Reloading Apache Server configuration'
+		pushd "$HTTP_CONFIGURATION_FILE_PATH/http_files" &> /dev/null
+		cp httpd.conf "$HTTP_ETC_PATH/" &> /dev/null
+		check_exit_code
+		cp listen.conf "$HTTP_ETC_PATH/" &> /dev/null
+		check_exit_code
+		cp server-tuning.conf "$HTTP_ETC_PATH/" &> /dev/null
+		check_exit_code
+		cp apache2 /etc/sysconfig/apache2 &> /dev/null
+		check_exit_code
+		
+		[[ -f "custom_includes.conf" ]] && {
+		    cp custom_includes.conf "$HTTP_ETC_PATH/conf.d" &> /dev/null
+		    check_exit_code
+		}
+		
+		
+		popd &> /dev/null
+		
+		if [ -f  "$HTTP_CONFIGURATION_FILE_PATH$HTTP_STATUS" ]; then
+			local status=$(cat $HTTP_CONFIGURATION_FILE_PATH$HTTP_STATUS)
+			if [ "$status" == "start" ]; then
+				/usr/sbin/rcapache2 start &> /dev/null
+				check_exit_code
+			fi
+		fi
+	else
+		local_log 'Apache server start skipped'
+	fi
+	
+	MIP=''
+	return $EXIT_SUCCESS
+}
+
+# Invoked with --failover ACTIVE
+function active2passive(){
+	local_log 'Function invoked: active2passive()'
+
+  AP_TYPE=$(apos_get_ap_type)
+
+  # Deletes symbolic link to Smart Image in TFTP area
+  rm -f /data/apz/data/default
+  check_exit_code
+
+  # atftpd stop (legacy, 169.1/2, 170.1/2, 169.33, 170.33 -> legacy)
+  apos_servicemgmt stop apg-atftps.service &>/dev/null
+  check_exit_code
+  local_log 'ATFTP server daemon stopped'
+
+	# dhcpd stop
+	apos_servicemgmt stop apg-dhcpd.service &>/dev/null
+	check_exit_code
+	local_log 'APG DHCP server daemon stopped'
+	
+	# ldap stop
+	handle_ldap stop
+
+	local STORAGE_TYPE=$(get_storage_type)
+	if [ $STORAGE_TYPE == 'MD' ]; then
+		deactivate_all_mips
+	fi
+
+  # vsftpd mgmt (public's ftp mgmt)
+  apos_servicemgmt stop apg-vsftpd.socket &>/dev/null
+  [ $? -ne $TRUE ] && abort 'Failure while stopping apg-vsftpd.socket'
+  local_log 'apg-vsftpd.socket succesfully stopped'
+
+  # vsftpd mgmt (nbi's ftp mgmt)
+  apos_servicemgmt stop apg-vsftpd-nbi.socket &>/dev/null
+  [ $? -ne $TRUE ] && abort 'Failure while stopping apg-vsftpd-nbi.socket'
+  local_log 'apg-vsftpd-nbi.socket succesfully stopped'
+
+  if isAP1; then 
+    # Fix for TR HY37860 vsftpd mgmt (APG internal network ftp mgmt)
+    apos_servicemgmt stop apg-vsftpd-APIO_1.socket &>/dev/null
+    [ $? -ne $TRUE ] && abort 'Failure while stopping apg-vsftpd-APIO_1.socket'
+    local_log 'apg-vsftpd-APIO_1.socket succesfully stopped'
+
+    # Fix for TR HY37860 vsftpd mgmt (APG internal network ftp mgmt)
+    apos_servicemgmt stop apg-vsftpd-APIO_2.socket &>/dev/null
+    [ $? -ne $TRUE ] && abort 'Failure while stopping apg-vsftpd-APIO_2.socket'
+    local_log 'apg-vsftpd-APIO_2.socket succesfully stopped'
+  fi 
+	
+	# vsftpd mgmt (umount)
+	vdconfile=/opt/ap/apos/conf/vdir/vd-conf
+	if [ -f $vdconfile ]; then
+	   	exec<$vdconfile
+	   	while read line; do
+			if [ $(echo $line | wc -w) -eq 3 ]; then
+				set -- $line
+				ftp_dir=$1
+				ftp_alias=$2
+				ftp_destfolder=$3
+				ftp_root=${ftp_destfolder:0:6}
+        local attempts=0
+  		  local max_attempts=3
+				SIGINT_TMOUT=2
+        SIGKILL_TMOUT=4
+				local UMOUNT_CMD="/usr/bin/timeout --signal=INT --kill-after=$SIGKILL_TMOUT $SIGINT_TMOUT /bin/umount $ftp_dir/$ftp_alias &>/dev/null"
+				
+        if [[ $ftp_root == "/data/" && -d $ftp_dir ]]; then
+					is_mounted_on "$ftp_dir/$ftp_alias" && $UMOUNT_CMD
+          local RETURN_CODE=$?
+				  while [[ $RETURN_CODE -ne 0 && $attempts -lt $max_attempts ]]; do			
+					    attempts=$(( $attempts + 1 ))
+					    [ $RETURN_CODE -ne 124 ] && /bin/usleep 500000
+		 			    # tries to umount once more
+              is_mounted_on "$ftp_dir/$ftp_alias" && $UMOUNT_CMD
+         		  RETURN_CODE=$?
+				  done
+				fi
+			else
+				abort 'Wrong configuration file for virtual directories'
+			fi
+		done
+	else
+		abort 'No configuration file for virtual directories'
+	fi
+  
+  if [ $(get_shelf_architecture_attr) -eq 3 ]; then
+    # netconf-beep mgmt 
+    apos_servicemgmt stop apg-netconf-beep.socket &>/dev/null
+    [ $? -ne $TRUE ] && abort 'Failure while stopping apg-netconf-beep.socket'
+    local_log 'apg-netconf-beep.socket succesfully stopped'
+  fi
+
+	# acs-agent SEC script patch
+	patch_acs
+
+	# In case cached credentials feature is enabled, stop the SSSD service, unmount the SSSD DB and start again SSSD
+	if [ $(apos_get_cached_creds_duration) -ne 0 ]; then
+		local_log "cache is enabled on the node"
+		if [ -d "$LDAP_CACHE_CLUSTER_FOLDER" ]; then
+			apos_servicemgmt stop sssd.service    
+			try 3 0.3 ${CMD_UMOUNT} $LDAP_CACHE_LOCAL_FOLDER
+			[ $? -ne $TRUE ] && abort "Failed to unmount the $LDAP_CACHE_LOCAL_FOLDER folder"
+   			apos_servicemgmt start sssd.service    
+			local_log "sssd service started"
+		
+		else
+			local_log "Folder '$LDAP_CACHE_CLUSTER_FOLDER' not existing, nothing to do!"
+		fi
+	fi
+         
+
+	#apache server stop
+	/usr/sbin/rcapache2 stop &> /dev/null
+	check_exit_code
+	local_log 'Apache server stopped'
+	
+	MIP=''
+
+	#if ssl.conf exisit empty on passive node 
+        if [ -e $ETC_APACHE2_CONFD_SSL_CONF_PATH ]; then
+           cat /dev/null > "$ETC_APACHE2_CONFD_SSL_CONF_PATH"
+        fi
+	
+	return $EXIT_SUCCESS
+}
+
+function handle_startup(){
+	local_log "Function invoked: handle_startup()"
+	
+	# Hanlde startup as a special case of passive2active failover.
+	passive2active
+	
+	return $EXIT_SUCCESS
+}
+
+function handle_failover(){
+	local_log "Function invoked: handle_failover( $* )"
+	case $1 in
+		ACTIVE)
+			active2passive
+		;;
+		PASSIVE)
+			passive2active
+		;;
+		*)
+			abort 'error occurred'
+		;;
+	esac
+
+	return $EXIT_SUCCESS
+}
+
+function handle_cleanup(){
+	local_log "Function invoked: handle_cleanup(()"
+    #Check the data disk replication type
+    local STORAGE_TYPE=$(get_storage_type)
+    case $STORAGE_TYPE in
+		MD)	
+			cleanup_md0_active_users
+			cleanup_md0_active_mounts
+		;;
+		DRBD)
+			cleanup_drbd1_active_users
+			cleanup_drbd1_active_mounts
+		;;
+		*)
+			abort "STORAGE TYPE not found"
+	esac
+	return $EXIT_SUCCESS
+}
+
+function usage(){
+	local_log 'Function invoked: usage()'
+	echo 'apos_operations --startup|-s'
+	echo 'apos_operations --failover|-f <ACTIVE|PASSIVE>'
+	echo 'apos_operations --activate-mips|-a'
+	echo 'apos_operations --deactivate-mips|-d'
+	echo 'apos_operations --cleanup|-c'
+	echo 'apos_operations --help|-h'	
+}
+
+# The function reads the command line argument list and parses it flagging the
+#  right variables in a case/esac switch.
+#  Input: the function must be invoked with the $@ parameter:
+#   parse_cmdline $*
+#  Required: please make attention to handle the cases in the right way.
+#
+function parse_cmdline(){
+	local_log 'Function invoked: parse_cmdline( '"$*"' )'	
+	# OPTIONS is a list of single-character options.
+	#  The string must be in the form:
+	#   Example: 'ovl' (for -o -v -l options).
+	#  Options that takes an argument must be followed by a colon:
+	#   Example: 'ovl:' (-v takes a mandatory argument).
+	#  Options with an optional argument must be followed by a double colon:
+	#   Example: 'ovl::' (-l takes an optional argument).
+	local OPTIONS='s f: c h a d'
+	
+	# LONG_OPTIONS is a list of space-separated multi-character options.
+	#  The string must be in the form:
+	#   Example: 'option1 option2 ... optionN'.
+	#  Options that takes an argument must be followed by a colon:
+	#   Example: 'option1: option2 ... optionN:'
+	#  Options with an optional argument must be followed by a double colon:
+	#   Example: 'option1:: option2:: ... optionN'
+	local LONG_OPTIONS='startup failover: activate-mips deactivate-mips cleanup help'
+
+	ARGS=$(getopt --longoptions "$LONG_OPTIONS" --options "$OPTIONS" -- "$@")
+	RETURN_CODE=$?	
+	if [ $RETURN_CODE -ne 0 ]; then
+		usage
+		abort "Wrong parameters"
+	fi
+	
+	eval set -- "$ARGS"
+	
+	# Make sure to handle the cases for all the options listed in OPTIONS
+	#  and LONG_OPTIONS and to fill up the right script-wide variables.
+	while [ $# -gt 0 ]; do		
+		case "$1" in
+			-s|--startup)
+				OPT_STARTUP=$TRUE
+			;;
+			-f|--failover)
+				OPT_FAILOVER=$TRUE
+				OPT_FAILOVER_ARG=$(echo $2 | tr [:lower:] [:upper:])
+				shift
+			;;
+			-a|--activate-mips)
+				OPT_ACTIVATE=$TRUE
+			;;
+			-d|--deactivate-mips)
+				OPT_DEACTIVATE=$TRUE
+			;;
+			-c|--cleanup)
+				OPT_CLEANUP=$TRUE
+			;;
+			-h|--help)
+				OPT_HELP=$TRUE
+			;;
+			--)
+				shift
+				break
+			;;
+			*)
+				usage
+				abort "unrecognized option ($1)"
+			;;
+		esac
+		shift
+	done
+}
+
+function options_check(){
+	local_log 'Function invoked: options_check()'
+	if [ $OPT_HELP -eq $TRUE ]; then
+		usage
+	else
+		if [[ $OPT_STARTUP -eq $TRUE && $OPT_FAILOVER -eq $TRUE ]]; then
+			usage
+			abort "Incompatible options."
+		fi
+
+		if [ $OPT_STARTUP -eq $TRUE ]; then
+			handle_startup
+			check_exit_code
+		else
+			if [ $OPT_FAILOVER -eq $TRUE ]; then
+				if [[ ! $OPT_FAILOVER_ARG =~ ^(ACTIVE|PASSIVE)$ ]]; then
+					usage
+					abort "Wrong option"
+				else
+					handle_failover $OPT_FAILOVER_ARG
+					check_exit_code
+				fi
+			else
+				if [ $OPT_CLEANUP -eq $TRUE ]; then
+					handle_cleanup
+					check_exit_code
+				elif [ $OPT_ACTIVATE -eq $TRUE ]; then
+					activate_all_mips
+					check_exit_code
+				elif [ $OPT_DEACTIVATE -eq $TRUE ]; then
+					deactivate_all_mips
+					check_exit_code
+				else
+					usage
+					abort "Missing parameter."
+				fi
+			fi
+		fi	
+	fi
+}
+
+#            ______
+#           |      |\
+#           | MAIN | |
+#           |______| |
+#            \______\|
+#
+
+OPT_STARTUP=$FALSE
+OPT_FAILOVER=$FALSE
+OPT_ACTIVATE=$FALSE
+OPT_DEACTIVATE=$FALSE
+OPT_FAILOVER_ARG='LOCKED'
+OPT_CLEANUP=$FALSE
+OPT_HELP=$FALSE
+
+sanity_checks
+AP_TYPE=$(apos_get_ap_type)	
+
+log "commandline: \"$0 $*\""
+local_log "commandline: \"$0 $*\""
+
+parse_cmdline $*
+options_check
+
+log "$0 completed successfully."
+local_log "$0 completed successfully."
+exit $EXIT_SUCCESS
+
+# End of file

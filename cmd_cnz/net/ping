@@ -1,0 +1,223 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       ping
+# Description:
+# 	Wrapper script for ping command
+##
+#Usage: ping [-nqvV][-I interface address] [-p pattern] [-s packet size]
+#            [-t ttl] [-M MTU discovery hint] [-W timeout] destinationNone.
+##
+# Output:
+#      PING 141.137.47.44 (141.137.47.44) from 141.137.47.43 eth1: 56(84) bytes of data 
+#      64 bytes from 141.137.47.44: icmp_seq=1 ttl=64 time=0.096 ms
+#      ..................... min/avg/max/mdev = 0.081/0.093/0.107/0.011 ms
+##
+# Changelog:
+# - Tue Apr 21 2020 - Rajeshwari Padavala (xcsrpad)
+#	Modified options
+# - Wed Jun 15 2013 - Krishna Chaitanya (xchakri)
+#	Fix provided for TR HR42403
+# - Fri Nov 09 2012 - Satya Deepthi (xsatdee)
+#	Fix provided for TR HQ56322
+# - Mon Jun 25 2012 - Rajagopal Reddy (xraredd)
+#	Added validation for ip address and modified the exit codes.
+# - Tue Mar 9 2012 - Satya Deepthi (xsatdee)
+#       First version.
+##
+
+# Load the apos common functions.
+. /opt/ap/apos/conf/apos_common.sh
+
+apos_intro $0
+# Global parameters
+PING="/bin/ping"
+CMD_EGREP=/usr/bin/egrep
+CMD_GREP=/usr/bin/grep
+OPTIONS=""
+OPTS="nqvp:s:t:M:VW:I:"
+version="This is ping 1.0"
+version+="\n"
+version+="Copyright (c) 2010-2012 Ericsson\n"
+
+# Exit-codes
+exit_success=0
+exit_failure=1
+exit_usage=2
+exit_option=20
+exit_ures_valu=22
+
+# Functions
+show_version()
+{
+	echo -e "$version"
+}
+
+function usage(){
+        echo -e "Usage: ping [-nqvV][-I interface address] [-p pattern] [-s packet size] \n \t    [-t ttl] [-M MTU discovery hint] [-W timeout] destination"
+        echo
+}
+
+function help()
+{
+	echo -e "Usage: ping [-nqvV][-I interface address] [-p pattern] [-s packet size] [-t ttl] [-M MTU discovery hint] [-W timeout] destination"
+	echo -e "
+-I interface address 
+	Set source address to specified interface address
+-n
+	Numeric output only
+-p pattern
+	You may specify upto 16 pad bytes to fill out the packet sent.
+-q
+	Quiet output
+-s packetsize
+	Specifies number of data bytes to be sent
+-t ttl
+	Set the IP Time To Live
+-M hint
+	Select Path MTU Discovery strategy
+-v
+	Verbose output
+-V
+	Show version and exit
+-W timeout
+	Time to wait for a response, in seconds.
+"
+}
+
+function check_ip(){
+
+        OIFS=$IFS
+        IP=$1
+        IFS=.
+
+        set -- $IP
+        IFS=$OIFS
+
+        [ $# -ne 4 ] && {
+                echo "ping: unknown host $IP "
+                exit $exit_ures_valu
+        }
+
+        [ $# -eq 0 ] && {
+                echo "ping: unknown host $IP "
+                exit $exit_ures_valu
+        }
+
+        for oct in $1 $2 $3 $4; do
+                echo $oct | ${CMD_EGREP} "^[0-9]+$" >/dev/null 2>&1
+                [ $? -ne 0 ] && {
+                        echo "ping: unknown host $IP "
+                        exit $exit_ures_valu
+                }
+
+                [[ $oct -lt 0 || $oct -gt 255 ]] && {
+                        echo "ping: unknown host $IP "
+                        exit $exit_ures_valu
+                }
+        done
+
+        echo $IP | ${CMD_GREP} "\.$" >/dev/null 2>&1
+        [ $? -eq 0 ] && {
+                echo "ping: unknown host $IP "
+                exit exit_ures_valu
+        }
+}
+
+# Main program
+interface=
+pattern=
+packet_size=
+ttl=
+hint=
+timeout=
+count=
+num_args=$#
+eval destination=\$$#
+
+if [ ! -f $PING ]; then
+	echo "Error when executing (general fault)"
+	exit $exit_failure
+fi
+	while getopts $OPTS option 
+	do
+		case $option in 
+		I)	# Interface address
+			interface=$OPTARG
+			OPTIONS="$OPTIONS -I $interface"
+		;;
+		n)	# Numeric output only
+			OPTIONS="$OPTIONS -n"
+		;;
+		p)	# Pattern specification
+			pattern=$OPTARG
+			OPTIONS="$OPTIONS -p $pattern"
+		;;
+       		q)      # Quiet output
+                	OPTIONS="$OPTIONS -q"
+        	;;
+        	s)      # Packet size
+                	packet_size=$OPTARG
+                	OPTIONS="$OPTIONS -s $packet_size"
+	    	;;
+        	t)      # Time to live 
+                	ttl=$OPTARG
+                	OPTIONS="$OPTIONS -t $ttl"
+        	;;
+        	M)      # Specify hint
+                	hint=$OPTARG
+                	OPTIONS="$OPTIONS -M $hint"
+        	;;
+        	v)      # Verbose output
+        	        OPTIONS="$OPTIONS -v"
+        	;;
+        	V)      # Show version and exit
+                	#OPTIONS="$OPTIONS -V"
+			if [ $# -gt 1]; then
+				usage
+			else
+				show_version
+			fi
+			exit $exit_success
+        	;;
+		W)      # Timeout
+                        timeout=$OPTARG
+                        if echo $timeout | egrep -q '^[0-9]+$'; then
+                                check_ip $destination
+								OPTIONS="$OPTIONS -w $timeout"
+                        else
+                                echo "timeout parameter should be an integer"
+                                exit $exit_option
+                        fi
+                ;;
+		\?)	# Wrong option
+			echo "Illegal option"
+			usage
+			exit $exit_option
+	esac
+	done 2> /dev/null
+
+	if [[ $num_args == 0 ]]; then
+		echo "Incorrect usage"
+		usage
+		exit $exit_usage
+	fi 
+	shift $((OPTIND - 1))
+	destination="$@"
+	
+	$PING $OPTIONS $destination 2> /dev/null
+	res=$?
+	if [[ $res -ne 0 && $res -ne 1 ]]; then				
+		echo "Incorrect usage"
+		usage
+		exit $exit_failure
+	fi
+
+apos_outro $0
+exit $exit_success
+
+# End of file

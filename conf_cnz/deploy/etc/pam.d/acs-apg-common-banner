@@ -1,0 +1,5 @@
+#%PAM-1.0
+#
+# This file is used to display banner message in APG.
+#
+auth    optional        pam_echo.so     file=/etc/welcomemessage.conf

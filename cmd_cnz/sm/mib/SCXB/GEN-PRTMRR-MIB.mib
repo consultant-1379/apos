@@ -1,0 +1,219 @@
+-- =============================================================================
+--
+-- %CCaseFile:	GEN-PRTMRR-MIB.mib %
+-- %CCaseRev:	/main/R1A/1 %
+-- %CCaseDate:	2010-08-27 %
+-- %CCaseDocNo:	7/196 03-CRA 119 1365 Ux %
+-- Author:      xsersud	
+--
+-- =============================================================================
+--
+-- Copyright (C) 2009-2010 by Ericsson AB
+-- S-126 25  STOCKHOLM
+-- SWEDEN, tel int + 46 8 719 0000
+--
+-- This Program may be used and/or copied only with the written permission
+-- from Ericsson AB, or in accordance with the terms and
+-- conditions stipulated in the agreement/contract under which the program
+-- has been supplied.
+--
+-- All rights reserved.
+--
+-- =============================================================================
+--
+-- REVISION HISTORY
+--
+-- Rev        Date         Name        What
+-- ========   ==========   ========    ========
+-- PA1        2008-04-22   xsersud     Initial revision.
+-- PA2        2008-06-25   xsersud     The port mirroring table object genPortMrrStatus, is commented
+--                                     after internal technical discussion. This feature is not required 
+--                                     for the current implementation. 
+-- PA3        2009-10-02   xramgun     Compliance group made optional. 
+-- A          2010-02-12   qsangov     Firm revision of GEN-PRTMRR-MIB
+-- A          2010-08-27   uabpnil     New document number
+-- =============================================================================
+
+GEN-PRTMRR-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY,
+    OBJECT-TYPE,
+    Integer32,
+    enterprises
+        FROM SNMPv2-SMI
+        
+    OBJECT-GROUP,             
+    MODULE-COMPLIANCE       
+        FROM SNMPv2-CONF; 
+
+genPortMrrMIB MODULE-IDENTITY
+    LAST-UPDATED "200806250000Z"
+    ORGANIZATION "Ericsson AB - EAB/FLJ/TI"
+    CONTACT-INFO "Email: ingvar.froroth@ericsson.com"
+    DESCRIPTION
+        "This MIB module defines objects for managing Port Mirroring of Ingress
+         and egress frames for switch devices."
+
+    REVISION  "200806250000Z"
+    DESCRIPTION "The port mirroring table object genPortMrrStatus, is commented
+                 after internal technical discussion. This feature is not required 
+                 for the current implementation."
+    
+    REVISION  "200804220000Z"
+    DESCRIPTION "First version"
+
+    ::= { enterprises ericsson(193) component(177) generic(2) transport(1) 3 }
+
+-- ============================================================================
+-- Definitions of objects
+-- ============================================================================
+
+--ericsson      OBJECT IDENTIFIER ::= {enterprises 193}
+--component     OBJECT IDENTIFIER ::= {ericsson 177}
+--generic       OBJECT IDENTIFIER ::= {component 2}
+--transport     OBJECT IDENTIFIER ::= {generic 1}
+--genPortMrrMIB OBJECT IDENTIFIER ::= {transport 3}
+
+-- --------------------------------------------------------------
+-- Group definitions
+-- --------------------------------------------------------------
+--genPortMrrNotifications           OBJECT IDENTIFIER ::= { genPortMrrMIB 0 }
+--genPortMrrNotificationObjects     OBJECT IDENTIFIER ::= { genPortMrrMIB 1 }
+
+genPortMrrConformance OBJECT IDENTIFIER ::= { genPortMrrMIB 3 }
+genPortMrrGroups      OBJECT IDENTIFIER ::= { genPortMrrConformance 1 }
+genPortMrrCompliance  OBJECT IDENTIFIER ::= { genPortMrrConformance 2 }
+
+-- ----------------------------------------------------------------
+-- Textual conventions
+-- ----------------------------------------------------------------    
+-- 
+-- ---------------------------------------------------------------------------------
+-- genPortMrrNotifications    OBJECT IDENTIFIER ::= { genPortMrrMIB 0 }
+-- ---------------------------------------------------------------------------------
+-- 
+
+-- ------------------------------------------------------------------------------------
+-- genPortMrrNotificationObjects OBJECT IDENTIFIER ::= { genPortMrrMIB 1 }
+-- ------------------------------------------------------------------------------------
+-- TBD
+
+genPortMrrObjects                 OBJECT IDENTIFIER ::= { genPortMrrMIB 2 }
+
+genPortMrrCtrlTable    OBJECT-TYPE
+    SYNTAX                SEQUENCE OF GenPortMrrCtrlEntry
+    MAX-ACCESS            not-accessible
+    STATUS                current
+    DESCRIPTION  "Port mirroring table."
+    ::=  { genPortMrrObjects 1 }
+
+ genPortMrrCtrlEntry   OBJECT-TYPE
+    SYNTAX                GenPortMrrCtrlEntry
+    MAX-ACCESS            not-accessible
+    STATUS                current
+    DESCRIPTION  "This table entry contains manageable mirroring objects for each port / LAG in the switch"
+    INDEX { genPortMrrIfIndex }
+    ::=  { genPortMrrCtrlTable 1 }
+
+GenPortMrrCtrlEntry ::=
+    SEQUENCE {
+       genPortMrrIfIndex     Integer32,
+       genPortMrrControl     INTEGER,
+       genPortMrrType        INTEGER,
+       genPortMrrToPort      Integer32
+    }
+
+genPortMrrIfIndex OBJECT-TYPE
+    SYNTAX                Integer32 (1..65535)
+    MAX-ACCESS            not-accessible
+    STATUS                current
+    DESCRIPTION "Interface index of the port / LAG for which all the mirroring configurations apply"
+    ::= { genPortMrrCtrlEntry 1 }
+
+genPortMrrControl OBJECT-TYPE
+    SYNTAX                INTEGER {
+                                    enable(1),
+                                    disable(2)
+                                  }
+    MAX-ACCESS            read-write
+    STATUS                current
+    DESCRIPTION "Enable / disable mirroring functionality for this port or LAG"
+    ::= { genPortMrrCtrlEntry 2 }
+
+genPortMrrType OBJECT-TYPE
+    SYNTAX                INTEGER {
+                                    ingress(1),
+                                    egress(2),
+                                    ingressegress(3)
+                                  }
+    MAX-ACCESS            read-write
+    STATUS                current
+    DESCRIPTION "Type of mirroring applied for the port or LAG in action. Configuration on this object is dependent 
+      on genPortMrrControl and value of this object is valid only if genPortMrrControl is 'enable'"
+    DEFVAL      { ingressegress }
+    ::= { genPortMrrCtrlEntry 3 }
+
+genPortMrrToPort OBJECT-TYPE
+    SYNTAX                Integer32
+    MAX-ACCESS            read-write
+    STATUS                current
+    DESCRIPTION "Port or LAG to which mirrored (sniffed) packets are to be copied"
+    ::= { genPortMrrCtrlEntry 4 }
+
+-- ------------------------------------------------------------------------------------
+-- Conformance Groups
+-- genPortMrrGroups      OBJECT IDENTIFIER ::= { genPortMrrConformance 1}
+-- ------------------------------------------------------------------------------------
+--genPortMrrNotificationGroup NOTIFICATION-GROUP
+--    NOTIFICATIONS {
+--    }
+--    STATUS      current
+--    DESCRIPTION
+--        "See corresponding notification description."
+--    ::= { genPortMrrGroups 1 }        
+
+--genPortMrrNotificationObjectGroup OBJECT-GROUP
+--    OBJECT  {
+--        }
+--    STATUS    current
+--    DESCRIPTION
+--        "See corresponding notification description."
+--    ::= { genPortMrrGroups 2 }
+
+genPortMrrObjectGroup   OBJECT-GROUP
+    OBJECTS {
+       genPortMrrControl,
+       genPortMrrType,
+       genPortMrrToPort
+    }
+    STATUS     current
+    DESCRIPTION
+        "See corresponding notification description."
+    ::= { genPortMrrGroups 3 }
+
+-- ---------------------------------------------------------------------------------
+-- Compliance Statement
+-- genPortMrrCompliance OBJECT IDENTIFIER ::= {genPortMrrConformance 2}
+-- ----------------------------------------------------------------------------------
+gnPortMrrCompliance MODULE-COMPLIANCE
+    STATUS        current
+    DESCRIPTION
+        "The compliance statement for SNMP entities supported by switch."
+    MODULE --this module
+    
+    GROUP  genPortMrrObjectGroup
+      DESCRIPTION
+        "Implementation of this group is optional"
+        
+--	GROUP  genPortMrrNotificationGroup
+--    DESCRIPTION 
+--        "Implementation of this group is optional"
+--		
+--	GROUP  genPortMrrNotificationObjectGroup
+--    DESCRIPTION 
+--        "Implementation of this group is optional"
+--				
+    ::= { genPortMrrCompliance 1 }
+
+END

@@ -1,0 +1,24 @@
+Usage:  shelfmngr set baud [--verbose] [--help]
+                  --rate=<vlaue> <board>
+
+Set the first boot device of the specified board (only apub boards are
+supported).
+
+--rate=<value>      	set the baudrate to specified value
+                        (i.e. 38400,57600 and 115200). Available interfaces
+			are listed in the lib/common/baudrate.dat file.
+			
+<board>                 represents the board the command will operate on. It
+                        can assume one of the following values:				                
+		                <board_name>
+		                <slot_number>
+				
+<board_name>            can assume one of the following values (the supported
+                        logical names are found in lib/common/slot_by_name.dat
+                        under the shelfmngr root directory):
+	                        apub_a, apa
+		                apub_b, apb		                
+
+<slot_number>           must be an unsigned integer mapped to one of the apub
+                        boards in the slot_by_name.dat file.
+

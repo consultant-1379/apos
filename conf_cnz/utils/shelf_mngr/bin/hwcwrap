@@ -1,0 +1,67 @@
+#!/bin/bash
+
+## This script is to extract certain information from the HWC Table
+## in an easy way. 
+## It is for now hard-coded for the default configuration. 
+## It will be changed into dynamic script reading from hwcls soon. 
+
+if [ $# -lt 3 ]; 
+then 
+	echo "Usage: $0 FBN A|B IP|SLOT [network]"
+	exit 1
+fi;
+
+source `dirname $0`/hwcconsts    # include to set constants for hwc table script
+
+if [ $# == 4 ];
+then
+	netip=$4
+fi
+
+if [ "$3" == "IP" ];
+then
+	if [ "$1" == "SCB" ];
+	then
+		if [ "$2" == "A" ]; then echo "192.168.$netip.$scba"; exit 0; fi;
+		if [ "$2" == "B" ]; then echo "192.168.$netip.$scbb"; exit 0; fi;
+	fi;
+
+	echo "Cannot provide IP for specified board type. Function not implemented."
+	exit 2
+fi
+
+if [ "$3" == "SLOT" ];
+then
+	if [ "$1" == "SCB" ];
+	then
+		if [ "$2" == "A" ];	then echo 0; exit 0; fi;
+		if [ "$2" == "B" ]; then echo 25; exit 0; fi;
+	fi;
+	
+	if [ "$1" == "GEA" ]; then echo 2; exit 0; fi;
+	
+	if [ "$1" == "CPUB" ];
+	then
+		if [ "$2" == "A" ];	then echo 3; exit 0; fi;
+		if [ "$2" == "B" ]; then echo 8; exit 0; fi;
+	fi;
+
+	if [ "$1" == "MAUB" ];	then echo 7; exit 0; fi;
+
+	if [ "$1" == "APUB" ];
+	then
+		if [ "$2" == "A" ];	then echo 14; exit 0; fi;
+		if [ "$2" == "B" ]; then echo 20; exit 0; fi;
+	fi;
+	
+	if [ "$1" == "Disk" ];
+	then
+		if [ "$2" == "A" ];	then echo 12; exit 0; fi;
+		if [ "$2" == "B" ]; then echo 22; exit 0; fi;
+	fi;
+
+	if [ "$1" == "DVD" ]; then echo 16; exit 0; fi;
+
+	echo "Cannot provide Slot for specified board type. Function not implemented."
+	exit 2
+fi;	

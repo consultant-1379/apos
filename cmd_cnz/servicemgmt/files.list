@@ -1,0 +1,17 @@
+# Directories
+555:lib
+555:lib/common
+555:lib/common/man
+
+# Files
+555:servicemgmt
+
+#444:lib/common/man/group_add.man
+#444:lib/common/man/group_modify.man
+#444:lib/common/man/group_delete.man
+#444:lib/common/man/group_list.man
+#444:lib/common/man/user_add.man
+#444:lib/common/man/user_modify.man
+#444:lib/common/man/user_delete.man
+#444:lib/common/man/user_list.man
+#444:lib/common/man/usermgmt.man

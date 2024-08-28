@@ -1,0 +1,8 @@
+[Unit]
+Description= APG atftpd
+After=network.target
+
+[Service]
+EnvironmentFile=/etc/sysconfig/atftpd
+ExecStart=/usr/sbin/atftpd $ATFTPD_OPTIONS --bind-address %i $ATFTPD_DIRECTORY
+Restart=always

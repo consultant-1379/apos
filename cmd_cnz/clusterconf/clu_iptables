@@ -1,0 +1,229 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2011 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# clu_iptables
+# A script to manage iptables rules.
+##
+# Changelog:
+# Thu, Feb 03, 2011 - Francesco Rainone (efrarai)
+#	Removed the "iptables" command invocation.
+# ???, ??? ??, 2010 - Madhu & Deepthi
+#	First version.
+##
+
+# Changelog
+# Updated by XPRANSI
+# Date: 27-10-2011
+
+# Functions
+
+# User-Input validations	
+
+#validation for target
+ validate_target() {
+			target=${!1}
+                        if [ -z $target ] ; then
+                                return 1
+			else
+                        num=$( echo $target | grep -Eq "^[0-9]+$")
+                        chk_num=$?
+                        	if [ $chk_num != 0 ] && [ $target != "control" ]&& [ $target != "payload" ] && [ $target != "all" ] ; then
+ 	                        return 1
+       				fi                      
+			fi
+			echo $target
+	}
+
+
+# Validation for threshold
+ validate_threshold() {
+			threshold=${!1}
+			if [ -z $threshold ] ; then
+				return 1
+			else
+                        num=$( echo $threshold | grep -Eq "^[0-9]+$")
+                        chk_num=$?
+	                        if [ $chk_num -eq 1 ] ; then
+                                return 1
+				fi
+			fi
+			echo $threshold
+	}
+
+# To delete an existing rule
+ delete() {
+        word=${!1}
+        rule=${!2}
+        rule_num=`validate_threshold rule`
+        if [ $? -ne 0 ]
+        then
+                help
+                echo "Enter rule number as argument. Empty values not accepted "
+                exit 1
+        fi
+
+        # Calling cluster_parse file to delete rule
+        $clu_file $word --delete $rule_num
+
+	}
+
+# To add/modify an existing rule
+  add_mod() {
+        word=${!1}
+        all_arg=${!2}
+	status=${!3}
+
+	arg=$( echo $all_arg | awk '{print $1}' )
+	target=$( echo $all_arg | awk '{print $2}' )
+	
+	w1=$(echo $arg | cut -d : -f 2)
+	if [ "$w1" != "$word" ]
+	 then
+        	help
+                echo "Enter correct format of arguments. "
+                exit 1
+	fi
+
+	if [ $status == "modify" ]
+	then
+        	rule=$(echo $arg | cut -d: -f 1)
+	        rule_num=`validate_threshold rule`
+	        if [ $? -ne 0 ]
+	        then
+        	        help
+                	echo "Enter correct format of arguments. "
+	                exit 1
+        	fi
+	fi
+        target_ip=`validate_target target`
+        if [ $? -ne 0 ]
+        then
+                help
+                echo "Target value should be either node number or node type (control/payload) or all. Empty values not accepted "
+                exit 1
+        fi
+
+	rul1=$( echo $all_arg | cut -d ' ' -f3- )
+	rul="iptables $rul1"
+	# efrarai: begin
+	echo "" > /tmp/iptables_error
+	# echo hello > /tmp/iptables_error
+	# $rul 2> /tmp/iptables_error 
+    # if [ $( cat /tmp/iptables_error | grep -wc "help") -gt 0 ]
+    # then
+		# help
+		# echo "ERROR:"
+		# cat /tmp/iptables_error	
+        # exit 1
+    # fi
+	# efrarai: end
+        
+	# Calling cluster_parse file to add/modify rule
+	args=$( echo $rul | awk '{$1=""; print}' )
+        rule="$word $target_ip $args"
+        chk_rule=$rule
+	if [ $status == "modify" ]
+        then
+	        $clu_file $word --modify $rule_num $rule $chk_rule
+	else
+        	$clu_file $word --add $rule $chk_rule
+	fi
+        }
+
+# To display existing alarm rules
+ display() {
+        $clu_file $word --display
+	}
+
+# To display help
+help()
+{
+echo "
+Usage: clu_$word <option> <rule>
+
+Options:
+-a|--add 	<New-rule>			To add a new $word rule 
+-d|--delete 	<Existing-rule-number>			To delete an existing $word rule
+-m|--modify 	<rule-number>:<new-rule>	To modify an existing $word rule
+-D|--display					To display all the existing rules
+-h|--help					To display help
+
+Rule: $word <target> <command>
+<target> 		<Node-number|control|payload|all>
+<command> 		IP table rule 
+
+Examples:
+iptables all -A INPUT -p tcp --dport 21 -j ACCEPT
+"
+}
+
+
+#Main
+
+pwd=`pwd`
+fname="clu_parse"
+clu_file="/opt/ap/apos/bin/clusterconf/$fname"
+#clu_file="/usr/bin/$fname"
+word="iptables"
+
+if [ -f /cluster/etc/cluster.conf ];then
+        clu_Conf_path="/cluster/etc/"
+        clu_Conf_file="cluster.conf"
+else
+        echo -e "\n/cluster/etc/cluster.conf file does not exists"
+        exit 1
+fi
+
+        if [ -f $clu_file ];then
+                if [ -x $clu_file ];then
+                 ch=$1
+		 shift 1
+		 arg2=$*
+		  case $ch in
+			--add|-a)
+				st="add"
+				add_mod word arg2 st
+				;;
+			--delete|-d)
+				if [ $# -gt 2 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					delete word arg2
+		   	   	fi
+				;;
+			--modify|-m)
+				st="modify"
+				add_mod word arg2 st
+				;;
+			--display|-D)
+				if [ $# -gt 1 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					display
+		   	   	fi
+				;;
+			--help|-h)
+				if [ $# -gt 1 ]; then
+                                        echo "Illegal arguments"
+                                        help
+                                else
+					help
+				fi
+				;;
+			*) 	echo -e "\nWrong input format, please follow the below format...\n"
+				help
+				;;
+		  esac 
+	else
+                        echo -e "\n$clu_file is not executable"
+                fi
+        else
+                echo -e "\n$clu_file file does not exists"
+        fi
+
+

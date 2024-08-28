@@ -1,0 +1,345 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       vlanls
+# Description:
+#       To list all existing VLANs in APG43L
+##
+# Usage: vlanls
+#
+##
+# Changelog:
+# - Wed 18 Jan 2017 - Neeraj Kasula (XNEEKAS)
+#   vlan command inhibition changes in virtualized environment
+# - Tue 12 APR 2016 - Kiran Apuri (XKIRAPU) 
+#   Added vlanls support for vAPG nodes
+# - Wed 09 MAY 2015 - Raghavendra Koduri (XKODRAG)
+#       1. Removed displaying of PCP vlaues for external APG vlans on BSP nodes
+# - Mon 11 MAY 2015 - Sindhuja Palla (XSINPAL)
+#	Removed -i option and extended script to list external and internal vlans with vlanls on BSP nodes
+# - Tue 2 APR 2015 - Sindhuja Palla / Raghavendra Rao Koduri (XSINPAL / XKODRAG)
+#       1. Enable new option -i to list internal vlans on BSP nodes
+#       2. Extended script to list external vlans along with pcp values on BSP nodes
+#       3. Improved the code quality
+# - Thu 27 Nov 2014 - Madhu Muthyala (XMADMUT)
+#	Updated to inhibit vlanls command in virtualized architecture
+# - Thu Jun 20 2013 - Furquan Ullah (XFURULL)
+#       1. Fix provided for TR HR48007
+# - Tue May 28 2013 - Krishna Chaitanya (XCHAKRI)
+#	Modified the output to accomodate 32 characters
+#	Solved the TR HR37892
+# - Fri Mar 29 2013 - Greeshma latha (XGRECHA)
+#	removed "Command executed successfully" printout
+# - Wed Aug 01 2012 - Pratap Reddy (XPRAUPP)
+#       rework done to include
+#		1. Improve the code quality
+#		2. Removed 'own/ther' phrases
+# - Thu Mar 10 2011 - Satya Deepthi (XSATDEE)
+#       Added validation for ip address and modified the exit codes.
+# - Thu Mar 10 2011 - Madhu Aravabhumi (XMADARA)
+#       First version.
+##
+
+# LOAD APOS COMMON FUNCTION
+APOS_COMMON="${AP_HOME:-/opt/ap}/apos/conf/apos_common.sh"
+source $APOS_COMMON
+
+# paths and files variables
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+LOG_TAG='vlanls'
+CLUSTER_CONF=/cluster/etc/cluster.conf
+PROC_VLAN=/proc/net/vlan
+VLAN_MAPING_CONF=/cluster/etc/ap/apos/vlan_adapter_maping.conf
+
+# command-list
+CMD_AWK=/usr/bin/awk
+CMD_CAT=/bin/cat
+CMD_CLUSTERCONF=/opt/ap/apos/bin/clusterconf/clusterconf
+CMD_HWTYPE='/opt/ap/apos/conf/apos_hwtype.sh'
+CMD_CUT=/usr/bin/cut
+CMD_IMMLIST=/usr/bin/immlist
+CMD_IMMFIND=/usr/bin/immfind
+
+# script-wide variables
+V_NAME=''
+V_ADAPTER=''
+V_ID=''
+SHELF_ARCH=''
+HW_TYPE=''
+
+# exit-code error flags
+exit_sucs=0
+exit_fail=1
+exit_usge=2
+exit_virtual_arch=44
+
+#----------------------------------------------------------------------------------------
+# log to system-log
+function log(){
+	/bin/logger -t "$LOG_TAG" "$*"
+}
+
+#----------------------------------------------------------------------------------------
+function abort(){
+	console_print "Error when executing (general fault)"
+	log "ABORTING: <"ERROR: $1">"
+	log "END: <$0>"
+	exit $exit_fail
+}
+
+#----------------------------------------------------------------------------------------
+function console_print(){
+	echo -e "$@"
+}
+
+#----------------------------------------------------------------------------------------
+function usage(){
+$CMD_CAT << EOF 
+Usage: vlanls
+
+EOF
+}
+
+#----------------------------------------------------------------------------------------
+function usage_error(){
+	console_print "Incorrect usage"
+	usage
+	exit $exit_usge
+}
+
+#----------------------------------------------------------------------------------------
+function parse_args(){
+	[ $# -ge 1 ] && usage_error
+}
+
+#----------------------------------------------------------------------------------------
+function console_abort(){
+	console_print "$1"
+	exit $2
+}
+
+#----------------------------------------------------------------------------------------
+function is_vlan_exists(){
+	local CNT=0
+	
+	# check if the vlan exists in the /proc
+	# on local node as well as on remote node.
+	if [ !  -f $PROC_VLAN/$V_ADAPTER ]; then
+		log "$PROC_VLAN/$V_ADAPTER Does not exist."
+		return $FALSE
+	fi
+}
+
+#----------------------------------------------------------------------------------------
+function isBSP(){
+	[ $SHELF_ARCH -eq 2 ] && return $TRUE
+	return $FALSE
+}
+
+#----------------------------------------------------------------------------------------
+function isvAPG(){
+	[[ $SHELF_ARCH -eq 3 && $HW_TYPE == 'VM' ]] && return $TRUE
+	return $FALSE
+}
+
+#----------------------------------------------------------------------------------------
+function sanity_checks(){
+	SHELF_ARCH=$($CMD_IMMLIST -a apgShelfArchitecture axeFunctionsId=1 | ${CMD_AWK} -F "=" '{print $2}' 2>/dev/null)
+	[ -z "$SHELF_ARCH" ] && abort "ERROR: Failed to get apgShelfArchitecture"
+
+	HW_TYPE=$($CMD_HWTYPE 2>/dev/null)
+  	[ -z "$HW_TYPE" ] && abort "ERROR: HW_TYPE not found"
+}
+
+#----------------------------------------------------------------------------------------
+function printHeader_v1(){
+
+	# Also, vlan informaion is cluster wide and hence
+	# node 1 and node 2 vlan information is always be in sync.
+	
+	# print the title first
+	if isBSP; then
+		$CMD_CAT << HEREDOC
+
+VLAN TABLE
+NAME                              TAG     PCP
+HEREDOC
+	else
+		$CMD_CAT << HEREDOC
+
+VLAN TABLE
+NAME                              TAG
+HEREDOC
+
+	fi
+}
+
+#----------------------------------------------------------------------------------------
+function vlanls_v1(){
+
+        local INDEX
+        local DEFAULT=" "
+        local T_SPACE=" "
+        local P_SPACE=" "
+
+        if [ -f $VLAN_MAPING_CONF ]; then
+                while read -r r_line
+                do
+                        V_NAME=$( echo $r_line | ${CMD_AWK} -F " " '{print $1}')
+                        V_ADAPTER=$( echo $r_line | ${CMD_CUT} -d " " -f2)
+                        V_ID=$( echo $r_line | ${CMD_CUT} -d " " -f2 | ${CMD_CUT} -d "." -f2)
+                        V_PCP="-"
+
+                        # check for validity
+                        ! is_vlan_exists  && continue
+
+                        for (( INDEX=0;  INDEX<$((33-$( expr length $V_NAME))); INDEX++ )); do T_SPACE+=" ";done
+                        for (( INDEX=0;  INDEX<$((7-$( expr length $V_ID))); INDEX++ )); do P_SPACE+=" ";done
+
+                        if isBSP; then
+                                echo "$V_NAME""$T_SPACE""$V_ID""$P_SPACE""$V_PCP"
+                        else
+                                echo "$V_NAME""$T_SPACE""$V_ID"
+                        fi
+                        T_SPACE=$DEFAULT; P_SPACE=$DEFAULT
+
+                done <$VLAN_MAPING_CONF
+        fi
+
+        if isBSP; then
+                for VLAN_OBJ in $($CMD_IMMFIND -c AxeEquipmentVlan);
+                do
+                        local l_SPACE=" "
+
+                        VLAN_ATTR=$($CMD_IMMLIST $VLAN_OBJ)
+                        VLAN_NAME=$(echo -e "$VLAN_ATTR" | $CMD_AWK '/name/{print $3}' )
+                        VLAN_PCP=$(echo -e "$VLAN_ATTR" | $CMD_AWK '/pcp/{print $3}' )
+                        VLAN_ID=-
+
+                        for (( INDEX=0;  INDEX<$((33-$( expr length "$VLAN_NAME"))); INDEX++ ));do l_SPACE+=" ";done
+
+                        echo -e "$VLAN_NAME$l_SPACE$VLAN_ID       $VLAN_PCP\t"
+                done
+
+        fi
+
+        return $TRUE
+}
+
+
+#----------------------------------------------------------------------------------------
+function printHeader_v2(){
+	# Also, vlan informaion is cluster wide and hence
+	# node 1 and node 2 vlan information is always be in sync.
+	
+	$CMD_CAT << HEREDOC
+
+VLAN TABLE
+NAME                               DOMAIN      VNICNAME
+HEREDOC
+
+	return $TRUE
+}
+
+#----------------------------------------------------------------------------------------
+function vlanls_v2(){
+  local L_NAME=''
+  local L_DOMAIN=''
+  local L_VNICNAME=''
+  local DEFAULT=''
+  local T_SPACE=''
+  local P_SPACE=''
+
+  [ ! -f $VLAN_MAPING_CONF ] && return $TRUE
+
+  while read -r line
+  do
+    L_NAME=$( echo $line | ${CMD_AWK} -F " " '{print $1}')
+    L_DOMAIN=$( echo $line | ${CMD_AWK} -F " " '{print $2}')
+    L_VNICNAME=$( echo $line | ${CMD_AWK} -F " " '{print $3}')
+    L_VNICNAME=$( echo $L_VNICNAME | ${CMD_CUT} -d . -f1)
+
+    for (( INDEX=0;  INDEX<$((35-$( expr length $L_NAME))); INDEX++ )); do T_SPACE+=" ";done
+    for (( INDEX=0;  INDEX<$((12-$( expr length $L_DOMAIN))); INDEX++ )); do P_SPACE+=" ";done
+
+    echo "$L_NAME""$T_SPACE""$L_DOMAIN""$P_SPACE""$L_VNICNAME"
+    T_SPACE=$DEFAULT; P_SPACE=$DEFAULT
+ done <$VLAN_MAPING_CONF
+	
+ return $TRUE
+}
+
+#----------------------------------------------------------------------------------------
+function VLANLS_v1(){
+  # printhing headers in output
+  printHeader_v1
+
+  # list vlan
+  vlanls_v1
+
+  return $TRUE
+}
+
+#----------------------------------------------------------------------------------------
+function VLANLS_v2(){
+  # printhing headers in output
+  printHeader_v2
+
+  #list vlans
+  vlanls_v2
+
+  return $TRUE
+}
+
+
+#----------------------------------------------------------------------------------------
+function invoke(){
+
+  if ! isvAPG ; then
+    VLANLS_v1
+  else
+    VLANLS_v2
+  fi
+	
+  MESSAGE="Command executed successfully\n-----------------------------"
+  echo "                                  "
+  return $TRUE
+}
+
+# _____________________ _____________________
+#|    _ _   _  .  _    |    _ _   _  .  _    |
+#|   | ) ) (_| | | )   |   | ) ) (_| | | )   |
+#|_____________________|_____________________|
+# Here begins the "main" function...
+
+
+# Set the interpreter to exit if a non-initialized variable is used.
+
+set -u
+
+log "START: <$0 $*>"
+
+if is_vAPG; then
+  console_print "$exit_virtual_arch_string"
+  console_print ""
+else
+  #sanity check to see if things are in place
+  sanity_checks
+
+  # parse the command-line paramters
+  parse_args $*
+
+  # invoke the command
+  invoke
+fi
+
+log "END: <$0 $*>"
+
+# exit with success return code
+exit $exit_sucs
+

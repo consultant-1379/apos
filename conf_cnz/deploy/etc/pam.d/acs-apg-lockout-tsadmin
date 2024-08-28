@@ -1,0 +1,5 @@
+#%PAM-1.0
+#
+# APG-customized hook for tsadmin user lockout mechanism
+#
+auth required  pam_tally2.so deny=3 unlock_time=300

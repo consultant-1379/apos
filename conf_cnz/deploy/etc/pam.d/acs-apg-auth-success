@@ -1,0 +1,11 @@
+#%PAM-1.0
+#
+# APG-customized acs-common-auth-success hook
+#
+auth [success=ignore default=6]  pam_localuser.so
+auth required  pam_env.so
+auth required  pam_unix2.so
+auth [default=ignore success=1]  pam_succeed_if.so user ingroup tsadmin
+auth include acs-apg-lockout-tsgroup
+auth [default=ignore success=1]  pam_succeed_if.so user notingroup tsadmin
+auth include acs-apg-lockout-tsadmin

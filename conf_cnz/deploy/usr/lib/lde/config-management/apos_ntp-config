@@ -1,0 +1,163 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2016 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       apos_ntp-config
+# Description:
+#       A script to create and include /etc/ntp.conf.local file having APG settings into ntp-config file.
+# Note:
+#       This script is intended to be deployed to the
+#       /usr/lib/lde/config-management/ directory.
+#
+#       It relies on the /opt/ap/apos/conf/apos_common.sh library.
+##
+# Changelog:
+# - Tue  May 03 2022 - rajeshwari padavala (xcsrpad)
+#       integrity issue.
+# - Fri  Apr 08 2022 - rajeshwari padavala (xcsrpad)
+#       updated for backup/restore issue.
+# - Thu  Feb 17 2022 - rajeshwari padavala (xcsrpad)
+#       updated for chrony configuration.
+# - Thu  Mar 28 2016 - sowjanya medak (xsowmed)
+#       First version.
+##
+# LDE_deployment:
+#       type:           config
+#       priority:       420
+##
+##
+# libraries -------------------------------------------------------------- BEGIN
+if [ -r /opt/ap/apos/conf/apos_common.sh ]; then
+        . /opt/ap/apos/conf/apos_common.sh
+else
+        echo '/opt/ap/apos/conf/apos_common.sh not found or not readable!' >&2
+        exit 1
+fi
+#
+# libraries ---------------------------------------------------------------- END
+##
+
+# functions -------------------------------------------------------------- BEGIN
+function usage(){
+        cat << HEREDOC
+Usage: $0 <action> <phase> [<etc_root>]
+where:
+        <action> can be "start" or "stop" or "config"
+        <phase> can be "init" or "reload"
+        <etc_root> (optional) specifies the base folder where the configuration
+                   will be generated (/etc by default)
+HEREDOC
+}
+function do_start(){
+        # TO-DO: implement the start phase if needed.
+        return
+}
+
+function do_stop(){
+        # TO-DO: implement the stop phase if needed.
+        return
+}
+
+function islocalfile() {
+ 
+  local type="$1"
+  local CONFIG_FILE_LOCAL="$type.conf.local"
+  local CONFIG_FILE="/etc/$type.conf"
+  if grep -qw "$CONFIG_FILE_LOCAL" $CONFIG_FILE 2>/dev/null; then 
+    return $TRUE
+  else
+    return $FALSE
+  fi 
+}
+
+function do_config() {
+  local type="$1"
+  apos_log "Adding entry of ntp.conf.local "
+
+  if ! grep -q 'ntp.conf.local' "$NTP_CONFIG_FILE" &> /dev/null; then    
+    $CMD_SED -i '/echo "driftfile \/boot\/ntp\/drift\/ntp.drift"/a\\ \t \techo \"includefile /etc/ntp.conf.local"' $NTP_CONFIG_FILE
+    apos_log "ntp.conf.local does not exist adding to ntp-config"
+  fi
+  apos_log "Adding entry of ntp.conf.local... Done"
+  
+  apos_log "Adding entry of chrony.conf.local" 
+  
+  if ! grep -q 'chrony.conf.local' "$NTP_CONFIG_FILE" &> /dev/null; then
+    $CMD_SED  -i '/echo "driftfile \/boot\/ntp\/drift_chrony\/ntp.drift"/a\\ \t \techo \"include /etc/chrony.conf.local"' $NTP_CONFIG_FILE
+    apos_log "chrony.conf.local does not exist adding to ntp-config"
+  fi
+  apos_log "Adding entry of chrony.conf.local... Done"
+  
+  if ! grep -q 'maxpoll' "$NTP_CONFIG_FILE" &> /dev/null; then
+    $CMD_SED -i 's/iburst/iburst maxpoll 8/g' "$NTP_CONFIG_FILE"
+    $CMD_SED -i  '/echo \"peer/ s/\"$/ maxpoll 8"/' "$NTP_CONFIG_FILE"
+  fi
+
+  if ! islocalfile $type; then
+    # ntp/chrony configuration files are generated with APG impacts
+    /usr/lib/lde/config-management/ntp-config config reload
+  fi
+}
+
+# functions ---------------------------------------------------------------- END
+##
+##
+# variables -------------------------------------------------------------- BEGIN
+NTP_CONFIG_FILE="/usr/lib/lde/config-management/ntp-config"
+[ ! -f $NTP_CONFIG_FILE ] && apos_abort 'ntp-config file not found'
+CMD_SED="/usr/bin/sed"
+# variables ---------------------------------------------------------------- END
+##
+
+##
+# main ------------------------------------------------------------------- BEGIN
+##
+# LDE config scripts called with the following:
+# param 1: action - start, stop or config
+# param 2: generate phase - init or reload
+# param 3: root path where config should be generated
+
+apos_intro $0
+
+if [ $# -lt 2 ]; then
+        usage
+        apos_abort 'missing parameter'
+fi
+
+if [ $(</etc/cluster/nodes/this/type) != 'control' ]; then
+        apos_abort 'this script must be run ONLY in control nodes'
+fi
+
+ACTION="$1"
+PHASE="$2"
+ETC_ROOT=${3:-"/etc"}
+
+TIME_SERVER_TYPE_CONFIG="$ETC_ROOT"/cluster/services/time/ntp.server-type
+TIME_SERVER_TYPE="ntp"
+if [ -s "$TIME_SERVER_TYPE_CONFIG" ] && \
+   [ "$(<"$TIME_SERVER_TYPE_CONFIG")" == "chrony" ]; then
+        TIME_SERVER_TYPE="chrony"
+fi
+
+case "$ACTION" in
+        start)
+                do_start
+                ;;
+        stop)
+                do_stop
+                ;;
+        config)
+                do_config $TIME_SERVER_TYPE
+                ;;
+        *)
+                usage
+                ;;
+esac
+
+apos_outro
+exit $TRUE
+# main --------------------------------------------------------------------- END
+##

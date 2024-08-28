@@ -1,0 +1,41 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#      tipc-link-stat
+# Description:
+#       A script to wrap the invocation of tipc-config with -ls option by TS user.
+# Note:
+#       None.
+##
+# Usage:
+#       None.
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Mon May 24 2021  -Gnaneswara Seshu (zbhegna)
+#       replaced tipc-config with tipc
+# - Thu Nov 08 2013  - Madhu Muthyala (xmadmut)
+#       First version.
+##
+
+function help()
+{
+   echo -e "\nUsage:  tipc-link-stat \n"
+}
+
+if [ $# -gt 0 ] ; then
+	echo -n "Incorrect usage"
+	help
+	exit 2
+else 
+	/usr/bin/sudo /sbin/tipc link statistics show
+fi
+
+exit $?
+

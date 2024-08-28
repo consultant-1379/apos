@@ -1,0 +1,19 @@
+##
+# This file contains the models to be included in the current APOS release.
+# The file syntax must comply with the following rules:
+#	- all the paths are relative to the /vobs/IO_Developments/MODELS/APZIM/
+#	  directory (leading / can be omitted).
+#	- Only one model per line is allowed.
+#	- Each line must be a <model_path>|<file_permissions> pair, with
+#	  <model_path> being a file reachable by the current config-spec and
+#	  <file_permissions> being an octal-mask of the permissions of the file
+#	  when deployed on the target machine.
+#	- Lines beginning with a # character will be ignored (comments).
+##
+
+#/APZIM_NBIFolders/AxeNbiFolders_imm_classes.xml|444
+#/APZIM_NBIFolders/AxeNbiFoldersNbiFoldersInstance_imm_objects.xml|444
+#/APZIM_NBIFolders/AxeNbiFolders_mp.xml|444
+/APZIM_AxeFunctions/AxeFunctions_mp.xml|444
+/APZIM_AxeFunctions/c_AxeFunctions_imm_classes.xml|444
+/APZIM_AxeFunctions/o_AxeFunctionsInstance_imm_objects.xml|444

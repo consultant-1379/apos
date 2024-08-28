@@ -1,0 +1,9 @@
+#!ipxe
+
+#Setting PXE path prefix option
+set 210:string tftp://192.168.169.33/default/
+
+#Setting PXE config file option
+#set 209:string pxelinux.cfg/default
+
+chain pxelinux.0 ||

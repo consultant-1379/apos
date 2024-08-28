@@ -1,0 +1,331 @@
+#!/bin/bash -u
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2011 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name: ipmiconf
+#       
+# Description:
+#	This script set: 
+#	- baud rate tp 115200 only for GEP2.
+#	- boot device to Internal SAS disk (07)for GEP1 and GEP2
+#	- ROJ to /12 or /22 only if ROJ number is different that /1 or /2.
+#	On GEP4 and GEP5 APUBs
+#	- set boot device to SAS/SATA-ID09 GMB 1.8
+##
+# Usage:
+#	call:  ipmiconf
+##
+# Changelog:
+# -  Tue 04 2017 - Raghavendra Koduri (XKODRAG)
+#   - added impacts for GEP7
+# - Tue Sep 03 2013 - Fabio Imperato (efabimp)
+#       RTFD impacts for MI
+# - Sat Jun 15 2013 - Fabio Ronca (efabron)
+#	GEP5 impact
+# - Wed Apr 24 2013 - Fabio Ronca (efabron)
+#	GEP4 impact
+# - Thu Jan 10 2013 - Fabio Ronca (efabron)
+#	ROJ setup removal.
+# - Tue Oct 23 2012 - Fabio Ronca (efabron)
+#	First version.
+#
+##
+
+# Global Variables ------------------------------------------------------- BEGIN
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+
+#IPMICONF_DIR="${AP_HOME:-/opt/ap}/apos/bin/ic/"
+GEP1_DIR='GEP1'
+GEP2_DIR='GEP2'
+
+CMD_LOGGER=''
+CMD_LOGGER_ERROR=''	# MUST be equal to $CMD_LOGGER
+CMD_GREP=''
+CMD_SED=''
+CMD_AWK=''
+CMD_TR=''
+CMD_ERIIPMI=''
+CMD_MKDIR=''
+
+LOG_TAG='-t ipmiconf'
+## Option variables ------------------------------------------------ BEGIN
+OPT_VERBOSE=$FALSE
+## Option variables ------------------------------------------------   END
+
+
+# Functions -------------------------------------------------------------- BEGIN
+# The function will check for the script's prerequisites to be satisfied.
+function sanity_check(){
+	OUT_TMP=$(mktemp --tmpdir ipmiconf_log_XXXXX)
+	ERR_TMP=$OUT_TMP
+	
+	CMD_LOGGER=$( which logger 2>/dev/null )
+	[ -z "$CMD_LOGGER" ] && CMD_LOGGER='/bin/logger'	
+	CMD_LOGGER_ERROR=$CMD_LOGGER
+	
+	CMD_GREP=$( which grep 2>/dev/null )
+	[ -z "$CMD_GREP" ] && CMD_GREP='/usr/bin/grep'
+	
+	CMD_ERIIPMI=$( which eri-ipmitool 2>/dev/null )
+	[ -z "$CMD_ERIIPMI" ] && CMD_ERIIPMI='/usr/sbin/eri-ipmitool'
+
+	CMD_SED=$( which sed 2>/dev/null )
+	[ -z "$CMD_SED" ] && CMD_SED='/usr/bin/sed'
+
+	CMD_AWK=$( which awk 2>/dev/null )
+	[ -z "$CMD_AWK" ] && CMD_AWK='/usr/bin/awk'
+
+	CMD_TR=$( which tr 2>/dev/null )
+	[ -z "$CMD_TR" ] && CMD_TR='/usr/bin/tr'
+}
+
+
+# The function will return $TRUE if the --verbose option has been specified,
+#  $FALSE otherwise.
+function is_verbose(){
+	if [ $OPT_VERBOSE -eq $TRUE ]; then
+		return $TRUE
+	else
+		return $FALSE
+	fi
+}
+ 
+
+# The function will log a message in the system log. If the --verbose option has
+#  been specified, it will print the same message on stdout too.
+function log(){
+	local PRIO='-p user.notice'
+	local MESSAGE="${*:-notice}"	
+	$CMD_LOGGER $PRIO $LOG_TAG "$MESSAGE" >$OUT_TMP 2>$ERR_TMP
+	is_verbose && echo -e "$MESSAGE"	
+}
+
+
+# The function will log an error message in the system log. If the --verbose
+#  option has been specified, it will print the same message on stderr too.
+function log_error(){	
+	local PRIO='-p user.err'
+	local MESSAGE="${*:-error}"	
+	$CMD_LOGGER_ERROR $PRIO $LOG_TAG "$MESSAGE" >$OUT_TMP 2>$ERR_TMP
+	echo -e "$MESSAGE" >&2
+}
+
+
+# The function will log and print an error message and will terminate the script
+#  with a $FALSE return code.
+function abort(){
+	local MESSAGE="ABORTING (${@:-unspecified error occurred})"
+	log_error $MESSAGE		
+	exit $FALSE
+}
+
+
+# The function will get the IPMI Product Infomration 
+function getProductInformation(){
+	log "getProductInformation --enter"
+	local ERROR_CODE
+	
+	local OUT_INFO=$($CMD_ERIIPMI gp) 
+	EXIT_CODE=$?
+	if [ $EXIT_CODE -ne $TRUE ]; then
+		abort "\"$CMD_ERIIPMI gp\" returned: $EXIT_CODE"
+	fi
+	
+	local TOKEN='Product Number:'
+	local TOKEN_2='Revision:'
+	ROJ=$( $CMD_ERIIPMI gp 2>/dev/null | $CMD_GREP -E "$TOKEN" | $CMD_AWK 'gsub(/.*Product Number:|'$TOKEN_2'.*/,"")' | $CMD_TR -d ' ' ) 
+	#eri-ipmitool gp | grep -e "Product Number:" | awk 'gsub(/.*Product Number:|Revision:.*/,"")'
+	ERROR_CODE=$?
+	if [ $ERROR_CODE -ne $TRUE ]; then
+		abort "get of current ROJ failed: $CMD_ERIIPMI gp failed with error code: $ERROR_CODE"
+	fi
+	
+	log "current ROJ of board: $ROJ"
+	
+	#echo $OUT_INFO
+	log "getProductInformation --exit"
+}
+
+
+# The function will change the Baud rate to 1152000
+function setBaudRate(){
+
+	log "set the baud rate to 115200"
+	
+	$CMD_ERIIPMI wgpr nvram 00 0x000f0000 0x00060000 &>/dev/null
+	local ERROR_CODE=$?
+	
+	if [ $ERROR_CODE -eq $TRUE ]; then
+		log "Baud rate properly set to 115200"
+	else
+		abort "Baud rate update failed: $CMD_ERIIPMI failed with error code: $ERROR_CODE"
+	fi
+	
+}
+
+
+# The function set the boot device to Internal SAS disk
+function setBootDevice(){
+
+	log "set the Boot Device to Internal SAS disk (07)"
+	
+	$CMD_ERIIPMI wgpr nvram 00 0xff000000 0x07000000 &>/dev/null
+	local ERROR_CODE=$?
+	
+	if [ $ERROR_CODE -eq $TRUE ]; then
+		log "Boot device properly set to Internal SAS disk"
+	else
+		abort "Boot device update failed: $CMD_ERIIPMI failed with error code: $ERROR_CODE"
+	fi
+	
+}
+
+# The function set the boot device from SSD disk on GEP4 board
+function setBootDeviceGEP4(){
+
+	$CMD_ERIIPMI wbcsgep4 -b 0 0x10 &>/dev/null
+	local ERROR_CODE=$?
+	
+	if [ $ERROR_CODE -eq $TRUE ]; then
+		log "Boot device 0 properly set to SAS/SATA-ID09 GMB 1.8"
+	else
+		abort "Set boot device 0 failed: $CMD_ERIIPMI failed with error code: $ERROR_CODE"
+	fi
+
+	$CMD_ERIIPMI wbcsgep4 -b 1 0xff &>/dev/null
+ 	ERROR_CODE=$?
+	 
+	if [ $ERROR_CODE -eq $TRUE ]; then
+		log "Boot device 1 clear"
+	else
+		abort "Set of boot device 1 failed: $CMD_ERIIPMI failed with error code: $ERROR_CODE"
+	fi	
+}
+
+# The function set the boot device from SSD disk on GEP5 board
+function setBootDeviceGEP5(){
+
+	$CMD_ERIIPMI wbcsgep5 -b 0 0x10 &>/dev/null
+ 	local ERROR_CODE=$?
+	 
+	if [ $ERROR_CODE -eq $TRUE ]; then
+		log "Boot device 0 properly set to SAS/SATA-ID09 GMB 1.8"
+	else
+		abort "Set boot device 0 failed: $CMD_ERIIPMI failed with error code: $ERROR_CODE"
+	fi
+
+	$CMD_ERIIPMI wbcsgep5 -b 1 0xff &>/dev/null
+ 	ERROR_CODE=$?
+	 
+	if [ $ERROR_CODE -eq $TRUE ]; then
+		log "Boot device 1 clear"
+	else
+		abort "Set of boot device 1 failed: $CMD_ERIIPMI failed with error code: $ERROR_CODE"
+	fi	
+}
+
+# The function set the boot device from SSD disk on GEP7 board
+function setBootDeviceGEP7(){
+
+        $CMD_ERIIPMI wbcsgep7 -b 0 0x10 &>/dev/null
+        local ERROR_CODE=$?
+
+        if [ $ERROR_CODE -eq $TRUE ]; then
+                log "Boot device 0 properly set to SAS/SATA-ID09 GMB 1.8"
+        else
+                abort "Set boot device 0 failed: $CMD_ERIIPMI failed with error code: $ERROR_CODE"
+        fi
+
+        $CMD_ERIIPMI wbcsgep7 -b 1 0xff &>/dev/null
+        ERROR_CODE=$?
+
+        if [ $ERROR_CODE -eq $TRUE ]; then
+                log "Boot device 1 clear"
+        else
+                abort "Set of boot device 1 failed: $CMD_ERIIPMI failed with error code: $ERROR_CODE"
+        fi
+}
+
+
+function setDefaultBios(){ 
+
+	$CMD_ERIIPMI sbios 1 &>/dev/null
+	local ERROR_CODE=$?
+
+	if [ $ERROR_CODE -eq $TRUE ]; then
+		log "Default BIOS image properly set to UPG image"
+	else
+		abort "Set default BIOS image to UPG image failed: $CMD_ERIIPMI failed with error code: $ERROR_CODE"
+	fi
+
+	$CMD_ERIIPMI sbiosp 1 &>/dev/null
+	local ERROR_CODE=$?
+
+	if [ $ERROR_CODE -eq $TRUE ]; then
+		log "BIOS pointer properly set to UPG image"
+	else
+		abort "BIOS pointer does not properly set to UPG image: $CMD_ERIIPMI failed with error code: $ERROR_CODE"
+	fi 	
+}
+
+function resetRTFDFlag(){
+
+	$CMD_ERIIPMI wgpr ram 00 0x80000000 0x00000000 &>/dev/null
+	local ERROR_CODE=$?
+
+	if [ $ERROR_CODE -eq $TRUE ]; then
+		log "RtfdStartedFlag flag properly cleared"
+	else
+		abort "Resetting RtfdStartedFlag flag failed: $CMD_ERIIPMI failed with error code: $ERROR_CODE"
+	fi
+}
+
+# pre-MAIN
+sanity_check
+# MAIN ------------------------------------------------------------------- BEGIN
+log "start hwmanagemt script"
+ROJ=''
+GEP_TYPE=''
+
+getProductInformation
+
+case "$ROJ" in
+	ROJ*/1*)
+		GEP_TYPE="GEP1"	
+		setBootDevice
+	;;
+	ROJ*/2*)
+		GEP_TYPE="GEP2"
+		setBootDevice
+		setBaudRate
+	;;
+	ROJ*/4*)
+		GEP_TYPE="GEP4"
+		setBootDeviceGEP4	
+	;;
+	ROJ*/5*)
+		GEP_TYPE="GEP5"
+		setBootDeviceGEP5
+		setDefaultBios
+		resetRTFDFlag	
+	;;
+        ROJ*/7*)
+                GEP_TYPE="GEP7"
+                setBootDeviceGEP7
+                setDefaultBios
+                resetRTFDFlag
+        ;;
+
+	*)
+		abort "unsupported GEP revision"
+	;;
+esac
+
+log "end hwmanagemt script"
+# MAIN --------------------------------------------------------------------- END
+
+exit $TRUE
+

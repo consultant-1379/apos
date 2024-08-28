@@ -1,0 +1,132 @@
+ --> dependencies for package acct
+
+ --> dependencies for package acl
+
+ --> dependencies for package apache2
+       apache2 apache2-prefork apache2-utils libapr-util1 libapr1 liblua5_2
+
+ --> dependencies for package apache2-worker
+       apache2 apache2-utils apache2-worker libapr-util1 libapr1 liblua5_2
+
+ --> dependencies for package bison
+
+ --> dependencies for package cdrdao
+       cdrdao libFLAC8 libao-plugins4 libao4 libasound2 libogg0 libpulse0 libsndfile1 libspeex1 libvorbis0 libvorbisenc2 libvorbisfile3
+
+ --> dependencies for package cdrkit-cdrtools-compat
+       cdrkit-cdrtools-compat genisoimage icedax libFLAC8 libao-plugins4 libao4 libasound2 libkate1 libogg0 liboggkate1 libpulse0 libsndfile1 libspeex1 libvorbis0 libvorbisenc2 libvorbisfile3 vorbis-tools wodim
+
+ --> dependencies for package dvd+rw-tools
+       cdrkit-cdrtools-compat dvd+rw-tools genisoimage icedax libFLAC8 libao-plugins4 libao4 libasound2 libburn4 libisoburn1 libisofs6 libkate1 libogg0 liboggkate1 libpulse0 libsndfile1 libspeex1 libvorbis0 libvorbisenc2 libvorbisfile3 vorbis-tools wodim
+
+ --> dependencies for package flex
+
+ --> dependencies for package ipsec-tools
+
+ --> dependencies for package lftp
+       lftp libgnutls28 libhogweed2 libnettle4 libp11-kit0 libtasn1 libtasn1-6
+
+ --> WARNING: package libXerces NOT FOUND
+
+ --> dependencies for package libboost_atomic1_54_0
+       boost-license1_54_0 libboost_atomic1_54_0
+
+ --> dependencies for package libboost_chrono1_54_0
+       boost-license1_54_0 libboost_chrono1_54_0 libboost_system1_54_0
+
+ --> dependencies for package libboost_date_time1_54_0
+       boost-license1_54_0 libboost_date_time1_54_0
+
+ --> dependencies for package libboost_filesystem1_54_0
+       boost-license1_54_0 libboost_filesystem1_54_0 libboost_system1_54_0
+
+ --> dependencies for package libboost_graph1_54_0
+       boost-license1_54_0 libboost_graph1_54_0 libboost_regex1_54_0 libicu52_1 libicu52_1-data
+
+ --> dependencies for package libboost_graph_parallel1_54_0
+       boost-license1_54_0 libboost_graph_parallel1_54_0 libboost_mpi1_54_0 libboost_python1_54_0 libboost_serialization1_54_0 libibverbs1 openmpi-libs
+
+ --> dependencies for package libboost_iostreams1_54_0
+       boost-license1_54_0 libboost_iostreams1_54_0
+
+ --> dependencies for package libboost_locale1_54_0
+       boost-license1_54_0 libboost_locale1_54_0 libboost_system1_54_0 libboost_thread1_54_0 libicu52_1 libicu52_1-data
+
+ --> dependencies for package libboost_log1_54_0
+       boost-license1_54_0 libboost_filesystem1_54_0 libboost_log1_54_0 libboost_system1_54_0 libboost_thread1_54_0
+
+ --> dependencies for package libboost_math1_54_0
+       boost-license1_54_0 libboost_math1_54_0
+
+ --> dependencies for package libboost_mpi1_54_0
+       boost-license1_54_0 libboost_mpi1_54_0 libboost_python1_54_0 libboost_serialization1_54_0 libibverbs1 openmpi-libs
+
+ --> dependencies for package libboost_program_options1_54_0
+       boost-license1_54_0 libboost_program_options1_54_0
+
+ --> dependencies for package libboost_python1_54_0
+       boost-license1_54_0 libboost_python1_54_0
+
+ --> dependencies for package libboost_random1_54_0
+       boost-license1_54_0 libboost_random1_54_0
+
+ --> dependencies for package libboost_regex1_54_0
+       boost-license1_54_0 libboost_regex1_54_0 libicu52_1 libicu52_1-data
+
+ --> dependencies for package libboost_serialization1_54_0
+       boost-license1_54_0 libboost_serialization1_54_0
+
+ --> dependencies for package libboost_signals1_54_0
+       boost-license1_54_0 libboost_signals1_54_0
+
+ --> dependencies for package libboost_system1_54_0
+       boost-license1_54_0 libboost_system1_54_0
+
+ --> dependencies for package libboost_test1_54_0
+       boost-license1_54_0 libboost_test1_54_0
+
+ --> dependencies for package libboost_timer1_54_0
+       boost-license1_54_0 libboost_chrono1_54_0 libboost_system1_54_0 libboost_timer1_54_0
+
+ --> dependencies for package libboost_thread1_54_0
+       boost-license1_54_0 libboost_system1_54_0 libboost_thread1_54_0
+
+ --> dependencies for package libboost_wave1_54_0
+       boost-license1_54_0 libboost_system1_54_0 libboost_thread1_54_0 libboost_wave1_54_0
+
+ --> dependencies for package lsscsi
+
+ --> dependencies for package lsof
+
+ --> dependencies for package libvmtools0-10.1.0
+	libxml-security-c17
+
+ --> dependencies for package openldap2-back-meta
+
+ --> dependencies for package openssh
+
+ --> dependencies for package php5
+       php5 postfix
+
+ --> dependencies for package php5-soap
+       php5 php5-soap postfix
+
+ --> dependencies for package quota
+
+ --> dependencies for package rsh
+
+ --> dependencies for package rsh-server
+       rsh-server tcpd
+
+ --> depedencies for package strongswan
+       libpcsclite1 dbus libmodman1 libproxy1 shared-mime-info libelf0 glib2-tools libgio wallpaper-branding gio-branding gsettings-desktop-schemas glib-networking libsoup strongswan-libs0 strongswan-ipsec
+
+ --> dependencies for package unzip
+
+ --> dependencies for package vsftpd
+
+ --> dependencies for package zip
+ 
+ --> dependencies for package sg3-utils
+      libsgutils2-2
+

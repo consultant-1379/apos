@@ -1,0 +1,45 @@
+STEP TO COMPILE BOOST LIBRARIES:
+===============================
+
+1. Download boost_1_44_0.tar.bz2 from ClearCase repository /vobs/cm4ap/apos/3pp_cnz/boost folder
+
+2. Unzip file using :  tar --bzip2 -xf boost_1_44_0.tar.bz2 
+
+3. Set the clearcase view with the last config spec to access LOTC SDK and DX compiler 
+
+4. Set environment variable: 
+	setenv DX_CUSTOM_RPATH /vobs/IO_Developments/MIDDLEWARE/lib64:/vobs/IO_Developments/MIDDLEWARE/lib64/opensaf
+	setenv DX_SYSROOT_X86_64 /vobs/IO_Developments/LOTC_SDK
+
+5. Edit  ~/BOOST_44/boost_1_44_0/tools/build/v2/user-config.jam file:
+
+   Adding the follow lines after GCC configuration.
+
+   # ----------------------
+   # GCC configuration
+   # ----------------------
+   using gcc : : /vobs/IO_Developments/DX_SDK/compilers/bin/x86_64-dx-linux-gnu-gcc : <compileflags>-I/vobs/IO_Developments/LOTC_SDK/usr/include 
+   <compileflags>-I/vobs/IO_Developments/LOTC_SDK/usr/include/c++/4.3 <compileflags>-I/vobs/IO_Developments/LOTC_SDK/usr/include/c++/4.3/x86_64-suse-linux 
+   <compileflags>-I/vobs/IO_Developments/LOTC_SDK/usr/include/python <linkflags>-L/vobs/IO_Developments/LOTC_SDK/usr/lib64 ;
+
+6. Build bjam. Executable are placed in "bin.linuxx86_64"
+   (../boost_1_44_0/tools/jam/src/bin.linuxx86_64)
+
+   cd BOOST_ROOT/tools/jam/src
+   sh ./build.sh
+   
+7. Add the path ".../boost_1_44_0/tools/jam/src/bin.linuxx86_64" to your PATH environment variable
+
+   setenv PATH .../boost_1_44_0/tools/jam/src/bin.linuxx86_64
+
+8. Build boost libraries by invoking bjam. Change directory to the Boost root and invoke bjam as follow:
+
+   create a folder with : "mkdir ~/boost-dir"
+
+   change folder with: "cd .../boost_1_44_0"
+   
+   run command: "bjam --build-dir=~/boost-dir toolset=gcc stage"
+
+   The libraries will be stored into .../boost_1_44_0/stage/lib
+
+   

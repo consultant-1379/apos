@@ -1,0 +1,21 @@
+Usage:  usermgmt user modify [--help] [--gid=group_id] [--global] 
+                             [--gname=group_name] <--uname=username>
+
+Modify a user account using the values specified.
+
+<--gname=>              Specify the Group name.
+
+<--uid=>                Specify the UID.
+
+<--uname=>              Specify the usename.
+
+<--secgroups=>          Specify the secondary groups as a comma separated list.
+
+<--shell=>              Specify the default shell.
+
+<--rmgroup=>            Remove the specified group.
+
+<--appendgroup>         Specify if appends the secondary droups passed with 
+                        secgroups option.
+
+<--help>                This help.

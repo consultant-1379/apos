@@ -1,0 +1,24 @@
+#!/bin/bash
+
+net=169
+
+for ip in 192.168.$net.{1..254}; do  # for loop and the {} operator
+	ping -c 1 -t 1 $ip > /dev/null 2> /dev/null  # ping and discard output
+	if [ $? -eq 0 ]; then  # check the exit code
+		echo "${ip} is up" # display the output
+		# you could send this to a log file by using the >>pinglog.txt redirect
+#	else
+#		echo "${ip} is down"
+	fi
+done
+
+net=170
+
+for ip in 192.168.$net.{1..254}; do  # for loop and the {} operator
+	ping -c 1 -t 1 $ip > /dev/null 2> /dev/null  # ping and discard output
+	if [ $? -eq 0 ]; then  # check the exit code
+		echo "${ip} is up" # display the output
+		# you could send this to a log file by using the >>pinglog.txt redirect
+	fi
+done
+

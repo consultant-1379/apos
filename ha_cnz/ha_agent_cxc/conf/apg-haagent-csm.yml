@@ -1,0 +1,48 @@
+csm-version: '1.0'
+components:
+- uid: apos.haagent
+  name: apos-haagent
+  description: APOS HAAGENT component
+  availability-manager: AMF
+  software:
+    sdp: ERIC-APOS_HAAGENTBIN-CXC1371467
+  supersedes:
+  - base-component: ERIC-APG_Agent
+  availability-properties:
+    control-policy:
+      type: ADVANCED
+    multiplicity-policy:
+      node-active: ONE
+      node-standby: ONE
+      cluster-active: ONE
+      cluster-standby: ONE
+    lifecycle-control:
+      prefix: /opt/ap/apos/bin
+      start: apos_ha_rdeagent_clc instantiate
+      stop: apos_ha_rdeagent_clc cleanup
+      monitor-keys:
+      - key: apos_ha_rdeagentd_hck
+        period: 60s
+        timeout: 240s
+      promote-demote-timeout: 240s
+      migrate-timeout: 60s
+      recovery-policy: NODE_FAILFAST
+      start-stop-timeout: 240s
+  constraints:
+    installation:
+      after:
+      - component: acs.lct.lib
+        method: DIFFERENT-STEP
+    upgrade:
+      migration-scope: compute-resource
+      after:
+      - component: acs.lct.lib
+        method: DIFFERENT-STEP
+  meta-data:
+    component-version: 13.0.7-0
+    deliverable:
+      deployment-package: apos_haagent-13.0.7-0-deployment-CXC1371467.tar.gz
+      runtime-package: apos_haagent-13.0.7-0-runtime-CXC1371467.tar.gz
+    software:
+    - file-name: APOS_HAAGENTBIN-CXC1371467_13-R1H.x86_64.sdp
+      bundle-name: ERIC-APOS_HAAGENTBIN-CXC1371467_13-R1H

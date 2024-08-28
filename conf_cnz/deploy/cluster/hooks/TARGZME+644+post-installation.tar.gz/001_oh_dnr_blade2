@@ -1,0 +1,407 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       001_oh_dnr_blade2
+# Description:
+#       A script to resore newly replaced board
+# Note:
+#      
+##
+# Usage:
+#       Used during APG43L single node Restoration
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Tue May 21 2019 -Harika Bavana (XHARBAV)
+#   Updated for secure backup
+# - Tue October 04 2017  Raghavendra Koduri (XKODRAG)
+#   Impacts due GEP7 hardware
+# - Wed Aug 31 2016 - Pratap Reddy (XPRAUPP)
+#     TR Fix for HV11906
+# - Mon Mar 07 2016 - Baratam Swetha(xswebar)
+# Updated TR HU63316 (snrinit needs to be handled for spare board replacement for GEP5)
+# - Wed May 21 2014 - Malangsha Shaik(xmalsha)
+# updated Main function and added GetHwType, GetNwBw
+# - Wed May 01 2013 - Pratap Reddy (XPRAUPP)
+#	First version.
+##
+
+# Non-initialized variables are forbidden
+#set -u
+set -x
+TRUE=$( true; echo $? )
+FALSE=$( false; echo $? )
+
+
+function abort() {
+  local ERROR_STRING=""
+
+  if [ "$1" ]; then
+    ERROR_STRING="ERROR: $1"
+    echo "$ERROR_STRING"
+  fi
+  echo "Aborting"
+  echo ""
+  exit 1
+}
+
+function activate_vg() {
+	echo "--- activate_vg() begin"
+	
+	[ ! -f $LVM_CONF ] && abort "lvm.conf file not found"
+	$(grep 'drbd0|sd.*' $LVM_CONF &>/dev/null)
+	[ $? -ne $TRUE ] && {
+		$(sed -i "s/drbd0/drbd0|sd.*/" $LVM_CONF )
+		[ $? -ne $TRUE ] && abort "Falied to update lvm.conf file"
+		$( /sbin/lvmdiskscan &>/dev/null )
+		[ $? -ne $TRUE ] && abort "Falied to update lvm.conf file"
+	}
+	
+	echo "--- activate_vg() end"
+}
+
+function get_hooks_path() {
+	local FOLDER="${HOOKS_DIR}"
+	[ -z "${FOLDER}" ] && FOLDER="/tmp/hooks_execute_dir"
+	[ ! -d ${FOLDER} ] && abort "ERROR: The hook path is not configured by LOTC!"
+	echo "${FOLDER}"
+}
+
+function udev_rules_GEP4() {
+    # Create udev rules for diskA
+    append_header
+
+    cat << HEREDOC >> $TMP_RULES
+# -- GEP4
+# -- LEFT GED-SASF
+
+KERNEL=="sd?", ENV{DEVTYPE}=="disk", ENV{ID_PATH}=="*sas-phy0*", ENV{ID_BUS}=="ata", SYMLINK+="eri_disk"
+ENV{DEVTYPE}=="partition", ENV{ID_BUS}=="ata", \
+ENV{ID_PART_ENTRY_NUMBER}=="6", SYMLINK+="eri-meta-part"
+
+HEREDOC
+
+    # Now copy created rule file to destination folder
+    copy_udev_rules
+
+}
+
+#-------------------------------------------------------------------------------------------
+
+function udev_rules_GEP7(){
+
+    # Create udev rules for diskA
+    append_header
+
+    cat << HEREDOC >> $TMP_RULES
+# -- RIGHT GED-SASF
+
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{device}=="0x23a3", SYMLINK+="eri_flash"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{sas_address}=="0x4433221100000000", SYMLINK+="eri_disk"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{sas_address}=="0x4433221101000000", SYMLINK+="eri_diskC"
+ENV{DEVTYPE}=="partition", ATTRS{sas_address}=="0x4433221100000000", ATTR{partition}=="6", SYMLINK+="eri-meta-part"
+
+HEREDOC
+
+    # Now copy created rule file to destination folder
+    copy_udev_rules
+}
+
+
+function udev_rules_GEP5(){
+
+	# Create udev rules for diskA
+	append_header
+
+	cat << HEREDOC >> $TMP_RULES
+# -- RIGHT GED-SASF
+
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{device}=="0x2323", SYMLINK+="eri_flash"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{sas_address}=="0x4433221100000000", SYMLINK+="eri_disk"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{sas_address}=="0x4433221101000000", SYMLINK+="eri_diskC"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{sas_address}=="0x443322110[23]000000", SYMLINK+="eri_diskD"
+ENV{DEVTYPE}=="partition", ATTRS{sas_address}=="0x4433221100000000", ATTR{partition}=="6", SYMLINK+="eri-meta-part"
+
+HEREDOC
+
+	# Now copy created rule file to destination folder
+	copy_udev_rules
+
+}
+
+function udev_rules_Virtualized(){
+  
+    # Create udev rules for VM in VMware environment
+    append_header
+
+    cat << HEREDOC >> $TMP_RULES
+
+# - VM udev Rule
+KERNEL=="[sv]d?", SUBSYSTEM=="block", PROGRAM="$HOOK_PATH/apos_is-datadisk.sh %k", SYMLINK+="eri_disk"
+ENV{DEVTYPE}=="partition", ENV{ID_PART_ENTRY_NUMBER}=="2", PROGRAM="$HOOK_PATH/apos_is-datadisk.sh %k", SYMLINK+="eri-meta-part"
+
+HEREDOC
+
+    # Now copy created rule file to destination folder
+    copy_udev_rules
+}
+
+function append_header() {
+
+	# Appened header for data disk rules for APG
+	cat << HEREDOC > $TMP_RULES
+# This file contains the rules for the physical-to-logical disk mapping for APG.
+
+# DO NOT WRAP THIS LINE
+#
+# old udev does not understand some of it,
+# and would end up skipping only some lines, not the full rule.
+# which can cause all sort of trouble with strange-named device nodes
+# for completely unrelated devices,
+# resulting in unusable network lookback, etc.
+#
+# in case this is "accidentally" installed on a system with old udev,
+# having it as one single line avoids those problems.
+#
+# DO NOT WRAP THIS LINE
+
+HEREDOC
+
+}
+
+function copy_udev_rules() {
+
+	# copy TEMP_RULES to source file UDEV_RULES
+	if [ -r $TMP_RULES ]; then
+		install -m 644 $TMP_RULES /etc/udev/rules.d/$UDEV_RULES
+		[ $? -ne 0 ] && apos_abort 'copy failed'
+                /sbin/udevadm control --reload-rules
+		udevadm trigger --subsystem-match="block"
+		udevadm settle
+	else
+		abort "file $TMP_RULES not found or not readable"
+	fi
+
+	# cleanup the source file
+	/bin/rm -f $TMP_RULES
+
+}
+
+function udev_rules() {
+	echo "--- udev_rules() begin"
+
+	[ -f $TMP_RULES ] && /bin/rm $TMP_RULES
+	UDEV_RULES="${PRIO}-apos_disks.rules"
+
+	# generate udev rules for VM
+	if [[ $HW_TYPE =~ "GEP5" ]]; then
+		udev_rules_GEP5
+	elif [[ $HW_TYPE =~ "GEP4" ]]; then
+		udev_rules_GEP4
+        elif [[ $HW_TYPE =~ "GEP7" ]]; then
+                udev_rules_GEP7
+        elif [[ "$HW_TYPE" == "VM" ]]; then
+                udev_rules_Virtualized 
+	fi
+	echo "--- udev_rules() end"
+}
+
+function GetNwBw() {
+
+  local NTWK_FILE='drbd_network_capacity'
+  local TEMP_LOCATION='/tmp/dnr_bkcp'
+  local DEF_NETWK_CAPCTY='1G'
+  if [ ! -f $HOOK_PATH/raid/drbd_network_capacity ]; then
+    pushd $TEMP_LOCATION >/dev/null 2>&1
+    /usr/bin/find $TEMP_LOCATION -type f -name "$NTWK_FILE" -exec cp -rvf {} $HOOK_PATH/raid/ \; 2>/dev/null
+    popd >/dev/null 2>&1
+  fi
+  NETWORK_BW=$( cat $HOOK_PATH/raid/drbd_network_capacity 2>/dev/null)
+  [ -z "$NETWORK_BW" ] && NETWORK_BW=$DEF_NETWK_CAPCTY
+
+  # clean up temp folder
+  rm -rf $TEMP_LOCATION
+
+  echo $NETWORK_BW
+}
+
+function GetHwType() {
+
+	local HW_TYPE=''
+	local HW_FILE='installation_hw'
+	local PERSISTENT_LOCATION='/cluster/home/dnr_bckp'
+	local CONFG_FILE='config.tar.gz'
+        local CONFG_FILE_ENC='config.tar.gz.enc'
+	local TEMP_LOCATION='/tmp/dnr_bkcp'
+	[ ! -d $TEMP_LOCATION ] && mkdir -p $TEMP_LOCATION
+
+	if [ ! -f $HOOK_PATH/raid/installation_hw ]; then
+		# check for Backup file existence, if not fail
+		BACKUP_FILE=$( ls -1 $PERSISTENT_LOCATION/*.tar  2>/dev/null)
+		[ -z $BACKUP_FILE ] && abort "APG Backup file not found"
+		pushd $TEMP_LOCATION >/dev/null 2>&1
+		# extract the backup file to get the required files
+		/bin/tar -m -C $TEMP_LOCATION -xf $BACKUP_FILE
+
+                DIRNAME=$(/usr/bin/find $TEMP_LOCATION -name "config.tar.gz*" -exec dirname {} \;)
+                #Check if encrypted config file, then decrypt using password filei
+                if [  -f $DIRNAME/config.tar.gz.enc ]; then
+                  #Fetch password from password file
+                  PASSWORD=$( cat $PERSISTENT_LOCATION/APG_BACKUP_PWD.dat 2>/dev/null)
+                    [ -z "$PASSWORD" ] && abort "Password not found in file"
+                  openssl enc -d -aes-256-cbc -md sha256 -salt -in $DIRNAME/$CONFG_FILE_ENC -out $DIRNAME/$CONFG_FILE -pass pass:$PASSWORD  &>/dev/null
+                  [ $? -ne 0 ] && abort "Decryption of encrypted config file is failed"
+                  /bin/rm -rf $DIRNAME/$CONFG_FILE_ENC
+                fi
+		# Extract the config file to get hardware file
+		/usr/bin/find $TEMP_LOCATION -name $CONFG_FILE -exec tar -xzvf {} \; &>/dev/null
+		# copy installation_hw file to hook path
+		/usr/bin/find $TEMP_LOCATION -type f -name "$HW_FILE" -exec cp -rvf {} $HOOK_PATH/raid/ \; 2>/dev/null
+		popd >/dev/null 2>&1
+	fi
+	HW_TYPE=$( cat $HOOK_PATH/raid/installation_hw 2>/dev/null)
+	[ -z "$HW_TYPE" ] && abort "Hardware type not found"
+
+	echo $HW_TYPE
+}
+
+function configure_drbd() {
+	echo "--- configure_drbd() begin"
+	
+	pushd $HOOK_PATH >/dev/null 2>&1
+	[ ! -x ./raid/raidmgr_dnr ] && abort "Unable to execute raidmgr_dnr"
+
+	OPTS='--lvm --configure --activate --force'
+	./raid/raidmgr_dnr "$OPTS"
+	[ $? -ne 0 ] && abort "Failure while configuring drbd1 on second node"
+    
+	popd >/dev/null 2>&1  
+	
+	echo "--- configure_drbd() end"
+}
+
+function disk_partition() {
+	echo "--- disk_partition() begin"
+	
+	pushd $HOOK_PATH >/dev/null 2>&1
+	[ ! -x ./raid/raidmgr_dnr ] && abort "Unable to execute raidmgr_dnr"
+
+	OPTS='--part --force'
+	./raid/raidmgr_dnr "$OPTS"
+	[ $? -ne 0 ] && abort "Failure while configuring drbd1 on second node"
+    
+	popd >/dev/null 2>&1  
+	
+	echo "--- disk_partition() end"
+}
+
+#---------------------------------------------------------------------
+function gep_detect() {
+        local GEP_PREFIX='GEP'
+        local ROJ=""
+        local HW=""
+        ROJ=$( dmidecode -s baseboard-product-name | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]' )
+        if [ -z "$ROJ" ]; then
+                ROJ=$( eri-ipmitool gp | grep ROJ | tr '[:upper:]' '[:lower:]' | awk '{print $3,$4,$5}' |sed -e "s/ //g" )
+        fi
+        if [ -z "$ROJ" ]; then
+                abort "unable to retrieve the ROJ code"
+        else
+                GEP_TYPE=$(echo "$ROJ" | sed 's@.*/@@g')
+                HW="$GEP_PREFIX${GEP_TYPE:0:1}"
+                echo "$HW"
+        fi
+}
+
+function init_system() {
+	echo "--- init_system() begin"
+#	local GEP="$(gep_detect)"
+#	[[ ! $GEP =~ "GEP4"  && ! $GEP =~ "GEP5" ]] && {
+#	# this hooks is only meant for GEP4/5,  so return true on GEP1/2.
+#	echo 'nothing to be done on GEP1/2'
+#	exit 0
+#	}
+
+	pushd $HOOK_PATH >/dev/null 2>&1
+	[ ! -r ./non_exec-raidmgr.tgz ] && abort "Unable to read raidmgr.tgz file"
+
+	tar -xzf ./non_exec-raidmgr.tgz
+
+	HW_TYPE=$(GetHwType)
+	if [ "$HW_TYPE" == "VM" ]; then
+		[ ! -r ./non_exec-dd_detector.tgz ] && abort "Unable to read non_exec-dd_detector.tgz file"
+		tar -xzf ./non_exec-dd_detector.tgz
+	fi
+
+	NETWORK_BW=$(GetNwBw)
+	
+	# make HW_TYPE and NETWORK_BW available in raidmgr_dnr
+	export HW_TYPE=$HW_TYPE; export NETWORK_BW=$NETWORK_BW
+
+	popd >/dev/null 2>&1
+	echo "--- init_system() end"
+}
+
+
+#                                              __    __   _______   _   __    _
+#                                             |  \  /  | |  ___  | | | |  \  | |
+#                                             |   \/   | | |___| | | | |   \ | |
+#                                             | |\  /| | |  ___  | | | | |\ \| |
+#                                             | | \/ | | | |   | | | | | | \   |
+#                                             |_|    |_| |_|   |_| |_| |_|  \__|
+#
+
+main() {
+	echo "--- main() begin"
+
+	init_system
+
+	echo "-   external path: $HOOK_PATH"
+
+	[[ ! $HW_TYPE =~ "GEP4"  && ! $HW_TYPE =~ "GEP5" && ! $HW_TYPE =~ "VM" ]] && [[ ! $HW_TYPE =~ "GEP7" ]] && {
+        	# this hooks is only meant for GEP4/5,  so return true on GEP1/2.
+	        echo 'nothing to be done on GEP1/2'
+        	echo "--- main() end"
+	        exit $TRUE
+	}
+
+	
+	# activate vg
+	activate_vg
+
+	if  ! $(/sbin/lvs | grep -q 'eri-data-lv') || [ -f $HOOK_PATH/raid/S_OPTION ]; then
+		# define udev rules
+		udev_rules
+
+		#create disk partition (called only in Virtualized environment)
+		[ "$HW_TYPE" == "VM" ] && disk_partition
+    
+		# configue drbd
+		configure_drbd
+	fi
+    
+	echo "--- main() end"	
+}
+
+# Main
+echo "APG43L: 001_oh_dnr_blade2 hook for SC-2-2 node."
+
+LVM_CONF='/etc/lvm/lvm.conf'
+HOOK_PATH=$(get_hooks_path)
+HW_TYPE=''
+TMP_RULES='/tmp/apos_disks.rules'
+PRIO='66'
+HW_TYPE=''
+NETWORK_BW=''
+
+main "@"
+exit $TRUE
+
+# End of file
+

@@ -1,0 +1,813 @@
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# models.info TEMPLATE
+##
+# Description:
+#       Configuration file used to perform IMM model changes during software upgrade for APOS_OSCONFBIN (CXC1371465)block.
+##
+##
+# Changelog:
+# - Mar 05 2015 - Nazeema Begum (XNAZBEG)
+#	Included version R2A
+# - nov 25-27 2013 - Fabrizio Paglia (XFABPAG)
+#       First version
+##
+
+# Report here FOR EACH package version, all introduced model changes, in the following format,
+# starting from the first version from which you want to support upgrade, with the most recent on top
+#
+# VERSION: CXC1371465-R1A22
+# <model changes commands here>
+# VERSION: CXC1234568-R1A
+# <model changes commands here>
+# VERSION: CXC1234567-R1B
+# <model changes commands here>
+#
+VERSION: CXC1371499_19-R1B
+VERSION: CXC1371499_19-R1A02
+VERSION: CXC1371499_19-R1A01
+VERSION: CXC1371499_18-R1E
+VERSION: CXC1371499_18-R1D
+VERSION: CXC1371499_18-R1C
+VERSION: CXC1371499_18-R1B
+VERSION: CXC1371499_18-R1A05
+VERSION: CXC1371499_18-R1A04
+VERSION: CXC1371499_18-R1A03
+VERSION: CXC1371499_18-R1A02
+VERSION: CXC1371499_18-R1A01
+VERSION: CXC1371499_17-R1D
+VERSION: CXC1371499_17-R1C
+VERSION: CXC1371499_17-R1B
+VERSION: CXC1371499_17-R1A02
+VERSION: CXC1371499_17-R1A01
+VERSION: CXC1371499_16-R1E
+VERSION: CXC1371499_16-R1D
+VERSION: CXC1371499_16-R1C
+VERSION: CXC1371499_16-R1B
+VERSION: CXC1371499_16-R1A04
+VERSION: CXC1371499_16-R1A03
+VERSION: CXC1371499_16-R1A02
+VERSION: CXC1371499_16-R1A01
+VERSION: CXC1371499_15-R1E
+VERSION: CXC1371499_15-R1D
+VERSION: CXC1371499_15-R1C
+VERSION: CXC1371499_15-R1B
+VERSION: CXC1371499_15-R1A02
+VERSION: CXC1371499_15-R1A01
+VERSION: CXC1371499_14-R1D
+VERSION: CXC1371499_14-R1C
+VERSION: CXC1371499_14-R1B
+VERSION: CXC1371499_14-R1A06
+VERSION: CXC1371499_14-R1A05
+VERSION: CXC1371499_14-R1A04
+VERSION: CXC1371499_14-R1A03
+VERSION: CXC1371499_14-R1A02
+VERSION: CXC1371499_14-R1A01
+VERSION: CXC1371499_13-R1D
+VERSION: CXC1371499_13-R1C
+VERSION: CXC1371499_13-R1B
+VERSION: CXC1371499_13-R1A04
+VERSION: CXC1371499_13-R1A03
+VERSION: CXC1371499_13-R1A02
+VERSION: CXC1371499_13-R1A01
+VERSION: CXC1371499_12-R1E
+VERSION: CXC1371499_12-R1D
+VERSION: CXC1371499_12-R1C
+VERSION: CXC1371499_12-R1B
+VERSION: CXC1371499_12-R1A12
+VERSION: CXC1371499_12-R1A11
+VERSION: CXC1371499_12-R1A10
+VERSION: CXC1371499_12-R1A09
+VERSION: CXC1371499_12-R1A08
+VERSION: CXC1371499_12-R1A07
+VERSION: CXC1371499_12-R1A06
+VERSION: CXC1371499_12-R1A05
+VERSION: CXC1371499_12-R1A04
+VERSION: CXC1371499_12-R1A03
+VERSION: CXC1371499_12-R1A02
+
+VERSION: CXC1371499_12-R1A01
+
+VERSION: CXC1371499_11-R1C
+
+VERSION: CXC1371499_11-R1B
+
+VERSION: CXC1371499_11-R1A04
+
+VERSION: CXC1371499_11-R1A03
+
+VERSION: CXC1371499_11-R1A02
+immcfg -d ruleId=Axetls_1,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371499_11-R1A01
+
+VERSION: CXC1371499_10-R1E
+
+VERSION: CXC1371499_10-R1D
+
+VERSION: CXC1371499_10-R1C
+
+VERSION: CXC1371499_10-R1B
+
+VERSION: CXC1371499_10-R1A07
+
+VERSION: CXC1371499_10-R1A06
+
+VERSION: CXC1371499_10-R1A05
+immcfg -c Rule -a userLabel='No access to action createSecuredBackupWithPasswd under MOC BrmBackupManager' -a permission='0' -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager.createSecuredBackupWithPasswd' ruleId=AxeBackupRestore_40,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -a userLabel='No access to MOC FileTPM,FtpTls' ruleId=AxeSysm_57,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -a userLabel='No access to MOC FileTPM,Sftp' ruleId=AxeSysm_58,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to action createSecuredBackupWithPasswd under MOC BrmBackupManager' -a permission='0' -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager.createSecuredBackupWithPasswd' ruleId=AxeBackupRestore_41,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute UserManagement.privacyNotice' -a permission='0' -a ruleData='ManagedElement,SystemFunctions,SecM,UserManagement.privacyNotice' ruleId=AxeUserManagement_3,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC FileTPM,FtpTls' -a permission='0' -a ruleData='ManagedElement,SystemFunctions,SysM,FileTPM,FtpTls' ruleId=AxeSysm_59,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC FileTPM,Sftp' -a permission='0' -a ruleData='ManagedElement,SystemFunctions,SysM,FileTPM,Sftp'  ruleId=AxeSysm_70,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSysm_63,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSysm_56,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSysm_61,roleId=SystemAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371499_10-R1A04
+
+VERSION: CXC1371499_10-R1A03
+
+immcfg -d ruleId=AxeSysm_55,roleId=SystemAdministrator,localAuthorizationMethodId=1
+
+immcfg -c Rule -a userLabel='No access to MOC FtpTls' -a permission='0' -a ruleData='ManagedElement,SystemFunctions,SysM,FileTPM,FtpTls' ruleId=AxeSysm_57,roleId=SystemAdministrator,localAuthorizationMethodId=1
+
+immcfg -c Rule -a userLabel='No access to MOC Sftp' -a permission='0' -a ruleData='ManagedElement,SystemFunctions,SysM,FileTPM,Sftp' ruleId=AxeSysm_58,roleId=SystemAdministrator,localAuthorizationMethodId=1
+
+
+VERSION: CXC1371499_10-R1A02
+
+VERSION: CXC1371499_10-R1A01
+immcfg -a ruleData='regexp:^\b((?!alogset\b)(?!aloglist\b)(?!alogpchg\b)(?!alogpls\b)(?!alogfind\b)(?!csadm\b)(?!gmlog\b)(?!rpmo\b)(?!mml\b)(?!ldapdef\b)(?!ipsecdef\b)(?!ipsecls\b)(?!ipsecrm\b)(?!sec-encryption-key-update\b)(?!wssadm\b)).*$' ruleId=AxeApCmd_70,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -a userLabel='Execute permission to execute AP commands aehls, alist, alogfind, csadm, ldapdef, ipsecdef, ipsecls, ipsecrm, sec-encryption-key-update, wssadm' -a ruleData='regexp:alogset|aloglist|alogpchg|alogpls|aehls|alist|alogfind|csadm|ldapdef|ipsec.*|sec-encryption-key-update|wssadm.*' ruleId=AxeApCmd_71,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371499_9-R1C
+
+VERSION: CXC1371499_9-R1B
+
+VERSION: CXC1371499_9-R1A10
+
+VERSION: CXC1371499_9-R1A09
+
+immcfg -d ruleId=AxeLdapManagement_8,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeLdapManagement_7,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeLdapManagement_5,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371499_9-R1A08
+VERSION: CXC1371499_9-R1A07
+VERSION: CXC1371499_9-R1A06
+VERSION: CXC1371499_9-R1A05
+immcfg -d ruleId=AxeSwM_32,roleId=SystemReadOnly,localAuthorizationMethodId=1
+
+VERSION: CXC1371499_9-R1A04
+
+VERSION: CXC1371499_9-R1A03
+VERSION: CXC1371499_9-R1A02
+
+VERSION: CXC1371499_9-R1A01
+
+VERSION: CXC1371499_8-R1B
+
+VERSION: CXC1371499_8-R1A12
+
+VERSION: CXC1371499_8-R1A11
+immcfg -c Rule -a userLabel='Read-only access to folder sw_package/APG/UPGRADE and full access to folders and files present in it' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=APG,FileGroup=UPGRADE.*' -a permission=7 ruleId=AxeFileManagement_400,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any folder in folder sw_package/APG/UPGRADE' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=APG,FileGroup=UPGRADE,FileGroup,*' -a permission=7 ruleId=AxeFileManagement_401,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any file in folder sw_package/APG/UPGRADE' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=APG,FileGroup=UPGRADE,FileInformation,*' -a permission=7 ruleId=AxeFileManagement_402,roleId=SystemAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371499_8-R1A10
+
+VERSION: CXC1371499_8-R1A09
+immcfg -d ruleId=AxeSwM_19,roleId=SystemAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371499_8-R1A08
+
+VERSION: CXC1371499_8-R1A07
+
+VERSION: CXC1371499_8-R1A06
+immcfg -c Rule -a userLabel='No access to attribute execMethod in the MOC UpgradePackage since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SwM,UpgradePackage.execMethod' -a permission=0 ruleId=AxeSwM_40,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute activationFallbackTimer in the MOC UpgradePackage since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SwM,UpgradePackage.activationFallbackTimer' -a permission=0 ruleId=AxeSwM_41,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute execMethod in the MOC UpgradePackage since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SwM,UpgradePackage.execMethod' -a permission=0 ruleId=AxeSwM_50,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute activationFallbackTimer in the MOC UpgradePackage since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SwM,UpgradePackage.activationFallbackTimer' -a permission=0 ruleId=AxeSwM_51,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute autoExport under MOC BrmBackupManager' -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager.autoExport' -a permission=0 ruleId=AxeBackupRestore_30,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute autoExportPassword under MOC BrmBackupManager' -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager.autoExportPassword' -a permission=0 ruleId=AxeBackupRestore_31,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute autoExportUri under MOC BrmBackupManager' -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager.autoExportUri' -a permission=0 ruleId=AxeBackupRestore_32,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager,BrmBackupLabelStore,*' ruleId=AxeBackupRestore_7,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MO Schema=ComFileTPM in SysM=1' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema=ComFileTPM,*' -a permission=0 ruleId=AxeSysm_61,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC FileTPM' -a ruleData='ManagedElement,SystemFunctions,SysM,FileTPM,*' -a permission=0 ruleId=AxeSysm_55,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute execMethod in the MOC SwM since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SwM.execMethod' -a permission=0 ruleId=AxeSwM_18,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute subType in the MOC SwM since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SwM.subType' -a permission=0 ruleId=AxeSwM_19,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=InServicePerformance,*' ruleId=AxeFileManagement_300,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute activationStep in the MOC UpgradePackage since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SwM,UpgradePackage.activationStep' -a permission=0 ruleId=AxeSwM_30,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager,BrmBackupLabelStore,*' ruleId=AxeBackupRestore_18,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute autoExport under MOC BrmBackupManager' -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager.autoExport' -a permission=0 ruleId=AxeBackupRestore_33,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute autoExportPassword under MOC BrmBackupManager' -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager.autoExportPassword' -a permission=0 ruleId=AxeBackupRestore_34,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute autoExportUri under MOC BrmBackupManager' -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager.autoExportUri' -a permission=0 ruleId=AxeBackupRestore_35,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute execMethod in the MOC SwM since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SwM.execMethod' -a permission=0 ruleId=AxeSwM_31,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute subType in the MOC SwM since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SwM.subType' -a permission=0 ruleId=AxeSwM_32,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute activationStep in the MOC UpgradePackage since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SwM,UpgradePackage.activationStep' -a permission=0 ruleId=AxeSwM_33,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MO Schema=LdeServiceMarking in SysM=1' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema=LdeServiceMarking,*' -a permission=0 ruleId=AxeSysm_62,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MO Schema=ComFileTPM in SysM=1' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema=ComFileTPM,*' -a permission=0 ruleId=AxeSysm_63,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC FileTPM' -a ruleData='ManagedElement,SystemFunctions,SysM,FileTPM,*' -a permission=0 ruleId=AxeSysm_56,roleId=SystemReadOnly,localAuthorizationMethodId=1
+
+VERSION: CXC1371499_8-R1A05
+VERSION: CXC1371499_8-R1A04
+immcfg -d ruleId=AxeSwM_1,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSwM_2,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSwM_3,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSwM_4,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSwM_5,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSwM_6,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSwM_14,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSwM_24,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute localFileStorePath in the MOC SwM since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SwM.localFileStorePath' -a permission=0 ruleId=AxeSwM_17,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute localFileStorePath in the MOC SwM since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SwM.localFileStorePath' -a permission=0 ruleId=AxeSwM_27,roleId=SystemReadOnly,localAuthorizationMethodId=1
+
+VERSION: CXC1371499_8-R1A03
+
+VERSION: CXC1371499_8-R1A02
+
+VERSION: CXC1371499_8-R1A01
+
+VERSION: CXC1371499_7-R1E
+
+VERSION: CXC1371499_7-R1D
+
+VERSION: CXC1371499_7-R1C
+
+VERSION: CXC1371499_7-R1B
+immcfg -d ruleId=AxeSysm_45,roleId=SystemAdministrator,localAuthorizationMethodId=1 
+immcfg -c Rule -a userLabel='No access to MO Schema=LdeServiceMarking in SysM=1' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,SysM,Schema=LdeServiceMarking,*' ruleId=AxeSysm_60,roleId=SystemAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371499_7-R1A07
+
+VERSION: CXC1371499_7-R1A06
+
+VERSION: CXC1371499_7-R1A05
+
+VERSION: CXC1371499_7-R1A04
+
+VERSION: CXC1371499_7-R1A03
+immcfg -d ruleId=AxeLdapManagement_1,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeLdapManagement_2,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeLdapManagement_3,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeLdapManagement_4,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeLdapManagement_6,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1 
+immcfg -c Rule -a userLabel='No access to attribute timeoutFallbackCapability in the MOC SwM since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SwM.timeoutFallbackCapability' -a permission=0 ruleId=AxeSwM_15,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute timeRemainingBeforeFallback in the MOC SwM since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SwM.timeRemainingBeforeFallback' -a permission=0 ruleId=AxeSwM_16,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute timeoutFallbackCapability in the MOC SwM since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SwM.timeoutFallbackCapability' -a permission=0 ruleId=AxeSwM_25,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute timeRemainingBeforeFallback in the MOC SwM since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SwM.timeRemainingBeforeFallback' -a permission=0 ruleId=AxeSwM_26,roleId=SystemReadOnly,localAuthorizationMethodId=1
+
+VERSION: CXC1371499_7-R1A02
+
+VERSION: CXC1371499_7-R1A01
+
+VERSION: CXC1371499_6-R1C
+
+VERSION: CXC1371499_6-R1B
+
+VERSION: CXC1371499_6-R1A09
+
+VERSION: CXC1371499_6-R1A08
+
+VERSION: CXC1371499_6-R1A07
+
+VERSION: CXC1371499_6-R1A06
+immcfg -c Rule -a userLabel='No access to attribute manualBackupName under MOC BrmBackupManager' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager.manualBackupName' ruleId=AxeBackupRestore_11,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute creationType under MOC BrmBackup' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager,BrmBackup.creationType' ruleId=AxeBackupRestore_12,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSysm_5,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSysm_41,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to action alarmBeforeTimeout in the MOC SwM since it is not used in AXE' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,SwM.alarmBeforeTimeout' ruleId=AxeSwM_10,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to action automaticBackup in the MOC SwM since it is not used in AXE' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,SwM.automaticBackup' ruleId=AxeSwM_11,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to action automaticRestore in the MOC SwM since it is not used in AXE' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,SwM.automaticRestore' ruleId=AxeSwM_12,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to action fallbackTimer in the MOC SwM since it is not used in AXE' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,SwM.fallbackTimer' ruleId=AxeSwM_13,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to action localFileStore in the MOC SwM since it is not used in AXE' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,SwM.localFileStore' ruleId=AxeSwM_14,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access permissions to folder InServicePerformance' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=InServicePerformance,*' ruleId=AxeFileManagement_300,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to folder sw_package/SMXB and full access to folders and files present in it' -a permission=7 -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=SMXB.*' ruleId=AxeFileManagement_310,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any folder in folder sw_package/SMXB' -a permission=7 -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=SMXB,FileGroup,*' ruleId=AxeFileManagement_311,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any file in folder sw_package/SMXB' -a permission=7 -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=SMXB,FileInformation,*' ruleId=AxeFileManagement_312,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC Role=Self since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SecM,UserManagement,LocalAuthorizationMethod,Role=Self,*' -a permission=0 ruleId=AxeLocalAuthorization_4,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC Role=SystemTroubleshooter since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SecM,UserManagement,LocalAuthorizationMethod,Role=SystemTroubleshooter,*' -a permission=0 ruleId=AxeLocalAuthorization_5,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute legalNotice' -a ruleData='ManagedElement,SystemFunctions,SecM,UserManagement.legalNotice' -a permission=0 ruleId=AxeUserManagement_1,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute loginFailureDelay' -a ruleData='ManagedElement,SystemFunctions,SecM,UserManagement.loginFailureDelay' -a permission=0 ruleId=AxeUserManagement_2,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC BrmBackupHousekeeping within Backup and Restore Management function MOM' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager,BrmBackupHousekeeping,*' ruleId=AxeBackupRestore_14,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to action importBackup in MOC BrmBackupManager within Backup and Restore Management function MOM' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager.importBackup' ruleId=AxeBackupRestore_15,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute manualBackupName under MOC BrmBackupManager' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager.manualBackupName' ruleId=AxeBackupRestore_16,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute exportPackageLabelPrefix in MOC BrM within Backup and Restore Management function MOM' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,BrM.exportPackageLabelPrefix' ruleId=AxeBackupRestore_17,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC BrmBackupLabelStore within Backup and Restore Management function MOM' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager,BrmBackupLabelStore' ruleId=AxeBackupRestore_18,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute backupDescriptor in MOC BrmBackup within Backup and Restore Management function MOM' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager,BrmBackup.backupDescriptor' ruleId=AxeBackupRestore_19,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to action export in MOC BrmBackup within Backup and Restore Management function MOM' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager,BrmBackup.export' ruleId=AxeBackupRestore_20,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute creationType under MOC BrmBackup' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,BrM,BrmBackupManager,BrmBackup.creationType' ruleId=AxeBackupRestore_21,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to action alarmBeforeTimeout in the MOC SwM since it is not used in AXE' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,SwM.alarmBeforeTimeout' ruleId=AxeSwM_20,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to action automaticBackup in the MOC SwM since it is not used in AXE' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,SwM.automaticBackup' ruleId=AxeSwM_21,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to action automaticRestore in the MOC SwM since it is not used in AXE' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,SwM.automaticRestore' ruleId=AxeSwM_22,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to action fallbackTimer in the MOC SwM since it is not used in AXE' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,SwM.fallbackTimer' ruleId=AxeSwM_23,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to action localFileStore in the MOC SwM since it is not used in AXE' -a permission=0 -a ruleData='ManagedElement,SystemFunctions,SwM.localFileStore' ruleId=AxeSwM_24,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -a ruleData='regexp:ver' ruleId=AxeApCmd_13,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -a ruleData='regexp:alist' ruleId=AxeApCmd_14,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -a ruleData='regexp:prcstate' ruleId=AxeApCmd_41,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -a ruleData='regexp:emfinfo' ruleId=AxeApCmd_19,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -a ruleData='regexp:stmpts' ruleId=AxeApCmd_40,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -a ruleData='regexp:opensession' ruleId=AxeApCmd_60,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSysm_10,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSysm_43,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -a ruleData='regexp:gmlog' ruleId=AxeApCmd_11,roleId=EricssonSupport,localAuthorizationMethodId=1
+immcfg -a ruleData='regexp:rpmo' ruleId=AxeApCmd_20,roleId=EricssonSupport,localAuthorizationMethodId=1
+immcfg -a ruleData='regexp:alogfind' ruleId=AxeApCmd_21,roleId=CpRole0,localAuthorizationMethodId=1
+immcfg -a ruleData='regexp:mml' ruleId=AxeApCmd_37,roleId=CpRole0,localAuthorizationMethodId=1
+
+VERSION: CXC1371499_6-R1A05
+
+VERSION: CXC1371499_6-R1A04
+
+VERSION: CXC1371499_6-R1A02
+
+VERSION: CXC1371499_6-R1A01
+
+VERSION: CXC1371499_5-R2A
+
+VERSION: CXC1371499_5-R1E
+
+VERSION: CXC1371499_5-R1D
+
+VERSION: CXC1371499_5-R1C
+
+VERSION: CXC1371499_5-R1B
+
+VERSION: CXC1371499_5-R1A17
+
+VERSION: CXC1371499_5-R1A16
+immcfg -d ruleId=AxeApCmd_16,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeApCmd_7,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Execute permissions for all AP commands except the security related ones' -a permission=1 -a ruleData='regexp:^\b((?!alogset\b)(?!aloglist\b)(?!alogpchg\b)(?!alogpls\b)(?!alogfind\b)(?!csadm\b)(?!gmlog\b)(?!rpmo\b)(?!mml\b)(?!ldapdef\b)(?!ipsecdef\b)(?!ipsecls\b)(?!ipsecrm\b)(?!wssadm\b)).*$' ruleId=AxeApCmd_70,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Execute permission to execute AP commands aehls, alist, alogfind, csadm, ldapdef, ipsecdef, ipsecls, ipsecrm, wssadm' -a ruleData='regexp:alogset|aloglist|alogpchg|alogpls|aehls|alist|alogfind|csadm|ldapdef|ipsec.*|wssadm.*' -a permission=1 ruleId=AxeApCmd_71,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371499_5-R1A15
+
+VERSION: CXC1371499_5-R1A14
+immcfg -a ruleData='regexp:^\b((?!alogset\b)(?!aloglist\b)(?!alogpchg\b)(?!alogpls\b)(?!alogfind\b)(?!csadm\b)(?!gmlog\b)(?!rpmo\b)(?!mml\b)(?!tcdef\b)(?!ncdef\b)(?!ldapdef\b)(?!ipsecdef\b)(?!ipsecls\b)(?!ipsecrm\b)(?!wssadm\b)).*$' ruleId=AxeApCmd_16,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute selectedModelOptions into MOC Schema' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema.selectedModelOptions' -a permission=0 ruleId=AxeSysm_50,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute selectedModelOptions into MOC Schema' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema.selectedModelOptions' -a permission=0 ruleId=AxeSysm_51,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC DateAndTime as it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,TimeM,DateAndTime,*' -a permission=0 ruleId=AxeTimem_1,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC DateAndTime as it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,TimeM,DateAndTime,*' -a permission=0 ruleId=AxeTimem_2,roleId=SystemReadOnly,localAuthorizationMethodId=1
+
+
+VERSION: CXC1371499_5-R1A13
+
+VERSION: CXC1371499_5-R1A12
+immcfg -c Rule -a userLabel='No access to MOC Role=LocalAuthenticationAdministrator since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SecM,UserManagement,LocalAuthorizationMethod,Role=LocalAuthenticationAdministrator,*' -a permission=0 ruleId=AxeLocalAuthorization_3,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to folder SoftwareManagement' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=SoftwareManagement,*' -a permission=0 ruleId=AxeFileManagement_290,roleId=SystemAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371499_5-R1A11
+
+VERSION: CXC1371499_5-R1A01
+cmw-immclass-modify $BUNDLE_NAME AxeNbiFoldersNbiFoldersM
+immcfg -a swPackageSMXB="/sw_package/SMXB" AxeNbiFoldersnbiFoldersMId=1
+immcfg -c Rule -a userLabel='No access to MO Schema=SecLA in SysM=1 as it is not for customer' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema=SecLA,*' -a permission=0 ruleId=AxeSysm_45,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC CliSsh since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,CliSsh,*' -a permission=0 ruleId=AxeSysm_40,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC CliTls since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,CliTls,*' -a permission=0 ruleId=AxeSysm_41,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC CrMgmt and related children' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions,SystemComponentHandling,EquipmentM,CrMgmt,*' -a permission=0 ruleId=AxeEquipment_1,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC LocalAuthenticationMethod and children' -a ruleData='ManagedElement,SystemFunctions,SecM,UserManagement,LocalAuthenticationMethod,*' -a permission=0 ruleId=AxeLocalAuthentication_1,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC CliSsh since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,CliSsh,*' -a permission=0 ruleId=AxeSysm_42,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC CliTls since it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,CliTls,*' -a permission=0 ruleId=AxeSysm_43,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MO Schema=SecLA in SysM=1 as it is not for customer' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema=SecLA,*' -a permission=0 ruleId=AxeSysm_46,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MOC CrMgmt and related children' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions,SystemComponentHandling,EquipmentM,CrMgmt,*' -a permission=0 ruleId=AxeEquipment_2,roleId=SystemReadOnly,localAuthorizationMethodId=1
+
+VERSION: CXC1371544_5-R1A04
+
+VERSION: CXC1371544-R1A03
+
+VERSION: CXC1371544-R1A02
+
+VERSION: CXC1371544-R1A01
+
+VERSION: CXC1371499_4-R1B
+
+VERSION: CXC1371499_4-R1A
+
+VERSION: CXC1371499-R2A
+
+VERSION: CXC1371499-R1C
+immcfg -d ruleId=AxeBackupRestore_1,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSwInventory_1,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSwManagement_1,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeLdapManagement_14,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeLdapManagement_15,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeLdapManagement_13,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Role -a userLabel='The role corresponding to CP user group 11' -a roleName='CpRole11' roleId=CpRole11,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to ManagedElement class' -a ruleData='ManagedElement' -a permission=4 ruleId=AxeTop_32,roleId=CpRole11,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to SystemFunctions class' -a ruleData='ManagedElement,SystemFunctions$' -a permission=4 ruleId=AxeTop_33,roleId=CpRole11,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to AxeFunctions class' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions' -a permission=4 ruleId=AxeFunctions_21,roleId=CpRole11,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to MOC SystemHandling' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions,SystemHandling' -a permission=4 ruleId=AxeSystemHandling_12,roleId=CpRole11,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read and action execute permissions to MOC AlphanumericDeviceM' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,*' -a permission=5 ruleId=AxeAlphaDevice_12,roleId=CpRole11,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to folder etc used to export timezone information on File Transfer session' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=etc,*' -a permission=4 ruleId=AxeFileManagement_205,roleId=CpRole11,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to the folder cp and subtree' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,*' -a permission=4 ruleId=AxeFileManagement_206,roleId=CpRole11,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to folder cp/mml and full access to folders and files present in it' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.*' -a permission=7 ruleId=AxeFileManagement_207,roleId=CpRole11,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any folder in folder cp/mml' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,*' -a permission=7 ruleId=AxeFileManagement_208,roleId=CpRole11,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any file in folder cp/mml' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,*' -a permission=7 ruleId=AxeFileManagement_209,roleId=CpRole11,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Execute permission to AP commands alogfind, mml' -a ruleData='regexp:alogfind|mml' -a permission=1 ruleId=AxeApCmd_32,roleId=CpRole11,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Execute permission to some AP commands' -a ruleData='regexp:acease|alist|cmdlls|cpdtest|cqrhils|cqrhlls|crdls|clhls|misclhls|fixerls|tesrvls' -a permission=1 ruleId=AxeApCmd_51,roleId=CpRole11,localAuthorizationMethodId=1
+immcfg -c Role -a userLabel='The role corresponding to CP user group 12' -a roleName='CpRole12' roleId=CpRole12,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to ManagedElement class' -a ruleData='ManagedElement' -a permission=4 ruleId=AxeTop_34,roleId=CpRole12,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to SystemFunctions class' -a ruleData='ManagedElement,SystemFunctions$' -a permission=4 ruleId=AxeTop_35,roleId=CpRole12,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to AxeFunctions class' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions' -a permission=4 ruleId=AxeFunctions_22,roleId=CpRole12,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to MOC SystemHandling' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions,SystemHandling' -a permission=4 ruleId=AxeSystemHandling_13,roleId=CpRole12,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read and action execute permissions to MOC AlphanumericDeviceM' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,*' -a permission=5 ruleId=AxeAlphaDevice_13,roleId=CpRole12,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to folder etc used to export timezone information on File Transfer session' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=etc,*' -a permission=4 ruleId=AxeFileManagement_240,roleId=CpRole12,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to the folder cp and subtree' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,*' -a permission=4 ruleId=AxeFileManagement_241,roleId=CpRole12,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to folder cp/mml and full access to folders and files present in it' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.*' -a permission=7 ruleId=AxeFileManagement_242,roleId=CpRole12,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any folder in folder cp/mml' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,*' -a permission=7 ruleId=AxeFileManagement_243,roleId=CpRole12,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any file in folder cp/mml' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,*' -a permission=7 ruleId=AxeFileManagement_244,roleId=CpRole12,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Execute permission to AP commands alogfind, mml' -a ruleData='regexp:alogfind|mml' -a permission=1 ruleId=AxeApCmd_33,roleId=CpRole12,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Execute permission to some AP commands' -a ruleData='regexp:acease|alist|cmdlls|cpdtest|cqrhils|cqrhlls|crdls|clhls|misclhls|fixerls|tesrvls' -a permission=1 ruleId=AxeApCmd_52,roleId=CpRole12,localAuthorizationMethodId=1
+immcfg -c Role -a userLabel='The role corresponding to CP user group 13' -a roleName='CpRole13' roleId=CpRole13,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to ManagedElement class' -a ruleData='ManagedElement' -a permission=4 ruleId=AxeTop_36,roleId=CpRole13,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to SystemFunctions class' -a ruleData='ManagedElement,SystemFunctions$' -a permission=4 ruleId=AxeTop_37,roleId=CpRole13,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to AxeFunctions class' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions' -a permission=4 ruleId=AxeFunctions_23,roleId=CpRole13,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to MOC SystemHandling' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions,SystemHandling' -a permission=4 ruleId=AxeSystemHandling_14,roleId=CpRole13,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read and action execute permissions to MOC AlphanumericDeviceM' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,*' -a permission=5 ruleId=AxeAlphaDevice_14,roleId=CpRole13,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to folder etc used to export timezone information on File Transfer session' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=etc,*' -a permission=4 ruleId=AxeFileManagement_245,roleId=CpRole13,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to the folder cp and subtree' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,*' -a permission=4 ruleId=AxeFileManagement_246,roleId=CpRole13,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to folder cp/mml and full access to folders and files present in it' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.*' -a permission=7 ruleId=AxeFileManagement_247,roleId=CpRole13,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any folder in folder cp/mml' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,*' -a permission=7 ruleId=AxeFileManagement_248,roleId=CpRole13,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any file in folder cp/mml' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,*' -a permission=7 ruleId=AxeFileManagement_249,roleId=CpRole13,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Execute permission to AP commands alogfind, mml' -a ruleData='regexp:alogfind|mml' -a permission=1 ruleId=AxeApCmd_34,roleId=CpRole13,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Execute permission to some AP commands' -a ruleData='regexp:acease|alist|cmdlls|cpdtest|cqrhils|cqrhlls|crdls|clhls|misclhls|fixerls|tesrvls' -a permission=1 ruleId=AxeApCmd_53,roleId=CpRole13,localAuthorizationMethodId=1
+immcfg -c Role -a userLabel='The role corresponding to CP user group 14' -a roleName='CpRole14' roleId=CpRole14,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to ManagedElement class' -a ruleData='ManagedElement' -a permission=4 ruleId=AxeTop_38,roleId=CpRole14,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to SystemFunctions class' -a ruleData='ManagedElement,SystemFunctions$' -a permission=4 ruleId=AxeTop_39,roleId=CpRole14,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to AxeFunctions class' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions' -a permission=4 ruleId=AxeFunctions_24,roleId=CpRole14,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to MOC SystemHandling' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions,SystemHandling' -a permission=4 ruleId=AxeSystemHandling_15,roleId=CpRole14,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read and action execute permissions to MOC AlphanumericDeviceM' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,*' -a permission=5 ruleId=AxeAlphaDevice_15,roleId=CpRole14,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to folder etc used to export timezone information on File Transfer session' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=etc,*' -a permission=4 ruleId=AxeFileManagement_265,roleId=CpRole14,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to the folder cp and subtree' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,*' -a permission=4 ruleId=AxeFileManagement_266,roleId=CpRole14,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to folder cp/mml and full access to folders and files present in it' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.*' -a permission=7 ruleId=AxeFileManagement_267,roleId=CpRole14,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any folder in folder cp/mml' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,*' -a permission=7 ruleId=AxeFileManagement_268,roleId=CpRole14,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any file in folder cp/mml' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,*' -a permission=7 ruleId=AxeFileManagement_269,roleId=CpRole14,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Execute permission to AP commands alogfind, mml' -a ruleData='regexp:alogfind|mml' -a permission=1 ruleId=AxeApCmd_35,roleId=CpRole14,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Execute permission to some AP commands' -a ruleData='regexp:acease|alist|cmdlls|cpdtest|cqrhils|cqrhlls|crdls|clhls|misclhls|fixerls|tesrvls' -a permission=1 ruleId=AxeApCmd_54,roleId=CpRole14,localAuthorizationMethodId=1
+immcfg -c Role -a userLabel='The role corresponding to CP user group 15' -a roleName='CpRole15' roleId=CpRole15,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to ManagedElement class' -a ruleData='ManagedElement' -a permission=4 ruleId=AxeTop_40,roleId=CpRole15,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to SystemFunctions class' -a ruleData='ManagedElement,SystemFunctions$' -a permission=4 ruleId=AxeTop_41,roleId=CpRole15,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to AxeFunctions class' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions' -a permission=4 ruleId=AxeFunctions_25,roleId=CpRole15,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to MOC SystemHandling' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions,SystemHandling' -a permission=4 ruleId=AxeSystemHandling_16,roleId=CpRole15,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read and action execute permissions to MOC AlphanumericDeviceM' -a ruleData='ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,*' -a permission=5 ruleId=AxeAlphaDevice_16,roleId=CpRole15,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to folder etc used to export timezone information on File Transfer session' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=etc,*' -a permission=4 ruleId=AxeFileManagement_280,roleId=CpRole15,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to the folder cp and subtree' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,*' -a permission=4 ruleId=AxeFileManagement_281,roleId=CpRole15,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to folder cp/mml and full access to folders and files present in it' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.*' -a permission=7 ruleId=AxeFileManagement_282,roleId=CpRole15,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any folder in folder cp/mml' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,*' -a permission=7 ruleId=AxeFileManagement_283,roleId=CpRole15,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any file in folder cp/mml' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,*' -a permission=7 ruleId=AxeFileManagement_284,roleId=CpRole15,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Execute permission to AP commands alogfind, mml' -a ruleData='regexp:alogfind|mml' -a permission=1 ruleId=AxeApCmd_36,roleId=CpRole15,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Execute permission to some AP commands' -a ruleData='regexp:acease|alist|cmdlls|cpdtest|cqrhils|cqrhlls|crdls|clhls|misclhls|fixerls|tesrvls' -a permission=1 ruleId=AxeApCmd_55,roleId=CpRole15,localAuthorizationMethodId=1
+
+VERSION: CXC1371499-R1B
+
+VERSION: CXC1371499-R1A09
+
+VERSION: CXC1371499-R1A08
+
+VERSION: CXC1371499-R1A07
+immcfg -d ruleId=AxeSysm_1,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSysm_2,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSysm_3,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSysm_6,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSysm_7,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeSysm_8,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MO Schema=CmwPm in SysM=1 as it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema=CmwPm,*' -a permission=0 ruleId=AxeSysm_20,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MO Schema=ComFm in SysM=1 as it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema=ComFm,*' -a permission=0 ruleId=AxeSysm_21,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MO Schema=ComSnmp in SysM=1 as it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema=ComSnmp,*' -a permission=0 ruleId=AxeSysm_22,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MO Schema=ECIM_CrM in SysM=1 as it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema=ECIM_CrM,*' -a permission=0 ruleId=AxeSysm_26,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MO Schema=ECIM_Equipment in SysM=1 as it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema=ECIM_Equipment,*' -a permission=0 ruleId=AxeSysm_27,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MO CrM=1 in SysM=1 as it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,CrM,*' -a permission=0 ruleId=AxeSysm_28,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MO Schema=CmwPm in SysM=1 as it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema=CmwPm,*' -a permission=0 ruleId=AxeSysm_23,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MO Schema=ComFm in SysM=1 as it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema=ComFm,*' -a permission=0 ruleId=AxeSysm_24,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MO Schema=ComSnmp in SysM=1 as it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema=ComSnmp,*' -a permission=0 ruleId=AxeSysm_25,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MO Schema=ECIM_CrM in SysM=1 as it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema=ECIM_CrM,*' -a permission=0 ruleId=AxeSysm_29,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MO Schema=ECIM_Equipment in SysM=1 as it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,Schema=ECIM_Equipment,*' -a permission=0 ruleId=AxeSysm_30,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to MO CrM=1 in SysM=1 as it is not used in AXE' -a ruleData='ManagedElement,SystemFunctions,SysM,CrM,*' -a permission=0 ruleId=AxeSysm_31,roleId=SystemReadOnly,localAuthorizationMethodId=1
+
+VERSION: CXC1371499-R1A06
+immcfg -a ruleData='regexp:^\b((?!alogset\b)(?!aloglist\b)(?!alogpchg\b)(?!alogpls\b)(?!alogfind\b)(?!csadm\b)(?!gmlog\b)(?!rpmo\b)(?!mml\b)(?!tcdef\b)(?!ncdef\b)(?!ldapdef\b)(?!ipsecdef\b)(?!ipsecls\b)(?!ipsecrm\b)(?!passwd\b)(?!wssadm\b)).*$' ruleId=AxeApCmd_16,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeUserM_1,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute authorityType into MOC EnrollmentAuthority' -a ruleData='ManagedElement,SystemFunctions,SecM,CertM,EnrollmentAuthority.authorityType' -a permission=0 ruleId=AxeCertManagement_1,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1 
+immcfg -c Rule -a userLabel='No access to attribute enrollmentAuthority into MOC EnrollmentServer' -a ruleData='ManagedElement,SystemFunctions,SecM,CertM,EnrollmentServerGroup,EnrollmentServer.enrollmentAuthority' -a permission=0 ruleId=AxeCertManagement_2,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371499-R1A05
+immcfg -d ruleId=AxeFileManagement_212,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_213,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_214,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_215,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_216,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_217,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to folder /support_data/protocol_tracer and full access to folders and files present in it' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileGroup=protocol_tracer.*' -a permission=7 ruleId=AxeFileManagement_270,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any folder in /support_data/protocol_tracer' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileGroup=protocol_tracer,FileGroup,*' -a permission=7 ruleId=AxeFileManagement_271,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any file in /support_data/protocol_tracer' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileGroup=protocol_tracer,FileInformation,*' -a permission=7 ruleId=AxeFileManagement_272,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Read-only access to folder /support_data/ts_storage and full access to folders and files present in it' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileGroup=ts_storage.*' -a permission=7 ruleId=AxeFileManagement_273,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any folder in /support_data/ts_storage' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileGroup=ts_storage,FileGroup,*' -a permission=7 ruleId=AxeFileManagement_274,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='Full access to create any file in /support_data/ts_storage' -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileGroup=ts_storage,FileInformation,*' -a permission=7 ruleId=AxeFileManagement_275,roleId=SystemAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371499-R1A04
+immcfg -d ruleId=AxeLdapManagement_10,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute targetBasedAccessControl into MOC EricssonFilter' -a ruleData='ManagedElement,SystemFunctions,SecM,UserManagement,LdapAuthenticationMethod,Ldap,EricssonFilter.targetBasedAccessControl' -a permission=0 ruleId=AxeLdapManagement_14,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute version into MOC EricssonFilter' -a ruleData='ManagedElement,SystemFunctions,SecM,UserManagement,LdapAuthenticationMethod,Ldap,EricssonFilter.version' -a permission=0 ruleId=AxeLdapManagement_15,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel='No access to attribute profileFilter into MOC EricssonFilter' -a ruleData='ManagedElement,SystemFunctions,SecM,UserManagement,LdapAuthenticationMethod,Ldap.profileFilter' -a permission=0 ruleId=AxeLdapManagement_16,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371499-R1A03
+
+VERSION: CXC1371499-R1A02
+immcfg -d ruleId=AxeCertm_1,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeCertm_2,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeCertm_3,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -a userLabel='Execute permission to execute AP commands aehls, alist, alogfind, csadm, tcdef, ncdef, ldapdef, ipsecdef, ipsecls, ipsecrm' ruleId=AxeApCmd_7,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -a ruleData='regexp:alogset|aloglist|alogpchg|alogpls|aehls|alist|alogfind|csadm|tcdef|ncdef|ldapdef|ipsec.*|wssadm.*' ruleId=AxeApCmd_7,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeLdapManagement_11,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeLdapManagement_12,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371499-R1A01
+
+VERSION: CXC1371465-R3A
+immcfg -c Rule -a userLabel="Execute permission to AP passwd command" -a permission=1 -a ruleData=passwd ruleId=AxeApCmd_61,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to AP passwd command" -a permission=1 -a ruleData=passwd ruleId=AxeApCmd_62,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to AP passwd command" -a permission=1 -a ruleData=passwd ruleId=AxeApCmd_63,roleId=EricssonSupport,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to AP passwd command" -a permission=1 -a ruleData=passwd ruleId=AxeApCmd_64,roleId=CpRole0,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to AP passwd command" -a permission=1 -a ruleData=passwd ruleId=AxeApCmd_65,roleId=CpRole1,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to AP passwd command" -a permission=1 -a ruleData=passwd ruleId=AxeApCmd_66,roleId=CpRole2,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to AP passwd command" -a permission=1 -a ruleData=passwd ruleId=AxeApCmd_67,roleId=CpRole3,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to AP passwd command" -a permission=1 -a ruleData=passwd ruleId=AxeApCmd_68,roleId=CpRole4,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to AP passwd command" -a permission=1 -a ruleData=passwd ruleId=AxeApCmd_69,roleId=CpRole5,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to AP passwd command" -a permission=1 -a ruleData=passwd ruleId=AxeApCmd_70,roleId=CpRole6,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to AP passwd command" -a permission=1 -a ruleData=passwd ruleId=AxeApCmd_71,roleId=CpRole7,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to AP passwd command" -a permission=1 -a ruleData=passwd ruleId=AxeApCmd_72,roleId=CpRole8,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to AP passwd command" -a permission=1 -a ruleData=passwd ruleId=AxeApCmd_73,roleId=CpRole9,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to AP passwd command" -a permission=1 -a ruleData=passwd ruleId=AxeApCmd_74,roleId=CpRole10,localAuthorizationMethodId=1
+
+VERSION: CXC1371465-R2B
+
+VERSION: CXC1371465-R2A
+
+VERSION: CXC1371465-R1F
+
+VERSION: CXC1371465-R1E
+immcfg -a ruleData='regexp:^\b((?!alogset\b)(?!aloglist\b)(?!alogpchg\b)(?!alogpls\b)(?!alogfind\b)(?!csadm\b)(?!gmlog\b)(?!rpmo\b)(?!mml\b)(?!tcdef\b)(?!ncdef\b)(?!ldapdef\b)(?!ipsecdef\b)(?!ipsecls\b)(?!ipsecrm\b)(?!wssadm\b)).*$' ruleId=AxeApCmd_16,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -a userLabel='Execute permission to execute AP commands aehls, alist, alogfind, csadm, tcdef, ncdef, ldapdef, ipsecdef, ipsecls, ipsecrm, wssadm' ruleId=AxeApCmd_7,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -a ruleData='regexp:alogset|aloglist|alogpchg|alogpls|aehls|alist|alogfind|csadm|tcdef|ncdef|ldapdef|ipsec.*|wssadm' ruleId=AxeApCmd_7,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371465-R1D
+
+VERSION: CXC1371465-R1C
+cmw-immclass-modify $BUNDLE_NAME AxeNbiFoldersNbiFoldersM
+immcfg -c Rule -a userLabel="Read-only access to folder sw_package/zip and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=zip.* ruleId=AxeFileManagement_135,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in folder sw_package/zip" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=zip,FileGroup,* ruleId=AxeFileManagement_136,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in folder sw_package/zip" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=zip,FileInformation,* ruleId=AxeFileManagement_137,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -a swPackageZip="/sw_package/zip" AxeNbiFoldersnbiFoldersMId=1
+immcfg -d ruleId=AxeFileManagement_123,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_124,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_125,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_126,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_127,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_128,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_129,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_130,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_131,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to AXE Security Handling related MOM" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SecurityHandling$ ruleId=AxeFunctions_40,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to AXE MML authorization related MOM" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SecurityHandling,MmlAuthorizationM,* ruleId=AxeFunctions_41,roleId=SystemAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371465-R1B
+
+VERSION: CXC1371465-R1B01
+cmw-immclass-modify $BUNDLE_NAME AxeFunctions
+cmw-immclass-modify $BUNDLE_NAME SecurityHandling
+immcfg -a ruleData=ManagedElement,SystemFunctions,SysM,Schema=ComFm ruleId=AxeSysm_7,roleId=SystemReadOnly,localAuthorizationMethodId=1
+
+VERSION: CXC1371465-R1A31
+immcfg -c Rule -a userLabel="No access to MO Schema=CmwPm in SysM=1 as it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SysM,Schema=CmwPm ruleId=AxeSysm_1,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MO Schema=ComFm in SysM=1 as it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SysM,Schema=ComFm ruleId=AxeSysm_2,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MO Schema=ComSnmp in SysM=1 as it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SysM,Schema=ComSnmp ruleId=AxeSysm_3,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC NetconfSsh as it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SysM,NetconfSsh,* ruleId=AxeSysm_4,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC NetconfTls as it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SysM,NetconfTls,* ruleId=AxeSysm_5,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access permissions to attribute internalHousekeeping in the class FileGroup" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup.internalHousekeeping ruleId=AxeFileManagement_260,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access permissions to attribute internalHousekeeping in the class FileGroup" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup.internalHousekeeping ruleId=AxeFileManagement_261,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MO Schema=CmwPm in SysM=1 as it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SysM,Schema=CmwPm ruleId=AxeSysm_6,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MO Schema=ComFm in SysM=1 as it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SysM,Schema=CmwFm ruleId=AxeSysm_7,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MO Schema=ComSnmp in SysM=1 as it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SysM,Schema=ComSnmp ruleId=AxeSysm_8,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC NetconfSsh as it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SysM,NetconfSsh,* ruleId=AxeSysm_9,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC NetconfTls as it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SysM,NetconfTls,* ruleId=AxeSysm_10,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to attribute serverPort into MOC Ldap" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,UserManagement,LdapAuthenticationMethod,Ldap.serverPort ruleId=AxeLdapManagement_7,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to attribute tlsMode into MOC Ldap" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,UserManagement,LdapAuthenticationMethod,Ldap.tlsMode ruleId=AxeLdapManagement_8,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC Filter into MOC Ldap" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,UserManagement,LdapAuthenticationMethod,Ldap,Filter,* ruleId=AxeLdapManagement_9,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC EricssonFilter into MOC Ldap" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,UserManagement,LdapAuthenticationMethod,Ldap,EricssonFilter,* ruleId=AxeLdapManagement_10,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to attribute nodeCredential into MOC Ldap" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,UserManagement,LdapAuthenticationMethod,Ldap.nodeCredential ruleId=AxeLdapManagement_11,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to attribute trustCategory into MOC Ldap" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,UserManagement,LdapAuthenticationMethod,Ldap.trustCategory ruleId=AxeLdapManagement_12,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to attribute administrativeState into MOC LdapAuthenticationMethod" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,UserManagement,LdapAuthenticationMethod.administrativeState ruleId=AxeLdapManagement_13,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to attribute administrativeState into MOC LocalAuthorizationMethod" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,UserManagement,LocalAuthorizationMethod.administrativeState ruleId=AxeLocalManagement_1,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access permissions to attribute internalHousekeeping in the class FileGroup" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup.internalHousekeeping ruleId=AxeFileManagement_262,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371465-R1A30
+
+VERSION: CXC1371465-R1A29
+
+VERSION: CXC1371465-R1A28
+cmw-immclass-modify $BUNDLE_NAME AxeNbiFoldersNbiFoldersM
+immcfg -a sourceDataForCpPrintouts="/data_transfer/source/cp_printouts" AxeNbiFoldersnbiFoldersMId=1
+immcfg -a sourceDataForHealthCheckFiles="/data_transfer/source/health_check" AxeNbiFoldersnbiFoldersMId=1
+immcfg -c Rule -a userLabel="Read-only access to folder data_transfer/source/cp_printouts and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=cp_printouts.* ruleId=AxeFileManagement_250,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in folder data_transfer/source/cp_printouts" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=cp_printouts,FileGroup,* ruleId=AxeFileManagement_251,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in folder data_transfer/source/cp_printouts" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=cp_printouts,FileInformation,* ruleId=AxeFileManagement_252,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder data_transfer/source/health_check and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=health_check.* ruleId=AxeFileManagement_253,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in folder data_transfer/source/health_check" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=health_check,FileGroup,* ruleId=AxeFileManagement_254,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in folder data_transfer/source/health_check" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=health_check,FileInformation,* ruleId=AxeFileManagement_255,roleId=SystemAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371465-R1A27
+log "APOS_OSCONFBIN no changes From R1A26"
+
+VERSION: CXC1371465-R1A26
+log "APOS_OSCONFBIN no changes From R1A25"
+
+VERSION: CXC1371465-R1A25
+log "APOS_OSCONFBIN no changes From R1A24"
+
+VERSION: CXC1371465-R1A24
+log "APOS_OSCONFBIN no changes From R1A23"
+
+VERSION: CXC1371465-R1A23
+log "APOS_OSCONFBIN imm update From R1A22"
+cmw-immclass-modify $BUNDLE_NAME AxeFunctions
+immcfg -c Rule -a userLabel="Execute permission to execute AP command opensession" -a permission=1 -a ruleData=opensession ruleId=AxeApCmd_60,roleId=SystemReadOnly,localAuthorizationMethodId=1
+
+VERSION: CXC1371465-R1A22
+log "APOS_OSCONFBIN no changes From R1A21"
+
+VERSION: CXC1371465-R1A21
+log "APOS_OSCONFBIN imm update From Rel1"
+
+cmw-immclass-modify $BUNDLE_NAME AxeFunctions
+cmw-immclass-modify $BUNDLE_NAME AxeNbiFoldersNbiFoldersM
+immcfg -c Rule -a userLabel="Full access to Health Check Management function MOM" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,HealthCheckM,* ruleId=AxeHealthCheck_1,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_81,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_24,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_25,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_26,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder data_transfer/source/data_records and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=data_records.* ruleId=AxeFileManagement_80,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in folder data_transfer/source/data_records" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=data_records,FileGroup,* ruleId=AxeFileManagement_143,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -a userLabel="Full access to create any file in folder data_transfer/source/data_records" ruleId=AxeFileManagement_82,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -a permission=7 ruleId=AxeFileManagement_82,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -a ruleData='ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=data_transfer,FileGroup=source,FileGroup=data_records,FileInformation,*' ruleId=AxeFileManagement_82,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder sw_package/IPLB and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=IPLB.* ruleId=AxeFileManagement_83,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in folder sw_package/IPLB" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=IPLB,FileGroup,* ruleId=AxeFileManagement_84,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in folder sw_package/IPLB" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=sw_package,FileGroup=IPLB,FileInformation,* ruleId=AxeFileManagement_85,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder /support_data/protocol_tracer and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileGroup=protocol_tracer.* ruleId=AxeFileManagement_212,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in /support_data/protocol_tracer" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileGroup=protocol_tracer,FileGroup,* ruleId=AxeFileManagement_213,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in /support_data/protocol_tracer" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileGroup=protocol_tracer,FileInformation,* ruleId=AxeFileManagement_214,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder /support_data/ts_storage and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileGroup=ts_storage.* ruleId=AxeFileManagement_215,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in /support_data/ts_storage" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileGroup=ts_storage,FileGroup,* ruleId=AxeFileManagement_216,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in /support_data/ts_storage" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=support_data,FileGroup=ts_storage,FileInformation,* ruleId=AxeFileManagement_217,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder etc used to export timezone information on File Transfer session" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=etc,* ruleId=AxeFileManagement_101,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -a ruleData='regexp:^\b((?!alogset\b)(?!aloglist\b)(?!alogpchg\b)(?!alogpls\b)(?!alogfind\b)(?!csadm\b)(?!gmlog\b)(?!rpmo\b)(?!mml\b)(?!tcdef\b)(?!ncdef\b)(?!ldapdef\b)(?!ipsecdef\b)(?!ipsecls\b)(?!ipsecrm\b)).*$' ruleId=AxeApCmd_16,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to attribute targetType since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,UserManagement.targetType ruleId=AxeUserM_1,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_142,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder /audit_logs/command_logs and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=audit_logs,FileGroup=command_logs.* ruleId=AxeFileManagement_222,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in /audit_logs/command_logs" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=audit_logs,FileGroup=command_logs,FileGroup,* ruleId=AxeFileManagement_223,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in /audit_logs/command_logs" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=audit_logs,FileGroup=command_logs,FileInformation,* ruleId=AxeFileManagement_224,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder /audit_logs/protected_logs and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=audit_logs,FileGroup=protected_logs.* ruleId=AxeFileManagement_225,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in /audit_logs/protected_logs" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=audit_logs,FileGroup=protected_logs,FileGroup,* ruleId=AxeFileManagement_226,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in /audit_logs/protected_logs" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=audit_logs,FileGroup=protected_logs,FileInformation,* ruleId=AxeFileManagement_227,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -a userLabel="Execute permission to execute AP commands aehls, alist, alogfind, csadm, tcdef, ncdef, ldapdef, ipsecdef, ipsecls, ipsecrm" ruleId=AxeApCmd_7,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -a ruleData='regexp:alogset|aloglist|alogpchg|alogpls|aehls|alist|alogfind|csadm|tcdef|ncdef|ldapdef|ipsec.*' ruleId=AxeApCmd_7,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to Health Check Management function MOM" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,HealthCheckM,* ruleId=AxeHealthCheck_2,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_133,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -a userLabel="Execute permissions to all listing AP commands having 'ls' as final letters, except for ipsecls, alogpls, cmdlls" ruleId=AxeApCmd_17,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -a ruleData='regexp:^\b((?!ipsec)(?!alog)(?!cmdl)).*ls$' ruleId=AxeApCmd_17,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to Health Check Management function MOM" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,HealthCheckM,* ruleId=AxeHealthCheck_3,roleId=EricssonSupport,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to MOC SystemHandling" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling ruleId=AxeSystemHandling_1,roleId=CpRole0,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read and action execute permissions to MOC AlphanumericDeviceM" -a permission=5 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,* ruleId=AxeAlphaDevice_1,roleId=CpRole0,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to the folder cp and subtree" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,* ruleId=AxeFileManagement_151,roleId=CpRole0,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder cp/mml and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.* ruleId=AxeFileManagement_152,roleId=CpRole0,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,* ruleId=AxeFileManagement_153,roleId=CpRole0,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,* ruleId=AxeFileManagement_154,roleId=CpRole0,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to some AP commands" -a permission=1 -a ruleData='regexp:acease|alist|cmdlls|cpdtest|cqrhils|cqrhlls|crdls|clhls|misclhls|fixerls|tesrvls' ruleId=AxeApCmd_38,roleId=CpRole0,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to MOC SystemHandling" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling ruleId=AxeSystemHandling_2,roleId=CpRole1,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read and action execute permissions to MOC AlphanumericDeviceM" -a permission=5 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,* ruleId=AxeAlphaDevice_2,roleId=CpRole1,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to the folder cp and subtree" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,* ruleId=AxeFileManagement_156,roleId=CpRole1,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder cp/mml and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.* ruleId=AxeFileManagement_157,roleId=CpRole1,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,* ruleId=AxeFileManagement_158,roleId=CpRole1,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,* ruleId=AxeFileManagement_159,roleId=CpRole1,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to some AP commands" -a permission=1 -a ruleData='regexp:acease|alist|cmdlls|cpdtest|cqrhils|cqrhlls|crdls|clhls|misclhls|fixerls|tesrvls' ruleId=AxeApCmd_39,roleId=CpRole1,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to MOC SystemHandling" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling ruleId=AxeSystemHandling_3,roleId=CpRole2,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read and action execute permissions to MOC AlphanumericDeviceM" -a permission=5 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,* ruleId=AxeAlphaDevice_3,roleId=CpRole2,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to the folder cp and subtree" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,* ruleId=AxeFileManagement_161,roleId=CpRole2,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder cp/mml and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.* ruleId=AxeFileManagement_162,roleId=CpRole2,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,* ruleId=AxeFileManagement_163,roleId=CpRole2,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,* ruleId=AxeFileManagement_164,roleId=CpRole2,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to some AP commands" -a permission=1 -a ruleData='regexp:acease|alist|cmdlls|cpdtest|cqrhils|cqrhlls|crdls|clhls|misclhls|fixerls|tesrvls' ruleId=AxeApCmd_42,roleId=CpRole2,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to MOC SystemHandling" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling ruleId=AxeSystemHandling_4,roleId=CpRole3,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read and action execute permissions to MOC AlphanumericDeviceM" -a permission=5 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,* ruleId=AxeAlphaDevice_4,roleId=CpRole3,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to the folder cp and subtree" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,* ruleId=AxeFileManagement_166,roleId=CpRole3,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder cp/mml and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.* ruleId=AxeFileManagement_167,roleId=CpRole3,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,* ruleId=AxeFileManagement_168,roleId=CpRole3,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,* ruleId=AxeFileManagement_169,roleId=CpRole3,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to some AP commands" -a permission=1 -a ruleData='regexp:acease|alist|cmdlls|cpdtest|cqrhils|cqrhlls|crdls|clhls|misclhls|fixerls|tesrvls' ruleId=AxeApCmd_43,roleId=CpRole3,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to MOC SystemHandling" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling ruleId=AxeSystemHandling_5,roleId=CpRole4,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read and action execute permissions to MOC AlphanumericDeviceM" -a permission=5 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,* ruleId=AxeAlphaDevice_5,roleId=CpRole4,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to the folder cp and subtree" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,* ruleId=AxeFileManagement_171,roleId=CpRole4,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder cp/mml and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.* ruleId=AxeFileManagement_172,roleId=CpRole4,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,* ruleId=AxeFileManagement_173,roleId=CpRole4,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,* ruleId=AxeFileManagement_174,roleId=CpRole4,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to some AP commands" -a permission=1 -a ruleData='regexp:acease|alist|cmdlls|cpdtest|cqrhils|cqrhlls|crdls|clhls|misclhls|fixerls|tesrvls' ruleId=AxeApCmd_44,roleId=CpRole4,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to MOC SystemHandling" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling ruleId=AxeSystemHandling_6,roleId=CpRole5,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read and action execute permissions to MOC AlphanumericDeviceM" -a permission=5 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,* ruleId=AxeAlphaDevice_6,roleId=CpRole5,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to the folder cp and subtree" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,* ruleId=AxeFileManagement_176,roleId=CpRole5,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder cp/mml and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.* ruleId=AxeFileManagement_177,roleId=CpRole5,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,* ruleId=AxeFileManagement_178,roleId=CpRole5,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,* ruleId=AxeFileManagement_179,roleId=CpRole5,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to some AP commands" -a permission=1 -a ruleData='regexp:acease|alist|cmdlls|cpdtest|cqrhils|cqrhlls|crdls|clhls|misclhls|fixerls|tesrvls' ruleId=AxeApCmd_45,roleId=CpRole5,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to MOC SystemHandling" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling ruleId=AxeSystemHandling_7,roleId=CpRole6,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read and action execute permissions to MOC AlphanumericDeviceM" -a permission=5 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,* ruleId=AxeAlphaDevice_7,roleId=CpRole6,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to the folder cp and subtree" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,* ruleId=AxeFileManagement_181,roleId=CpRole6,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder cp/mml and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.* ruleId=AxeFileManagement_182,roleId=CpRole6,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,* ruleId=AxeFileManagement_183,roleId=CpRole6,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,* ruleId=AxeFileManagement_184,roleId=CpRole6,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to some AP commands" -a permission=1 -a ruleData='regexp:acease|alist|cmdlls|cpdtest|cqrhils|cqrhlls|crdls|clhls|misclhls|fixerls|tesrvls' ruleId=AxeApCmd_46,roleId=CpRole6,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to MOC SystemHandling" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling ruleId=AxeSystemHandling_8,roleId=CpRole7,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read and action execute permissions to MOC AlphanumericDeviceM" -a permission=5 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,* ruleId=AxeAlphaDevice_8,roleId=CpRole7,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to the folder cp and subtree" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,* ruleId=AxeFileManagement_186,roleId=CpRole7,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder cp/mml and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.* ruleId=AxeFileManagement_187,roleId=CpRole7,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,* ruleId=AxeFileManagement_188,roleId=CpRole7,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,* ruleId=AxeFileManagement_189,roleId=CpRole7,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to some AP commands" -a permission=1 -a ruleData='regexp:acease|alist|cmdlls|cpdtest|cqrhils|cqrhlls|crdls|clhls|misclhls|fixerls|tesrvls' ruleId=AxeApCmd_47,roleId=CpRole7,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to MOC SystemHandling" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling ruleId=AxeSystemHandling_9,roleId=CpRole8,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read and action execute permissions to MOC AlphanumericDeviceM" -a permission=5 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,* ruleId=AxeAlphaDevice_9,roleId=CpRole8,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to the folder cp and subtree" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,* ruleId=AxeFileManagement_191,roleId=CpRole8,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder cp/mml and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.* ruleId=AxeFileManagement_192,roleId=CpRole8,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,* ruleId=AxeFileManagement_193,roleId=CpRole8,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,* ruleId=AxeFileManagement_194,roleId=CpRole8,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to some AP commands" -a permission=1 -a ruleData='regexp:acease|alist|cmdlls|cpdtest|cqrhils|cqrhlls|crdls|clhls|misclhls|fixerls|tesrvls' ruleId=AxeApCmd_48,roleId=CpRole8,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to MOC SystemHandling" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling ruleId=AxeSystemHandling_10,roleId=CpRole9,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read and action execute permissions to MOC AlphanumericDeviceM" -a permission=5 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,* ruleId=AxeAlphaDevice_10,roleId=CpRole9,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to the folder cp and subtree" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,* ruleId=AxeFileManagement_196,roleId=CpRole9,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder cp/mml and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.* ruleId=AxeFileManagement_197,roleId=CpRole9,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,* ruleId=AxeFileManagement_198,roleId=CpRole9,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,* ruleId=AxeFileManagement_199,roleId=CpRole9,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to some AP commands" -a permission=1 -a ruleData='regexp:acease|alist|cmdlls|cpdtest|cqrhils|cqrhlls|crdls|clhls|misclhls|fixerls|tesrvls' ruleId=AxeApCmd_49,roleId=CpRole9,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to MOC SystemHandling" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling ruleId=AxeSystemHandling_11,roleId=CpRole10,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read and action execute permissions to MOC AlphanumericDeviceM" -a permission=5 -a ruleData=ManagedElement,SystemFunctions,AxeFunctions,SystemHandling,AlphanumericDeviceM,* ruleId=AxeAlphaDevice_11,roleId=CpRole10,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to the folder cp and subtree" -a permission=4 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,* ruleId=AxeFileManagement_201,roleId=CpRole10,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Read-only access to folder cp/mml and full access to folders and files present in it" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml.* ruleId=AxeFileManagement_202,roleId=CpRole10,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any folder in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileGroup,* ruleId=AxeFileManagement_203,roleId=CpRole10,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Full access to create any file in folder cp/mml" -a permission=7 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup=cp,FileGroup=mml,FileInformation,* ruleId=AxeFileManagement_204,roleId=CpRole10,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="Execute permission to some AP commands" -a permission=1 -a ruleData='regexp:acease|alist|cmdlls|cpdtest|cqrhils|cqrhlls|crdls|clhls|misclhls|fixerls|tesrvls' ruleId=AxeApCmd_50,roleId=CpRole10,localAuthorizationMethodId=1
+immcfg -a axeApplication=2 axeFunctionsId=1
+immcfg -a sourceCallRecords="/data_transfer/source/data_records" AxeNbiFoldersnbiFoldersMId=1
+immcfg -a swPackageIPLB="/sw_package/IPLB" AxeNbiFoldersnbiFoldersMId=1
+
+VERSION: CXC1371348-R2A
+log "APOS_OSCONFBIN update from APG43L 1.2"
+immcfg -d ruleId=AxeFileManagement_79,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFileManagement_132,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -d ruleId=AxeFaultManagement_4,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC BackupScheduler within Backup and Restore Management function MOM" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,BrM,BrmBackupManager,BrmBackupScheduler,* ruleId=AxeBackupRestore_4,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access permissions to class FileGroupPolicy and related MOM items" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,FileM,FileGroupPolicy,* ruleId=AxeFileManagement_230,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access permissions to class FileGroupPolicy and related MOM items" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,FileM,FileGroupPolicy,* ruleId=AxeFileManagement_220,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access permissions to class FileGroupPolicy and related MOM items" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,FileM,FileGroupPolicy,* ruleId=AxeFileManagement_210,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access permissions to attribute reservedByPolicy in the class FileGroup" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup.reservedByPolicy ruleId=AxeFileManagement_231,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access permissions to attribute reservedByPolicy in the class FileGroup" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup.reservedByPolicy ruleId=AxeFileManagement_221,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access permissions to attribute reservedByPolicy in the class FileGroup" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,FileM,LogicalFs,FileGroup.reservedByPolicy ruleId=AxeFileManagement_211,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to attribute useTlsFallback into MOC Ldap" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,UserManagement,LdapAuthenticationMethod,Ldap.useTlsFallback ruleId=AxeLdapManagement_6,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to attribute useTls into MOC Ldap" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,UserManagement,LdapAuthenticationMethod,Ldap.useTls ruleId=AxeLdapManagement_5,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to attribute filterType into MOC Ldap" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,UserManagement,LdapAuthenticationMethod,Ldap.filterType ruleId=AxeLdapManagement_4,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC Tls since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,Tls,* ruleId=Axetls_1,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC NtpServer since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SysM,NtpServer,* ruleId=AxeSnmp_4,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC Snmp since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SysM,Snmp,* ruleId=AxeSnmp_3,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC NtpServer since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SysM,NtpServer,* ruleId=AxeSnmp_2,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC Snmp since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SysM,Snmp,* ruleId=AxeSnmp_1,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC CustomRule since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,UserManagement,LocalAuthorizationMethod,CustomRule,* ruleId=AxeLocalAuthorization_2,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC CustomRole since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,UserManagement,LocalAuthorizationMethod,CustomRole,* ruleId=AxeLocalAuthorization_1,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to Fault Management MOC Fm since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,Fm,* ruleId=AxeFaultManagement_1,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to action createUpgradePackageRemote in the MOC SwM since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SwM.createUpgradePackageRemote ruleId=AxeSwM_6,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to action createUpgradePackageFromUri in the MOC SwM since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SwM.createUpgradePackageFromUri ruleId=AxeSwM_5,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to action createUpgradePackage in the MOC SwM since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SwM.createUpgradePackage ruleId=AxeSwM_4,roleId=SystemReadOnly,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to action createUpgradePackageRemote in the MOC SwM since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SwM.createUpgradePackageRemote ruleId=AxeSwM_3,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to action createUpgradePackageFromUri in the MOC SwM since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SwM.createUpgradePackageFromUri ruleId=AxeSwM_2,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to action createUpgradePackage in the MOC SwM since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SwM.createUpgradePackage ruleId=AxeSwM_1,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC TrustCategory since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,CertM,TrustCategory,* ruleId=AxeCertm_3,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC EnrollmentServerGroup since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,CertM,EnrollmentServerGroup,* ruleId=AxeCertm_2,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC EnrollmentAuthority since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,SecM,CertM,EnrollmentAuthority,* ruleId=AxeCertm_1,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC BackupScheduler within Backup and Restore Management function MOM" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,BrM,BrmBackupManager,BrmBackupScheduler,* ruleId=AxeBackupRestore_3,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC BrmBackupHousekeeping within Backup and Restore Management function MOM" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,BrM,BrmBackupManager,BrmBackupHousekeeping,* ruleId=AxeBackupRestore_5,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to attribute exportPackageLabelPrefix in MOC BrM within Backup and Restore Management function MOM" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,BrM.exportPackageLabelPrefix ruleId=AxeBackupRestore_6,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to MOC BrmBackupLabelStore within Backup and Restore Management function MOM" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,BrM,BrmBackupManager,BrmBackupLabelStore ruleId=AxeBackupRestore_7,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to attribute backupDescriptor in MOC BrmBackup within Backup and Restore Management function MOM" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,BrM,BrmBackupManager,BrmBackup.backupDescriptor ruleId=AxeBackupRestore_8,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to action export in MOC BrmBackup within Backup and Restore Management function MOM" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,BrM,BrmBackupManager,BrmBackup.export ruleId=AxeBackupRestore_9,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to action importBackup in MOC BrmBackupManager within Backup and Restore Management function MOM" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,BrM,BrmBackupManager.importBackup ruleId=AxeBackupRestore_10,roleId=SystemAdministrator,localAuthorizationMethodId=1
+immcfg -c Rule -a userLabel="No access to Fault Management MOC Fm since it is not used in AXE" -a permission=0 -a ruleData=ManagedElement,SystemFunctions,Fm,* ruleId=AxeFaultManagement_2,roleId=SystemSecurityAdministrator,localAuthorizationMethodId=1
+
+VERSION: CXC1371348-R1S
+log "APOS_OSCONFBIN no changes"
+
+VERSION: CXC1371348-R1N
+log "APOS_OSCONFBIN no changes"
+
+

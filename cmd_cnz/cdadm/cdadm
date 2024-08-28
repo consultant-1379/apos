@@ -1,0 +1,246 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2014 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       cdadm
+# Description:
+#       A command to configure the cached credentials duration time.
+##
+# Changelog:
+# - Tue Jul 26 2016 - Alessio Cascone (ealocae)
+#   	Added impacts to use mount bind for SSSD databases.
+# - Mon May 30 2016 - Alessio Cascone (ealocae)
+#       Improvements to reconfigure syncd service when cache is enabled/disabled. 
+# - Fri Mar 18 2016 - Alessio Cascone (ealocae)
+#       Reworked for SLES12 && LocalAuthentication Phase1 features.
+# - Thu Jun 25 2014 - Antonio Buonocunto (eanbuon)
+#       Adaptation to new format.
+# - Thu Jun 11 2014 - Antonio Buonocunto (eanbuon)
+#       First version.
+##
+
+# Load the apos common functions.
+. /opt/ap/apos/conf/apos_common.sh
+
+apos_intro $0
+
+# The variable ALLOWED_OPTIONS contains the valid option for cached credentials and the related settings.
+# In order to handle a new option, a string should be added to the variable in the following format:
+#
+# <SHORT_OPTION>:<LONG_OPTION>:<MULTIPLICATIVE FACTOR>:<REQUIRES AN ARGUMENT>
+# i.e.
+# h:hours:1:yes
+#
+MAX_CACHE_DURATION="60"
+MIN_CACHE_DURATION="0"
+ALLOWED_OPTIONS="d:days:1:yes E:erase:0:no"
+CD_PATH=$(apos_create_brf_folder config)
+CD_FILE="$CD_PATH/cached_creds_duration"
+CFG_PATH="/opt/ap/apos/conf"
+APP_NAME="cdadm"
+LOG_TAG='cdadm'
+AP_TYPE=$(apos_get_ap_type)
+IMM_TMOUT="10"
+LDAP_CACHE_CLUSTER_FOLDER="$(apos_create_brf_folder clear)/sssd_db/"
+LDAP_CACHE_FILE_PATH="$LDAP_CACHE_CLUSTER_FOLDER/cache_LdapAuthenticationMethod.ldb"
+LDAP_CACHE_LOCAL_FOLDER='/var/lib/sss/db/'
+CMD_MOUNT=$(which mount)
+CMD_MKDIR=$(which mkdir)
+CMD_UMOUNT=$(which umount)
+ADMINISTRATIVE_STATE_UNLOCKED=1
+
+function log(){
+  local PRIO='-p user.notice'
+  local MESSAGE="${*:-notice}"
+  echo -e "$MESSAGE"
+}
+
+function log_internal(){
+  local PRIO='-p user.notice'
+  local MESSAGE="${*:-notice}"
+  /bin/logger $PRIO $LOG_TAG "$MESSAGE"
+}
+
+function log_error(){
+  local PRIO='-p user.err'
+  local MESSAGE="${*:-error}"
+  /bin/logger $PRIO $LOG_TAG "$MESSAGE"
+  echo -e "$MESSAGE" >&2
+}
+
+function abort(){
+  local MESSAGE="${@:-unspecified error occurred}"
+  log_error "$MESSAGE"
+  exit $FALSE
+}
+
+function usage(){
+  echo -e "Usage:  $APP_NAME --days |-d <days>"
+  echo
+  echo "Cached User Authentication, Administration"
+}
+
+function option_is_valid(){
+  local fflag=1
+  local OPT="$1"
+  OPT=${OPT//-/}
+  if [ -z "$OPT" ]; then
+    usage
+    abort "option \"$1\" not valid"
+  fi
+  for ITEM in $ALLOWED_OPTIONS; do
+    ITEM_SHORT=$(echo $ITEM|awk -F":" '{print $1}')
+    ITEM_LONG=$(echo $ITEM|awk -F":" '{print $2}')
+    if [ "$ITEM_SHORT" == "$OPT" ] || [ "$ITEM_LONG" == "$OPT" ]; then
+      OPTION="$ITEM_LONG"
+      OPTION_MF=$(echo $ITEM|awk -F":" '{print $3}')
+      REQUIRES_ARGUMENT=$(echo $ITEM|awk -F":" '{print $4}')
+      fflag=0
+      break
+    fi
+  done
+  if [ "$fflag" == "1" ]; then
+    usage
+    abort "option \"$1\" not valid"
+  fi
+}
+
+function argument_is_valid(){
+  OPTION_ARG="$1"
+  if [ "$REQUIRES_ARGUMENT" == "yes" ];then
+    if [ -z "$OPTION_ARG" ]; then
+      usage
+      abort "missing argument"
+    fi
+    OPTION_ARG_ORIG="$OPTION_ARG"
+    if [[ ! $OPTION_ARG =~ ^[0-9]+$ ]]; then
+	  usage
+	  abort "argument \"$OPTION_ARG\" not valid"
+    fi
+	if [ ${#MAX_CACHE_DURATION} -lt ${#OPTION_ARG} ];then
+      usage
+	  abort "argument \"$OPTION_ARG_ORIG\" not valid. Value in $OPTION should be in the range $MIN_CACHE_DURATION - $(( $MAX_CACHE_DURATION / $OPTION_MF ))"
+    fi
+    if [ $OPTION_ARG -lt $MIN_CACHE_DURATION ] || [ $OPTION_ARG -gt $MAX_CACHE_DURATION ]; then
+      usage
+	  abort "argument \"$OPTION_ARG_ORIG\" not valid. Value in $OPTION should be in the range $MIN_CACHE_DURATION - $(( $MAX_CACHE_DURATION / $OPTION_MF ))"
+    fi
+  else
+    if [ ! -z "$OPTION_ARG" ]; then
+      usage
+      abort "argument \"$1\" not valid"
+    fi
+  fi
+}
+
+function cdadm(){
+  sanity_check
+		
+  if [ "$OPTION" = "erase" ];then
+      # Erase the SSSD cache (truncate it)
+      /usr/bin/truncate --size=0 $LDAP_CACHE_FILE_PATH
+      if [ $? -ne 0 ];then
+        log_internal "Truncate of SSSD cache file '$LDAP_CACHE_FILE_PATH' failed"
+        abort "general fault"
+      fi
+
+      # Stop the SSSD service, unmount its DB folder, and start it again
+      apos_servicemgmt stop sssd.service &> /dev/null    
+      ${CMD_UMOUNT} $LDAP_CACHE_LOCAL_FOLDER
+      local EXIT_CODE=$?
+      apos_servicemgmt start sssd.service &> /dev/null   
+      
+      # After restarting anyway SSSD, check if the umount operation was successful
+      if [ $EXIT_CODE -ne 0 ];then
+        log_internal "Failed to umount the folder '$LDAP_CACHE_LOCAL_FOLDER'"
+        abort "general fault"
+      fi
+  else
+    echo -n $OPTION_ARG > $CD_FILE
+    if ! grep -q "$OPTION_ARG" "$CD_FILE"; then
+      log_internal "Value $OPTION_ARG not properly configured in $CD_CONFIG"
+      abort "general fault"
+    fi
+    # Destroy CACHE in case of 0 argument
+    if [ $OPTION_ARG -eq  0 ];then
+      sudo /opt/ap/apos/bin/cdadm -E
+      if [ $? -ne $TRUE ];then
+        log_internal "Execution of cdadm -E operation has failed"
+        abort "general fault"
+      fi
+    else
+      if [ ! -d $LDAP_CACHE_CLUSTER_FOLDER ]; then
+        ${CMD_MKDIR} $LDAP_CACHE_CLUSTER_FOLDER
+        if [ $? -ne 0 ];then
+          log_internal "Failed to create the folder '$LDAP_CACHE_CLUSTER_FOLDER'"
+          abort "general fault"
+        fi
+      fi
+    
+      # Stop the SSSD service, mount its DB folder, and start it again
+      apos_servicemgmt stop sssd.service &> /dev/null   
+      ${CMD_MOUNT} --bind $LDAP_CACHE_CLUSTER_FOLDER $LDAP_CACHE_LOCAL_FOLDER
+      local EXIT_CODE=$?
+      apos_servicemgmt start sssd.service &> /dev/null   
+
+      # After restarting anyway SSSD, check if the mount operation was successful
+      if [ $EXIT_CODE -ne 0 ];then
+        log_internal "Failed to mount the folder '$LDAP_CACHE_LOCAL_FOLDER'"
+        abort "general fault"
+      fi
+    fi
+  fi
+
+  # Force the execution of the acs-agent code
+  kill_after_try 3 1 $IMM_TMOUT /usr/bin/immcfg -a administrativeState=$ADMINISTRATIVE_STATE_UNLOCKED SecLdapAuthenticationldapAuthenticationMethodId=1 &> /dev/null 
+  if [ $? -ne $TRUE ];then
+    log_internal "Execution of immcfg operation has failed"
+    abort "general fault"
+  fi
+}
+
+# The function reads the command line argument list and parses it flagging the
+#  right variables in a case/esac switch.
+# Syntax: parse_cmdline $@
+function parse_cmdline(){
+  local ARGS="$@"
+  OPTION=""
+  eval set -- "$ARGS"
+  if [ $# -le 0 ] || [ $# -gt 2 ]; then
+    usage
+    abort 'uncorrect parameter(s)'
+  fi
+  option_is_valid $1
+  argument_is_valid $2
+  cdadm $OPTION $OPTION_ARG
+}
+
+# This functions checks that all the preconditions for the 
+# command execution are fulfilled.
+# Syntax: sanity_check 
+function sanity_check() {
+  # In order to execute successfully the cache enabling, the LDAP fragment must be unlocked
+  local LDAP_ADMINISTRATIVE_STATE=$(kill_after_try 3 1 5 /usr/bin/immlist -a administrativeState SecLdapAuthenticationldapAuthenticationMethodId=1 2> /dev/null | awk -F '=' '{print $2}')
+  if [ -z $LDAP_ADMINISTRATIVE_STATE ] || [ $LDAP_ADMINISTRATIVE_STATE -ne $ADMINISTRATIVE_STATE_UNLOCKED ] ; then
+    abort "Unable to activate cached user authentication when SecLdapAuthenticationldapAuthenticationMethodId=1 fragment is LOCKED"
+  fi
+}
+
+#                                              __    __   _______   _   __    _
+#                                             |  \  /  | |  ___  | | | |  \  | |
+#                                             |   \/   | | |___| | | | |   \ | |
+#                                             | |\  /| | |  ___  | | | | |\ \| |
+#                                             | | \/ | | | |   | | | | | | \   |
+#                                             |_|    |_| |_|   |_| |_| |_|  \__|
+if [ "$AP_TYPE" == "$AP2" ]; then
+  log_internal "Execution of $APP_NAME not allowed on AP2"
+  abort "Illegal command in this system configuration."
+fi
+parse_cmdline $@
+apos_outro $0
+exit $TRUE
+
+# End of file

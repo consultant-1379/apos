@@ -1,0 +1,291 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2016 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       apos_ip-config
+# Description:
+#       A script to configure service configuration files with network and ip
+#               information.
+# Note:
+#       This script is intended to be deployed to the
+#       /usr/lib/lde/config-management/ directory.
+#
+#       It relies on the /opt/ap/apos/conf/apos_common.sh library.
+##
+# Changelog:
+#
+# - Thu Jan 28 2020 - Neelam Kumar (xneelku)
+#       IPv6 impacts for Virtual ( apg-vsftpd-nbi.socket and apg-vsftpd.socket files)
+# - Thu Jan 24 2019 - Swapnika Baradi (xswapba)
+#       Update apg-vsftpd-nbi.socket and apg-vsftpd.socket file dynamically when a new interface is added.
+# - Wed Jan 20 2016 - Antonio Buonocunto (eanbuon)
+#       First version.
+##
+# LDE_deployment:
+#       type:           config
+#       priority:       590
+##
+
+
+##
+# libraries -------------------------------------------------------------- BEGIN
+if [ -r /opt/ap/apos/conf/apos_common.sh ]; then
+        . /opt/ap/apos/conf/apos_common.sh
+else
+        echo '/opt/ap/apos/conf/apos_common.sh not found or not readable!' >&2
+        exit 1
+fi
+# libraries ---------------------------------------------------------------- END
+##
+
+
+##
+# functions -------------------------------------------------------------- BEGIN
+function usage(){
+        cat << HEREDOC
+Usage: $(basename $0) <action> <phase> [<etc_root>]
+where:
+        <action> can be "start" or "stop" or "config"
+        <phase> can be "init" or "reload"
+        <etc_root> (optional) specifies the base folder where the configuration
+    will be generated (/etc by default)
+HEREDOC
+}
+
+function do_start(){
+        # TO-DO: implement the start phase if needed.
+        return
+}
+
+function do_stop(){
+        # TO-DO: implement the stop phase if needed.
+        return
+}
+
+function do_config(){
+  local CMD_AWK="/usr/bin/awk"
+  local CMD_CAT="/usr/bin/cat"
+  local CMD_GREP="/usr/bin/grep"
+  local CMD_SED="/usr/bin/sed"
+  local SRC='/opt/ap/apos/etc/deploy'
+  local CFG_PATH="/opt/ap/apos/conf"
+  local FILES_TO_CONFIGURE=""
+  local LS="ls"
+  local vsftp_own_socket_file="/usr/lib/systemd/system/apg-vsftpd.socket"
+  local vsftp_mip_socket_file="/usr/lib/systemd/system/apg-vsftpd-nbi.socket"
+  local MIP_PATH="/etc/cluster/nodes/this/mip/"
+  local IP_PATH="/etc/cluster/nodes/this/networks"
+  local IPv6Stack=$FALSE
+  local DualStack=$FALSE
+  local IPv4Stack=$FALSE
+  local BINDIPV6_STRING="BindIPv6Only=both"
+
+  # get the ap type : AP1 or AP2
+  AP_TYPE=$(apos_get_ap_type)
+  if [ $AP2 != $AP_TYPE ]; then 
+    #AP1 CASE
+    FILES_TO_CONFIGURE="/usr/lib/systemd/system/apg-netconf-beep.socket /usr/lib/systemd/system/apg-vsftpd-APIO_1.socket /usr/lib/systemd/system/apg-vsftpd-nbi.socket /usr/lib/systemd/system/apg-rsh.socket /usr/lib/systemd/system/apg-vsftpd-APIO_2.socket /usr/lib/systemd/system/apg-vsftpd.socket"
+  else
+    #AP2 CASE
+    FILES_TO_CONFIGURE="/usr/lib/systemd/system/apg-vsftpd-nbi.socket /usr/lib/systemd/system/apg-rsh.socket /usr/lib/systemd/system/apg-vsftpd.socket"
+  fi
+  apos_log "Configuring $AP_TYPE services"
+  pushd $CFG_PATH &> /dev/null
+  # Fetch information
+  local node_id=$($CMD_CAT /etc/cluster/nodes/this/id)
+  if [ $node_id -ne 1 ] && [ $node_id -ne 2 ];then
+    apos_abort "Failure while fatching node id"
+  fi
+  local node_ipna_network_ip_address=$($CMD_CAT /etc/cluster/nodes/this/networks/ipna/primary/address)
+  if [ -z "$node_ipna_network_ip_address" ];then
+    apos_abort "Invalid IP address for ipna network"
+  fi
+  local node_ipnb_network_ip_address=$($CMD_CAT /etc/cluster/nodes/this/networks/ipnb/primary/address)
+  if [ -z "$node_ipnb_network_ip_address" ];then
+    apos_abort "Invalid IP address for ipnb network"
+  fi
+
+  if [ -d /etc/cluster/nodes/this/mip/nbi_v6 ]; then 
+     local node_nbi_network_ipv6_ip_address=$($CMD_CAT /etc/cluster/nodes/this/mip/nbi_v6/address)
+     if [ -z "$node_nbi_network_ipv6_ip_address" ];then
+       apos_abort "Invalid IP address for nbi_v6 network"
+     fi 
+  fi 
+
+  # Primary folder of public is symlink to actual Node IP address
+  # for example: folder struct looks like below
+  #  --| /etc/cluster/nodes/this/networks/public_v6/primary -> 2001:1b70:8294:4435:4::4
+  if [ -L /etc/cluster/nodes/this/networks/public_v6/primary ]; then 
+     local node_public_network_ipv6_ip_address=$($CMD_CAT /etc/cluster/nodes/this/networks/public_v6/primary/address)
+     if [ -z "$node_public_network_ipv6_ip_address" ];then
+       apos_abort "Invalid IP address for public_v6 network"
+     fi
+  fi 
+  
+  # Check for IPv6 stack 
+  [[ -n "$node_public_network_ipv6_ip_address" && -n "$node_nbi_network_ipv6_ip_address" ]] && IPv6Stack=$TRUE
+
+  if [ -d /etc/cluster/nodes/this/mip/nbi ]; then 
+    local node_nbi_network_ipv4_ip_address=$($CMD_CAT /etc/cluster/nodes/this/mip/nbi/address)
+    if [ -z "$node_nbi_network_ipv4_ip_address" ];then
+      apos_abort "Invalid IP address for nbi network"
+    fi
+  fi
+
+  # Primary folder of public is symlink to actual Node IP address 
+  # for example: folder struct looks like below 
+  #  --| /etc/cluster/nodes/this/networks/public/primary -> 10.33.42.188 
+  if [ -L /etc/cluster/nodes/this/networks/public/primary ]; then
+    local node_public_network_ipv4_ip_address=$($CMD_CAT /etc/cluster/nodes/this/networks/public/primary/address)
+    if [ -z "$node_public_network_ipv4_ip_address" ];then
+      apos_abort "Invalid IP address for public network"
+    fi
+  fi
+ 
+  # Check for IPv4 stack
+  [[ -n "$node_public_network_ipv4_ip_address" && -n "$node_nbi_network_ipv4_ip_address" ]] && IPv4Stack=$TRUE
+
+  # check for Dual stack
+  [[ $IPv4Stack -eq $TRUE && $IPv6Stack -eq $TRUE ]] && DualStack=$TRUE
+
+  local node_internal_network_ip_address=$($CMD_CAT /etc/cluster/nodes/this/networks/internal/primary/address)
+  if [ -z "$node_internal_network_ip_address" ];then
+    apos_abort "Invalid IP address for internal network"
+  fi
+  local node_primarysca_network_ip_address=$($CMD_CAT /etc/cluster/nodes/this/mip/primary_sc-a/address)
+  if [ -z "$node_primarysca_network_ip_address" ];then
+    apos_abort "Invalid IP address for primary_sc-a network"
+  fi
+
+  # In case of IPv6Stack, map the variable names
+  if [ $IPv6Stack -eq $TRUE ]; then  
+    apos_log "INFO: apos_ip-conifg --> IPv6 Stack found"
+    node_public_network_ip_address="[$node_public_network_ipv6_ip_address]"
+    node_nbi_network_ip_address="[$node_nbi_network_ipv6_ip_address]"
+  fi 
+
+  if [ $IPv4Stack -eq $TRUE ]; then 
+    apos_log "INFO: apos_ip-conifg --> IPv4 Stack found"
+    node_public_network_ip_address="$node_public_network_ipv4_ip_address"
+    node_nbi_network_ip_address="$node_nbi_network_ipv4_ip_address"
+  fi
+  
+  for CONFIGURATION_FILE in $FILES_TO_CONFIGURE;do
+    apos_log "setting-up APOS modifications to $CONFIGURATION_FILE ..."
+    if [ ! -e "$SRC/$CONFIGURATION_FILE" ];then
+      apos_abort "File $CONFIGURATION_FILE does not exist"
+    else
+      ./apos_deploy.sh --from $SRC/$CONFIGURATION_FILE --to $CONFIGURATION_FILE
+      [ ! $? = 0 ] && apos_abort 1 "\"apos_deploy.sh\" exited with non-zero return code"
+      $CMD_SED -i "s@<node_internal_network_ip_address>@$node_internal_network_ip_address@g" $CONFIGURATION_FILE
+      $CMD_SED -i "s@<node_ipna_network_ip_address>@$node_ipna_network_ip_address@g" $CONFIGURATION_FILE
+      $CMD_SED -i "s@<node_ipnb_network_ip_address>@$node_ipnb_network_ip_address@g" $CONFIGURATION_FILE
+      $CMD_SED -i "s@<node_nbi_network_ip_address>@$node_nbi_network_ip_address@g" $CONFIGURATION_FILE
+      $CMD_SED -i "s@<node_public_network_ip_address>@$node_public_network_ip_address@g" $CONFIGURATION_FILE
+      $CMD_SED -i "s@<node_primarysca_network_ip_address>@$node_primarysca_network_ip_address@g" $CONFIGURATION_FILE
+    fi
+  done
+
+
+  # IPv6 impacts for nbi_v6 and Public_v6 network
+  if [ $DualStack -eq $TRUE ]; then
+    # update of IPv6 MIP address for vsftp mip socket
+    apos_log "INFO: apos_ip-conifg --> IPv6 Stack found"
+    MIP_STRING="ListenStream=[$node_nbi_network_ipv6_ip_address]:21"
+    $CMD_SED -i "/Accept/i$MIP_STRING" $vsftp_mip_socket_file
+    $CMD_SED -i "/Accept/i$BINDIPV6_STRING" $vsftp_mip_socket_file
+
+    # update of IPv6 IP address for vsftp node socket
+    PUBLIC_STRING="ListenStream=[$node_public_network_ipv6_ip_address]:21"
+    $CMD_SED -i "/Accept/i$PUBLIC_STRING" $vsftp_own_socket_file
+    $CMD_SED -i "/Accept/i$BINDIPV6_STRING" $vsftp_own_socket_file
+  elif [ $IPv6Stack -eq $TRUE ]; then
+    BINDIPV6_STRING="BindIPv6Only=ipv6-only"
+    $CMD_SED -i "/Accept/i$BINDIPV6_STRING" $vsftp_mip_socket_file
+    $CMD_SED -i "/Accept/i$BINDIPV6_STRING" $vsftp_own_socket_file
+  fi 
+  
+  local MIP_LIST=$($LS -l $MIP_PATH | $CMD_GREP -Evw "boot_[a-b]|la-ldap|nfs|primary_sc-[a-b]|total|nbi|nbi_v6" |\
+                   $CMD_AWK '{ print $NF }')
+  local IP_LIST=$($LS -l $IP_PATH | \
+                  $CMD_GREP -Evw "bgci_[a-b]|sol_[a-b]|ipn[a-b]|internal|total|debug|data_network|internal_10g|public|public_v6" | \
+                  $CMD_AWK '{print $NF}')
+ 
+  # custome network handling for both IPv4 and IPv6 address types
+  for MIP in $MIP_LIST; do
+    CUSTOME_MIP_ADDRESS=$($CMD_CAT $MIP_PATH/$MIP/address)
+    if echo "$CUSTOME_MIP_ADDRESS" | grep -E '[0-9a-f]+:+' >/dev/null; then
+      MIP_LISTEN="ListenStream=[$CUSTOME_MIP_ADDRESS]:21"
+    else
+      MIP_LISTEN="ListenStream=$CUSTOME_MIP_ADDRESS:21"
+    fi
+    $CMD_SED -i "/Accept/i$MIP_LISTEN" $vsftp_mip_socket_file
+  done
+
+  for IP in  $IP_LIST; do
+    CUSTOME_IP_ADDRESS=$($CMD_CAT $IP_PATH/$IP/primary/address)
+   if echo "$CUSTOME_IP_ADDRESS" | grep -E '[0-9a-f]+:+' >/dev/null; then
+     IP_LISTEN="ListenStream=[$CUSTOME_IP_ADDRESS]:21"
+   else
+     IP_LISTEN="ListenStream=$CUSTOME_IP_ADDRESS:21"
+    fi 
+    $CMD_SED -i "/Accept/i$IP_LISTEN" $vsftp_own_socket_file
+  done
+  
+  apos_servicemgmt reload all --type=service &>/dev/null || apos_abort 'failure while reloading services after apos_ip-config'
+  popd &> /dev/null
+  return $TRUE
+}
+# functions ---------------------------------------------------------------- END
+##
+
+##
+# variables -------------------------------------------------------------- BEGIN
+
+# variables ---------------------------------------------------------------- END
+##
+
+##
+# main ------------------------------------------------------------------- BEGIN
+##
+# LDE config scripts called with the following:
+# param 1: action - start, stop or config
+# param 2: generate phase - init or reload
+# param 3: root path where config should be generated
+
+apos_intro $0
+
+if [ $# -lt 2 ]; then
+        usage
+        apos_abort 'missing parameter'
+fi
+
+if [ $(</etc/cluster/nodes/this/type) != 'control' ]; then
+        apos_abort 'this script must be run ONLY in control nodes'
+fi
+
+ACTION="$1"
+PHASE="$2"
+ETC_ROOT=${3:-"/etc"}
+
+case "$ACTION" in
+        start)
+                do_start
+                ;;
+        stop)
+                do_stop
+                ;;
+        config)
+                do_config
+                ;;
+        *)
+                usage
+                ;;
+esac
+
+apos_outro
+# main --------------------------------------------------------------------- END
+##

@@ -1,0 +1,413 @@
+-- ============================================================================
+--
+-- %CCaseFile:	GEN-PM-MIB.mib %
+-- %CCaseRev:	/main/R1A/1 %
+-- %CCaseDate:	2010-08-27 %
+-- %CCaseDocNo:	6/196 03-CRA 119 1365 Ux %
+-- Author:	esetwik
+--
+-- =============================================================================
+--
+-- Copyright (C) 2009-2010 by Ericsson AB
+-- S-126 25  STOCKHOLM
+-- SWEDEN, tel int + 46 8 719 0000
+--
+-- This Program may be used and/or copied only with the written permission
+-- from Ericsson AB, or in accordance with the terms and
+-- conditions stipulated in the agreement/contract under which the program
+-- has been supplied.
+--
+-- All rights reserved.
+--
+-- =============================================================================
+--
+-- REVISION HISTORY
+--
+-- Rev        Date         Name        What
+-- ========   ==========   ========    ========
+-- PA1        2009-09-16   esetwik     Generic Perfomance Monitor counters mib
+-- PA2        2009-09-30   esetwik     Moved notification object above the
+--                                     notification.
+-- A          2010-02-12   qsangov     Firm revision for GEN-PM-MIB
+-- A          2010-08-27   uabpnil     New document number
+-- =============================================================================
+
+GEN-PM-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY,
+    NOTIFICATION-TYPE,
+    OBJECT-TYPE,
+    Integer32,
+    Counter32,
+    Counter64,
+    enterprises
+        FROM SNMPv2-SMI
+
+    TEXTUAL-CONVENTION,
+    DateAndTime
+        FROM SNMPv2-TC
+
+    OBJECT-GROUP,             
+    NOTIFICATION-GROUP,
+    MODULE-COMPLIANCE       
+        FROM SNMPv2-CONF; 
+
+genTransportPM MODULE-IDENTITY
+           LAST-UPDATED 
+	       "200909160000Z"
+	   ORGANIZATION
+	       "Ericsson AB "
+	   CONTACT-INFO
+	       "E-mail: ingvar.froroth@ericsson.com"       
+	   DESCRIPTION
+	       "This MIB module defines objects for reading/writing performance
+     	        monitoring components unique for Common Component Switch Board."
+ 
+	    -- Revision history.	 
+	    REVISION
+	       "200909160000Z"
+	   DESCRIPTION
+               "See top of document"  
+ 
+    ::= { enterprises ericsson(193) component(177) generic(2) transport(1) 4 }
+
+-- ============================================================================
+-- Definitions of objects
+-- ============================================================================
+
+--ericsson		OBJECT IDENTIFIER ::= {enterprises 193}
+--component		OBJECT IDENTIFIER ::= {ericsson 177}
+--generic		OBJECT IDENTIFIER ::= {component 2}
+--transport		OBJECT IDENTIFIER ::= {generic 1}
+--genTransportPM       	OBJECT IDENTIFIER ::= {transport 4}
+
+-- -------------------------------------------------------------
+
+pmNotifications         OBJECT IDENTIFIER ::= { genTransportPM 0 }
+pmNotificationObjects   OBJECT IDENTIFIER ::= { genTransportPM 1 }
+pmObjects               OBJECT IDENTIFIER ::= { genTransportPM 2 }
+pmActions               OBJECT IDENTIFIER ::= { genTransportPM 3 }
+
+pmConformance           OBJECT IDENTIFIER ::= { genTransportPM 4 }
+pmGroups                OBJECT IDENTIFIER ::= { pmConformance 1 }
+--pmCompliance            OBJECT IDENTIFIER ::= { pmConformance 2 }
+
+
+-- ============================================================================
+-- Textual conventions
+-- ============================================================================
+
+Acknowledge ::= TEXTUAL-CONVENTION
+    STATUS	current
+    DESCRIPTION
+	"Values indication ok or not ok."
+    SYNTAX	INTEGER {
+                   nok (0),
+		   ok (1)
+		   }
+
+-- -------------------------------------------------------------
+-- pmNotificationObjects OBJECT IDENTIFIER ::= { genTransportPM 1 }
+-- -------------------------------------------------------------
+
+result OBJECT-TYPE
+    SYNTAX	Acknowledge
+    MAX-ACCESS	accessible-for-notify
+    STATUS	current
+    DESCRIPTION
+	"Description of the counter freeze result"
+    ::= { pmNotificationObjects 1 }
+
+-- -------------------------------------------------------------
+-- pmNotifications  OBJECT IDENTIFIER ::= { genTransportPM 0 }
+-- -------------------------------------------------------------
+
+snapShotDone NOTIFICATION-TYPE
+    OBJECTS { result }
+    STATUS  current
+    DESCRIPTION
+            "A snapShotDone notification signifies the end of a
+             snapshot action."
+    ::= { pmNotifications 1 }
+
+-- -------------------------------------------------------------
+-- pmObjects OBJECT IDENTIFIER ::= { genTransportPM 2 }
+-- -------------------------------------------------------------
+
+pmCounterTable OBJECT-TYPE
+    SYNTAX       SEQUENCE OF PmCounterEntry
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "A list of ports and its counters."
+    ::= { pmObjects 1 }
+
+pmCounterEntry OBJECT-TYPE
+    SYNTAX       PmCounterEntry
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "An entry containing counter information applicable for
+         indicated port."
+    INDEX       { pmInterfaceIndex }
+    ::= { pmCounterTable 1 }
+
+PmCounterEntry ::=
+    SEQUENCE {
+              pmInterfaceIndex              Integer32,
+              pmIfHcInOctets                Counter64,
+              pmIfHcOutOctets               Counter64,
+              pmIfHcInUcastPkts             Counter64,
+              pmIfHcOutUcastPkts            Counter64,
+              pmIfHcInMulticastPkts         Counter64,
+              pmIfHcOutMulticastPkts        Counter64,
+              pmIfHcInBroadcastPkts         Counter64,
+              pmIfHcOutBroadcastPkts        Counter64,
+              pmIfInDiscards                Counter32,
+              pmIfOutDiscards               Counter32,
+              pmIfInErrors                  Counter32,
+              pmIfOutErrors                 Counter32
+             }
+
+pmInterfaceIndex OBJECT-TYPE
+    SYNTAX  	 Integer32 (0..100)
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "The index identifier of the interface, corresponding with ifIndex
+         as specified by RFC2863."
+    ::= { pmCounterEntry 1 }
+
+pmIfHcInOctets OBJECT-TYPE
+    SYNTAX       Counter64
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "See definition in The Interfaces Group MIB, RFC2863."
+    ::= { pmCounterEntry 2 }
+
+pmIfHcOutOctets OBJECT-TYPE
+    SYNTAX       Counter64
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "See definition in The Interfaces Group MIB, RFC2863."
+    ::= { pmCounterEntry 3 }
+
+pmIfHcInUcastPkts OBJECT-TYPE
+    SYNTAX       Counter64
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "See definition in The Interfaces Group MIB, RFC2863."
+    ::= { pmCounterEntry 4 }
+
+pmIfHcOutUcastPkts OBJECT-TYPE
+    SYNTAX       Counter64
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "See definition in The Interfaces Group MIB, RFC2863."
+    ::= { pmCounterEntry 5 }
+
+pmIfHcInMulticastPkts OBJECT-TYPE
+    SYNTAX       Counter64
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "See definition in The Interfaces Group MIB, RFC2863."
+    ::= { pmCounterEntry 6 }
+
+pmIfHcOutMulticastPkts OBJECT-TYPE
+    SYNTAX       Counter64
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "See definition in The Interfaces Group MIB, RFC2863."
+    ::= { pmCounterEntry 7 }
+
+pmIfHcInBroadcastPkts OBJECT-TYPE
+    SYNTAX       Counter64
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "See definition in The Interfaces Group MIB, RFC2863."
+    ::= { pmCounterEntry 8 }
+
+pmIfHcOutBroadcastPkts OBJECT-TYPE
+    SYNTAX       Counter64
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "See definition in The Interfaces Group MIB, RFC2863."
+    ::= { pmCounterEntry 9 }
+
+pmIfInDiscards OBJECT-TYPE
+    SYNTAX       Counter32
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "See definition in The Interfaces Group MIB, RFC2863."
+    ::= { pmCounterEntry 10 }
+
+pmIfOutDiscards OBJECT-TYPE
+    SYNTAX       Counter32
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "See definition in The Interfaces Group MIB, RFC2863."
+    ::= { pmCounterEntry 11 }
+
+pmIfInErrors OBJECT-TYPE
+    SYNTAX       Counter32
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "See definition in The Interfaces Group MIB, RFC2863."
+    ::= { pmCounterEntry 12 }
+
+pmIfOutErrors OBJECT-TYPE
+    SYNTAX       Counter32
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "See definition in The Interfaces Group MIB, RFC2863."
+    ::= { pmCounterEntry 13 }
+
+
+-- -------------------------------------------------------------
+-- pmActions OBJECT IDENTIFIER ::= { genTransportPM 3 }
+-- -------------------------------------------------------------
+
+pmSnapshotStartTime OBJECT-TYPE
+    SYNTAX       DateAndTime
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "The time when the latest counter snapshot was ordered."
+    ::= { pmActions 1 }
+
+pmAction OBJECT-TYPE
+    SYNTAX       INTEGER { snapshot(1) }
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "Whenever this object is set to snapshot(1), a counter collection
+         over all ports is initialized.
+         The current status of this action can be monitored through the
+         pmActionStatus object, while the collected counters are provided
+         through the pmCounterTable "
+    ::= { pmActions 2 }
+
+pmActionStatus OBJECT-TYPE
+    SYNTAX	INTEGER { snapshotInProgress(1),
+                          snapshotSuccess(2),
+                          snapshotError(3) }
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "The status of the current 'snapshot(1)' action."
+    ::= { pmActions 3 }
+
+pmSnapshotDuration OBJECT-TYPE
+    SYNTAX	 Integer32
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "The time (in milliseconds) it took to collect the pmCounterTable.
+	If the time exceeds 100 ms it will be signaled snapshotError in 
+	the pmActionStatus object."
+    ::= { pmActions 4 }
+
+-- -------------------------------------------------------------
+-- pmConformance OBJECT IDENTIFIER ::= { genTransportPM 4 }
+-- -------------------------------------------------------------
+
+-- -------------------------------------------------------------
+-- pmGroups OBJECT IDENTIFIER ::= { pmConformance 1 }
+-- -------------------------------------------------------------
+
+pmNotificationGroup NOTIFICATION-GROUP
+    NOTIFICATIONS {
+          snapShotDone
+       }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding notification description."
+    ::= { pmGroups 1 }
+
+pmTrapObjectGroup OBJECT-GROUP
+    OBJECTS {
+          result
+       }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding object description."
+    ::= { pmGroups 2 }
+
+pmObjectGroup OBJECT-GROUP
+    OBJECTS {
+--       pmInterfaceIndex,
+       pmIfHcInOctets,
+       pmIfHcOutOctets,
+       pmIfHcInUcastPkts,
+       pmIfHcOutUcastPkts,
+       pmIfHcInMulticastPkts,
+       pmIfHcOutMulticastPkts,
+       pmIfHcInBroadcastPkts,
+       pmIfHcOutBroadcastPkts,
+       pmIfInDiscards,
+       pmIfOutDiscards,
+       pmIfInErrors,
+       pmIfOutErrors
+       }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding object descriptions."
+    ::= { pmGroups 3 }
+
+pmActionGroup OBJECT-GROUP
+    OBJECTS {
+       pmSnapshotStartTime,
+       pmAction,
+       pmActionStatus,
+       pmSnapshotDuration
+       }
+    STATUS	current
+    DESCRIPTION
+	"Se corresponding object descriptions."
+    ::= { pmGroups 4 }
+
+-- -------------------------------------------------------------
+-- pmCompliance OBJECT IDENTIFIER ::= { pmConformance 2 }
+-- -------------------------------------------------------------
+
+pmCompliance MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+	"The compliance statement for SNMP entities supported
+	 by this MIB."
+    MODULE -- this module
+
+    GROUP pmNotificationGroup
+    DESCRIPTION 
+        "Implementation of this group is optional"
+
+    GROUP pmTrapObjectGroup
+    DESCRIPTION 
+        "Implementation of this group is optional"
+
+    GROUP pmObjectGroup
+    DESCRIPTION 
+        "Implementation of this group is optional"
+
+    GROUP pmActionGroup
+    DESCRIPTION 
+        "Implementation of this group is optional"
+
+    ::= { pmConformance 2 }
+
+END
+
+

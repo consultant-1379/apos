@@ -1,0 +1,15 @@
+[Unit]
+Description=auditd daemon
+DefaultDependencies=no
+After=local-fs.target
+Conflicts=shutdown.target
+Before=sysinit.target shutdown.target
+
+[Service]
+Type=forking
+ExecStart=/usr/lib/systemd/scripts/apg-auditd.sh start
+ExecStopPost=/usr/lib/systemd/scripts/apg-auditd.sh stop
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

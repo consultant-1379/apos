@@ -1,0 +1,18 @@
+# This file contains the rules for the physical-to-logical disk mapping for vAPG Storage.
+
+# DO NOT WRAP THIS LINE
+#
+# old udev does not understand some of it,
+# and would end up skipping only some lines, not the full rule.
+# which can cause all sort of trouble with strange-named device nodes
+# for completely unrelated devices,
+# resulting in unusable network lookback, etc.
+#
+# in case this is "accidentally" installed on a system with old udev,
+# having it as one single line avoids those problems.
+#
+# DO NOT WRAP THIS LINE
+
+# - VM udev Rule
+KERNEL=="[sv]d?", SUBSYSTEM=="block", PROGRAM="/opt/ap/apos/conf/apos_is-datadisk.sh %k", SYMLINK+="eri_disk"
+ENV{DEVTYPE}=="partition", ENV{ID_PART_ENTRY_NUMBER}=="2", PROGRAM="/opt/ap/apos/conf/apos_is-datadisk.sh %k", SYMLINK+="eri-meta-part"

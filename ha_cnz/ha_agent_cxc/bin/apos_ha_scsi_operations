@@ -1,0 +1,823 @@
+#!/bin/bash
+#
+#	Description	:	This module provides a interface to interact with the scsi devices. 
+#				It uses sg_persist utility for doing so. This module is mainly
+#				used by APG RDE Add-On Agent to register and reserve the SCSI devices.
+#	Author		:	XMALSHA ( s.malangsha@tcs.com )
+#	Created On	: 	Nov 10, 2010
+#
+# LSB function library
+. /lib/lsb/init-functions
+
+#setting  global variables
+exit_success=0
+exit_failure=1
+query_raid_status=0
+query_scsi_status=0
+key_overflow=0xffffffffffffff
+NODE1=1
+NODE2=2
+MAX_ATTEMPTS=3
+prog="apos_ha_scsi_operations"
+
+#defining the array
+faulty_disks=()
+
+#commnd list to use
+#
+SGPERSIST=`which sg_persist`
+ECHO=`which echo`
+CMWEA=`which cmwea`
+CUT=`which cut`
+LOGGER=`which logger`
+
+#check node id
+#
+node_id=$(</etc/cluster/nodes/this/id)
+key_prefix=$node_id
+update_file="/cluster/nodes/$node_id/ddisk/status"
+
+#debug begin
+tipc_id=`${CMWEA} tipcaddress-get | ${CUT} -d , -f 3`
+[[ $tipc_id != 1 && $tipc_id != 2 ]] && ${LOGGER} -s -t $prog "INFO: TIPC ID Received:$tipc_id"
+#debug end
+
+## The usual usage information
+##
+function usage_error() {
+
+	${ECHO} >&2
+	${ECHO} "Usage: $0 options"
+	${ECHO} "where options include:"
+	${ECHO} 
+	${ECHO} "RAID options:"
+	${ECHO} "--query-raid-status|-s			Check RAID status"
+	${ECHO} 
+	${ECHO} "SCSI options:"
+	${ECHO} "--register-renew-datadisk|-g	<dev>	PR Out: Register"
+	${ECHO} "--reserve-datadisk|-r		<dev>	PR Out: Reserve"
+	${ECHO} "--query-scsi-devices|-q			PR In:  Query SCSI Devices"
+	${ECHO} "--query-generation-key|-k	<dev>	PR In:  Query Generation Key"
+	${ECHO} "--preempt-disk|-p		<dev>	PR Out: Preempt"
+	${ECHO} "--preempt-abort-disk|-a		<dev>	PR Out: Preempt and Abort"
+	${ECHO} "--release-reservations|-l	<dev>	PR Out: Release"
+	${ECHO} "--read-reservations|-R		<dev>	PR Out: Read Reservations"
+	${ECHO} "--read-registrations|-G		<dev>	PR In:  Read Registrations"
+	${ECHO} "--clear-registrations|-c       <dev>	PR Out: Clear registrations"
+	${ECHO} "--unreg-datadisk|-u		<dev>	Unregister devices"
+	${ECHO} "--version|-v				Output version string"
+	${ECHO}
+	${ECHO} "Misc. Options:"
+	${ECHO} "--update-datadisks-status|U		Update Datadisk status"
+	${ECHO}  >&2
+}
+
+[[ $# < 1 ]] && {
+	usage_error
+	exit $exit_failure
+}
+
+TEMP=$(getopt -o sg:r:qk:p:a:l:R:G:u:c:vU --long query-raid-status,register-renew-datadisk:,reserve-datadisk:,query-scsi-devices,query-generation-key:,preempt-disk:,preempt-abort-disk:,release-reservations:,read-reservations:,read-registrations:,unreg-datadisk:,clear-registrations:,update-datadisks-status,version -- "$@")
+
+if [ $? != 0 ]; then
+	${LOGGER} -s -t $prog "getopt failed"	
+	exit $exit_failure
+fi
+
+
+# check for sg_persist command provided by sg3_utils package
+#
+if ! $(${SGPERSIST} -V &> /dev/null) ; then
+	${LOGGER} -s -t $prog "Error: sg_persist not found"		
+	exit $exit_failure
+fi
+
+#Reset generation key with the node id included
+function reset_key() {
+
+	${ECHO} "0x$node_id"0
+}
+
+# generate a new key for registration and reservation
+#
+function generate_key () {
+
+	#Check for the existing key, if found incrementment it by 1 else create a new key
+	#
+
+	key_in_hex=$(${SGPERSIST} --in --read-keys --device /dev/$1  2>/dev/null | grep -i "^ *0x$node_id" | head -1 )
+	if [[ $key_in_hex = "" ]]; then
+		key=`reset_key`
+		${ECHO} $key
+	else
+		key_in_hex_with_no_nodeid=`${ECHO} $key_in_hex | ${CUT} -c 1-3 --complement`
+		key_in_dec_with_no_nodeid=`printf "%d" 0x$key_in_hex_with_no_nodeid`
+		
+		if [[ "$key_in_hex_with_no_nodeid" = "$key_overflow" ]]; then
+			key_in_hex_with_nodeid=`reset_key`
+		else
+			key_in_dec_with_no_nodeid=`expr $key_in_dec_with_no_nodeid + 1`
+			key_in_hex_with_no_nodeid=`printf "%x" $key_in_dec_with_no_nodeid`
+			key_in_hex_with_nodeid="0x$node_id"$key_in_hex_with_no_nodeid
+		fi
+		${ECHO} $key_in_hex_with_nodeid
+	fi
+}
+
+#query for the node key. 
+#
+function get_node_key () {
+
+	dev=$1
+	node=$2
+	
+	counter=$MAX_ATTEMPTS
+	while [ $counter -ge 0 ]
+	do
+		key_in_hex=$(${SGPERSIST} --in --read-keys --device /dev/$dev  2>/dev/null | grep -i "^ *0x$node" | head -1 )
+		if [[ "$key_in_hex" = "" ]]; then
+			counter=`expr $counter - 1`
+		else
+			break;
+		fi
+	done	
+	${ECHO} $key_in_hex
+}
+
+#query for the faulty key.
+#
+function get_faulty_key () {
+
+        dev=$1
+        counter=$MAX_ATTEMPTS
+        while [ $counter -ge 0 ]
+        do
+                key_in_hex=$(${SGPERSIST} --in --read-keys --device /dev/$dev  2>/dev/null | grep -i "^ *0x")
+                if [[ "$key_in_hex" = "" ]]; then
+                        counter=`expr $counter - 1`
+                else
+                        break;
+                fi
+        done
+        ${ECHO} $key_in_hex
+}
+
+#query for reserved node key
+#
+function read_reservation_key () {
+
+	dev=$1
+	key_in_hex=$(${SGPERSIST} --no-inquiry --device "/dev/$dev" --in  --read-reservation | grep Key | ${CUT} -d "=" -f2 2>/dev/null )
+
+	${ECHO} $key_in_hex
+}
+
+# register the input scsi device using our key
+#
+function register_devices() {
+
+	dev=$1
+
+	# check the key if it overflows, increment the key by 1 otherwise
+	#
+	new_key=`generate_key $dev`
+	[[ ! "$new_key" =~ "0x$node_id" ]] && {
+		${LOGGER} -t $prog "INFO: New-Key is not aligned to node-id:$new_key"
+       		new_key=$(reset_key)
+	}	
+	
+	old_key=`get_node_key $dev $node_id`
+	[[ ! "$old_key" =~ "0x$node_id" ]] && {
+		${LOGGER} -t $prog "INFO: Old-Key is not aligned to node-id:$old_key"
+       		new_key=$(reset_key)
+	}	
+		
+	if [[ "$new_key" == "0x10" || "$new_key" == "0x20" ]]; then   #still have to handle the reset case
+		command="${SGPERSIST} --no-inquiry --device /dev/$dev --out --register --param-sark=$new_key --prout-type=6"
+	else
+		command="${SGPERSIST} --no-inquiry --device /dev/$dev --out --register --param-sark=$new_key --prout-type=6 --param-rk=$old_key"
+	fi 
+
+ 	if ! ${command} 1>/dev/null; then
+		${LOGGER} -t $prog "Error: Disk registration Failed!"
+		
+		# debug begin
+		local sg_persist_log=$(sg_persist /dev/$dev 2>/dev/null)
+		local sg_persist_r_log=$(sg_persist -r /dev/$dev 2>/dev/null)
+		${LOGGER} -t $prog "clear_registrations: sg_persist_log:$sg_persist_log"
+		${LOGGER} -t $prog "clear_registrations: sg_persist_r_log:$sg_persist_r_log"
+		# debug end
+		
+		return $exit_failure
+	fi
+
+	#${LOGGER} -t $prog "Disk registration Success!"
+	return $exit_success
+}
+
+#reserve each device using our key
+#
+function reserve_device() {
+	
+	dev=$1
+
+	counter=$MAX_ATTEMPTS
+	while [ $counter -ge 0 ]
+	do
+		#query for the key
+		key=`get_node_key $dev $node_id`
+		if [[ "$key" = "" ]]; then
+			${LOGGER} -s -t $prog "Error: NULL key found. Attempt to register $dev again."
+			
+			# debug begin
+			local sg_persist_log=$(sg_persist /dev/$dev 2>/dev/null)
+			local sg_persist_r_log=$(sg_persist -r /dev/$dev 2>/dev/null)
+			${LOGGER} -t $prog "clear_registrations: sg_persist_log:$sg_persist_log"
+			${LOGGER} -t $prog "clear_registrations: sg_persist_r_log:$sg_persist_r_log"
+			# debug end
+			
+			register_devices
+		else
+			break
+		fi
+		counter=`expr $counter - 1`
+	done
+	
+	#give up if the registration key is still NULL. Something terribily wrong.
+	#
+
+	key=`get_node_key $dev $node_id`
+	if [[ "$key" = "" ]]; then
+		${LOGGER} -s -t $prog "Error: NULL key found. Prabably cause is registration not done on device $dev"
+	    
+		# debug begin
+		local sg_persist_log=$(sg_persist /dev/$dev 2>/dev/null)
+		local sg_persist_r_log=$(sg_persist -r /dev/$dev 2>/dev/null)
+		${LOGGER} -t $prog "clear_registrations: sg_persist_log:$sg_persist_log"
+		${LOGGER} -t $prog "clear_registrations: sg_persist_r_log:$sg_persist_r_log"
+		# debug end
+		
+		return $exit_failure
+	fi
+	
+	#reserve the device /dev/$dev
+
+	if ! $(${SGPERSIST} --no-inquiry --device "/dev/$dev" --out --reserve --param-rk=$key --prout-type=6 1>/dev/null) ; then
+		${LOGGER} -s -t $prog "Error: Disk Reservation Failed!"
+		
+		# debug begin
+		local sg_persist_log=$(sg_persist /dev/$dev 2>/dev/null)
+		local sg_persist_r_log=$(sg_persist -r /dev/$dev 2>/dev/null)
+		${LOGGER} -t $prog "clear_registrations: sg_persist_log:$sg_persist_log"
+		${LOGGER} -t $prog "clear_registrations: sg_persist_r_log:$sg_persist_r_log"
+		# debug end
+		
+		return $exit_failure
+	fi
+
+	#${LOGGER} -t $prog "Disk Reservation Success!"
+	return $exit_success
+}
+
+#release the given device reservations
+#
+function release_reservations() {
+
+	dev=$1
+
+	#query for registered node key
+	node_key=`get_node_key $dev $node_id`
+
+	if [[ "$node_key" = "" ]]; then
+		${LOGGER} -s -t $prog "Error: NULL key found. Prabably cause is registration not done on device \"$dev\" "
+	     
+		 # debug begin
+		 local sg_persist_log=$(sg_persist /dev/$dev 2>/dev/null)
+		 local sg_persist_r_log=$(sg_persist -r /dev/$dev 2>/dev/null)
+		 ${LOGGER} -t $prog "clear_registrations: sg_persist_log:$sg_persist_log"
+		 ${LOGGER} -t $prog "clear_registrations: sg_persist_r_log:$sg_persist_r_log"
+		 # debug end
+
+		return $exit_failure
+	fi
+
+	#query for reserved node key
+	#
+	reserve_node_key=`read_reservation_key $dev`	
+
+	if [[ "$node_key" != "$reserve_node_key" ]]; then
+		${LOGGER} -s -t $prog "INFO: No Reservation found on this node for device \""$dev"\"!"
+		
+		# debug begin
+		local sg_persist_log=$(sg_persist /dev/$dev 2>/dev/null)
+		local sg_persist_r_log=$(sg_persist -r /dev/$dev 2>/dev/null)
+		${LOGGER} -t $prog "clear_registrations: sg_persist_log:$sg_persist_log"
+		${LOGGER} -t $prog "clear_registrations: sg_persist_r_log:$sg_persist_r_log"
+		# debug end
+			
+		return $exit_success
+	fi
+			
+	#release the device /dev/$dev
+	#
+
+	if ! ${SGPERSIST} --no-inquiry --device "/dev/$dev" --out --release --param-rk=$reserve_node_key --prout-type=6 1>/dev/null; then
+		${LOGGER} -s -t $prog "Error: Disk Release Reservation Failed!"
+
+	        # debug begin
+        	local sg_persist_log=$(sg_persist /dev/$dev 2>/dev/null)
+	        local sg_persist_r_log=$(sg_persist -r /dev/$dev 2>/dev/null)
+	        ${LOGGER} -t $prog "clear_registrations: sg_persist_log:$sg_persist_log"
+	        ${LOGGER} -t $prog "clear_registrations: sg_persist_r_log:$sg_persist_r_log"
+	        # debug end
+
+		return $exit_failure
+	fi
+
+	#${LOGGER} -t $prog "Disk Release Reservation Success!"
+	return $exit_success
+}
+
+#read the given device reservations
+#
+function read_reservations() {
+
+	dev=$1
+
+	#read the device /dev/$dev
+	#
+	${SGPERSIST} --no-inquiry --device "/dev/$dev" --in  --read-reservation
+	
+	return $exit_success
+}
+
+#read the given device registrations
+#
+function read_registrations() {
+
+        dev=$1
+
+        #read the device /dev/$dev
+        #
+        ${SGPERSIST} --no-inquiry --device "/dev/$dev" --in 2>/dev/null
+
+        return $exit_success
+}
+
+#preempt the given scsi device
+#
+function preempt_datadisk() {
+
+	dev=$1
+
+	#query for the key
+	node_key=`get_node_key $dev $node_id`
+	
+	if [[ "$node_id" = "$NODE1" ]]; then
+		mate_node_key=`get_node_key $dev $NODE2`
+	else 
+		mate_node_key=`get_node_key $dev $NODE1`
+	fi
+
+	${LOGGER} -t $prog "INFO: Node Key: $node_key ,Mate node key: $mate_node_key"
+
+	#preempt the device /dev/$dev
+	#
+	if ! $(${SGPERSIST} --no-inquiry --device /dev/$dev --out --preempt --param-rk=$node_key --param-sark=$mate_node_key --prout-type=6 1>/dev/null); then
+		${LOGGER} -s -t $prog "Error: Preempt failed on the device \""$dev"\"!"
+
+	        # debug begin
+        	local sg_persist_log=$(sg_persist /dev/$dev 2>/dev/null)
+	        local sg_persist_r_log=$(sg_persist -r /dev/$dev 2>/dev/null)
+	        ${LOGGER} -t $prog "clear_registrations: sg_persist_log:$sg_persist_log"
+	        ${LOGGER} -t $prog "clear_registrations: sg_persist_r_log:$sg_persist_r_log"
+	        # debug end
+
+		return $exit_failure
+	fi
+
+	return $exit_success
+}
+
+#preempt and abort the given scsi device
+#
+function preempt_abort_devices() {
+
+	dev=$1
+
+	#query for the key
+	node_key=`get_node_key $dev $node_id`
+	
+	if [[ "$node_id" = "$NODE1" ]]; then
+		mate_node_key=`get_node_key $dev $NODE2`
+	else 
+		mate_node_key=`get_node_key $dev $NODE1`
+	fi
+
+	${LOGGER} -t $prog "INFO: Node Key: $node_key ,Mate node key: $mate_node_key"
+
+	#preempt and abourt the device /dev/$dev
+	#
+	if ! $(${SGPERSIST} --no-inquiry --device /dev/$dev --out --preempt-abort --param-rk=$node_key --param-sark=$mate_node_key --prout-type=6 1>/dev/null); then
+		${LOGGER} -s -t $prog  "Error: Preempt and Abort failed on this device \""$dev"\"!"
+		return $exit_failure
+	fi
+
+	return $exit_success
+}
+
+#unrigster the given scsi device
+#
+function unregister_devcies() {
+
+	disk_unreg_fail=0
+	dev=$1
+
+	#query for the key
+	node_key=`get_node_key $dev $node_id`
+
+	if [[ $node_key = "" ]]; then
+		${LOGGER} -s -t $prog "Error: NULL key found. Prabably cause is registration not done on device $dev "
+
+	        # debug begin
+        	local sg_persist_log=$(sg_persist /dev/$dev 2>/dev/null)
+	        local sg_persist_r_log=$(sg_persist -r /dev/$dev 2>/dev/null)
+	        ${LOGGER} -t $prog "clear_registrations: sg_persist_log:$sg_persist_log"
+	        ${LOGGER} -t $prog "clear_registrations: sg_persist_r_log:$sg_persist_r_log"
+	        # debug end
+
+		return $exit_failure
+	fi
+	
+	#query for if this device is already reserved, in which case reservation is to be released before unregister the device.
+	#
+	reserve_node_key=`read_reservation_key $dev`	
+
+	if [[ "$node_key" = "$reserve_node_key" ]]; then
+		${LOGGER} -s -t $prog "Error: Active Reservation found on this device \""$dev"\". Release the reservation before proceeding with un-registering the device!"
+
+	        # debug begin
+        	local sg_persist_log=$(sg_persist /dev/$dev 2>/dev/null)
+	        local sg_persist_r_log=$(sg_persist -r /dev/$dev 2>/dev/null)
+	        ${LOGGER} -t $prog "clear_registrations: sg_persist_log:$sg_persist_log"
+	        ${LOGGER} -t $prog "clear_registrations: sg_persist_r_log:$sg_persist_r_log"
+	        # debug end
+
+		return $exit_failure
+	fi
+	
+	#proceed to unregister the device  
+	#
+	if ! $(${SGPERSIST} --device "/dev/$dev" --out --register --param-rk=$node_key --prout-type=6 1>/dev/null); then
+		${LOGGER} -s -t $prog "Error: Disk unregistration Failure!"
+	        # debug begin
+
+        	local sg_persist_log=$(sg_persist /dev/$dev 2>/dev/null)
+	        local sg_persist_r_log=$(sg_persist -r /dev/$dev 2>/dev/null)
+	        ${LOGGER} -t $prog "clear_registrations: sg_persist_log:$sg_persist_log"
+	        ${LOGGER} -t $prog "clear_registrations: sg_persist_r_log:$sg_persist_r_log"
+	        # debug end
+
+		return $exit_failure
+	fi
+	
+	#${LOGGER} -t $prog "Disk unregistration Success!"
+	return $exit_success
+}
+
+#depending on fdisk for both raid and real scsi devices for now
+#
+function get_scsi_devices() {
+
+	scsi_devices=`fdisk -l 2>/dev/null | 
+				  grep "Linux raid autodetect" | 
+				  awk '{ print $1 }' | cut -d / -f3 | 
+				  cut -c -3 | tr -s '\n' ' ' ; echo`
+
+	${ECHO} $scsi_devices
+}
+
+# query scsi devices. this option is to be called with --update-datadisks-status
+#
+function query_scsi_devices(){
+
+	# Read scsi devices 
+	scsi_devices=`get_scsi_devices`
+
+	# if not scsi devices were found we can exit now
+	#
+	[ -z "$scsi_devices" ] && ${LOGGER} -s -t $prog "No scsi devices found .. exiting" && return $exit_failure
+
+	count=0
+	for dev in $scsi_devices
+	do
+		if ! ${SGPERSIST} -d "/dev/$dev" -i -r 2>/dev/null | grep -i "PR generation" >/dev/null 2>&1; then
+			${LOGGER} -s -t $prog "Error: Unable to query device: /dev/$dev"
+			faulty_disks[$count]="$dev"
+			count=`expr $count+1`
+		fi
+
+	done
+	return $exit_success
+}
+# query for PR generation key
+#
+function get_PRGen_key(){
+
+	dev=$1
+	PR_Key=$(${SGPERSIST} -d "/dev/$dev" -i -r 2>/dev/null | grep "PR generation=" | ${CUT} -d "," -f1 | ${CUT} -d "=" -f2)
+	${ECHO} $PR_Key 		
+}
+
+# query for generation keys of given scsi device
+#
+function query_generation_key(){
+	
+	dev=$1
+	key_in_hex=`get_PRGen_key $dev`
+
+	if [[ $key_in_hex = "" ]]; then
+		${LOGGER} -s -t $prog "Error: NULL key found. Prabably cause is registration not done on device $dev "		
+		${ECHO} $key_in_dec 2>&1 #To capture NULL from the calling thread
+		return $exit_failure
+	fi
+
+	key_in_dec=`printf "%u" $key_in_hex`
+
+	${ECHO} $key_in_dec 2>&1   #write the output to stdout and popen it from calling thread for reading
+	return $exit_success
+}
+
+#query the raid status of data disks. this option is to be called with --update-datadisks-status
+#
+function query_ddisk_raid_status() {
+
+	${ECHO}  "ddisk_raid_status"
+
+	raid_devices=`cat /proc/mdstat | grep md0 | \\
+			awk  '{print $5,$6}' |  \\
+			sed -e 's/[0-9]//g' |  \\
+			sed -e 's/\[\]//g' |  \\
+			sed -e 's/(/ /g'| \\
+			sed -e 's/)//g'| sort | uniq`
+
+	count=0
+	${ECHO} "Raid devices: $raid_devices"
+	for dev in $raid_devices
+	do
+		faulty_disks[$count]="$dev"
+		count=`expr $count+1`
+	done
+	return $exit_success
+}
+
+function echo_version() {
+
+	${ECHO} "Version Info:"
+	
+	${SGPERSIST} -V
+}
+
+#update raid and scsi device status to /cluster. this option is to be invoked with query_ddisk_raid_status or query_scsi_devices.
+#
+function update_datadisks_status() {
+
+	${ECHO} "update_datadisks_status"
+
+	scsi_devices=`get_scsi_devices`
+
+	# if not scsi devices were found we can exit now
+	#
+	[ -z "$scsi_devices" ] && ${LOGGER} -s -t $prog "Error: No scsi devices found .. exiting" && return $exit_failure
+
+	#update raid status first
+	#
+	if [[ "$query_raid_status" = "1" ]]; then
+		if [[ ${#faulty_disks[@]} -eq 2 ]]; then 
+			${ECHO} "Status :Healthy" > $update_file
+		elif [[ ${#faulty_disks[@]} -eq 3 || ${#faulty_disks[@]} -eq 1 ]]; then
+			${ECHO} "Status : Partial Healthy" > $update_file
+		else
+			${ECHO} "Status : Faulty" > $update_file
+		fi
+	
+		${ECHO} "Devices:" >> $update_file	
+
+		#handle remove disk case
+		#
+		
+		if [[ ${#faulty_disks[@]} -eq 1 ]]; then
+			for dev in $scsi_devices
+			do
+				if [[ "${faulty_disks[0]}" = "$dev" ]]; then
+					${ECHO} "  Device: /dev/$dev 	Status: Healthy" >>$update_file
+				else
+					${ECHO} "  Device: /dev/$dev 	Status: Faulty" >>$update_file
+				fi
+
+			done
+			return $exit_success # Ok. updated the status. Now exit
+		fi
+
+		for (( count=0; count<${#faulty_disks[@]}; count++ ))
+		do
+
+			if [[ "${faulty_disks[$count]}" = "F" ]]; then
+				continue
+			fi
+			
+			if [[ "`expr $count + 1`" < "${#faulty_disks[@]}" && "${faulty_disks[`expr $count + 1`]}" = "F" ]]; then
+				${ECHO} "  Device: /dev/${faulty_disks[$count]}	Status: Faulty" >>$update_file
+				${ECHO} "count: `expr $count + 1`"
+				${ECHO} "fauty_disk: `expr ${#faulty_disks[@]} - 1`"
+				if [[ "`expr $count + 1`" = "`expr ${#faulty_disks[@]} - 1`" ]]; then
+					break
+				fi
+			else
+				${ECHO} "  Device: /dev/${faulty_disks[$count]}	Status: Healthy" >>$update_file
+			fi
+		done	
+		return $exit_success # Ok. updated the status. Now exit
+	fi
+
+	# update scsi link status
+	#
+	if [[ "$query_scsi_status" = "1" ]]; then
+		if [[ !$link_not_rechable ]]; then
+			${ECHO} "Status :Healthy" > $update_file
+		elif [[ $link_not_rechable -eq 1 ]]; then
+			${ECHO} "Status : Partial Healthy" > $update_file
+		else
+			${ECHO} "Status : Faulty"> $update_file
+		fi
+
+		${ECHO} "Devices:" >> $update_file
+
+		count=0
+		for dev in $scsi_devices
+     		do
+			if [ "$dev" = "${faulty_disks[$count]}" ]; then
+				${ECHO} "	Device: /dev/$dev	Status: Not reachable"  >> $update_file
+			else
+				${ECHO} "	Device: /dev/$dev	Status: Healthy"  >> $update_file
+			fi
+
+		if [ ${#faulty_disks[@]} -eq 2 ]; then
+			count=`expr $count+1`
+		fi
+		done
+	fi
+	return $exit_success
+}
+
+function clear_registrations(){
+	dev=$1
+
+	# debug begin
+	local sg_persist_log=$(sg_persist /dev/$dev 2>/dev/null)
+	local sg_persist_r_log=$(sg_persist -r /dev/$dev 2>/dev/null)
+	${LOGGER} -t $prog "clear_registrations: sg_persist_log:$sg_persist_log"
+	${LOGGER} -t $prog "clear_registrations: sg_persist_r_log:$sg_persist_r_log"
+	# debug end
+
+	local keys=`get_faulty_key $dev`
+	[ -z "$keys" ] && return $exit_success
+
+	local new_key=$(reset_key)
+
+	for key in $keys
+	do
+		# try to overwite the device registration 
+		${LOGGER} -t $prog "INFO: registraions old key:$key new key: $new_key"
+		if ! $( ${SGPERSIST} --no-inquiry --device /dev/$dev --out --register \
+		    --param-sark=$new_key --prout-type=6 --param-rk=$key --prout-type=6 1>/dev/null); then
+		     ${LOGGER} -t $prog "clear_registrations: registration with key [$key] failed"
+		else
+		     break
+		fi
+	done
+
+	# clear all reservations and registrations.
+	${LOGGER} -t $prog "INFO: Clearing out the registrations. Key: $new_key"
+	if ! $( ${SGPERSIST} --no-inquiry --device /dev/$dev --out --clear \
+		--param-rk=$new_key --prout-type=6 1>/dev/null); then
+		${LOGGER} -s -t $prog  "Error: Clear reservation failed on this device \""$dev"\"!"
+		return $exit_failure
+	fi
+
+	# register the devices now.
+	register_devices $dev	
+	local rCode=$?
+	[ $rCode != $exit_success ] && return $exit_failure
+
+	# reserve the device
+	reserve_device $dev
+	rCode=$?
+	[ $rCode != $exit_success ] && return $exit_failure
+
+	return $exit_success
+}
+
+eval set -- "$TEMP"
+
+while true; do
+	case $1 in
+	
+	--query-raid-status|-s)
+	
+				   	query_raid_status=1
+					query_ddisk_raid_status
+		 		   	retval=$?
+				   	shift
+				   	;;
+	--register-renew-datadisk|-g) 
+	
+	   			   	register_devices $2
+					retval=$?
+				   	shift 2
+	   			   	;;
+	--reserve-datadisk|-r) 
+	
+				   	reserve_device $2
+					retval=$?
+				   	shift 2
+				   	;;
+	--query-scsi-devices|-q) 
+	
+				   	query_scsi_status=1
+				   	query_scsi_devices
+					retval=$?
+				   	shift
+				   	;;
+	--query-generation-key|-k)
+			 	   	
+				   	query_generation_key $2
+					retval=$?
+				   	shift 2
+				   	;;
+	--preempt-disk|-p) 
+	
+				   	preempt_datadisk $2
+					retval=$?
+				  	shift 2
+				   	;;
+	--preempt-abort-disk|-a) 
+	
+	  			   	preempt_abort_devices $2
+					retval=$?
+				   	shift 2
+				   	;;
+	--release-reservations|-l) 
+				   
+				   	release_reservations $2
+					retval=$?
+				   	shift 2
+				   	;;
+	--read-reservations|-R) 
+	
+				   	read_reservations $2
+					retval=$?
+				   	shift 2
+				   	;;
+	--read-registrations|-G) 
+	
+				   	read_registrations $2
+					retval=$?
+				   	shift 2
+				   	;;
+	--unreg-datadisk|-u) 
+	
+				   	unregister_devcies $2
+					retval=$?
+				   	shift 2
+				   	;;
+	--clear-registrations|-c) 
+	
+				   	clear_registrations $2
+					retval=$?
+				   	shift 2
+				   	;;
+	--version|-v) 
+	
+					echo_version
+					shift
+				   	;;
+
+    	--update-datadisks-status|-U) 
+			
+				   	update_datadisks_status
+					retval=$?
+			     		shift
+				  	;;	   
+    	--) 
+					break
+				   	;;
+    	/?)
+					usage_error
+			       		;;		
+	esac		
+done
+shift # the -- 
+
+exit $retval
+

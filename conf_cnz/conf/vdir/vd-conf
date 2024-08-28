@@ -1,0 +1,6 @@
+/var/cpftp APZ /data/apz
+/var/cpftp cpa /data/apz/data/cpa/cphw/crash
+/var/cpftp cpb /data/apz/data/cpb/cphw/crash
+/var/cpftp CPSDUMP /data/cps/data
+/var/cpftp CPSLOAD /data/fms/data
+/var/cpftp tracelog /data/cps/logs

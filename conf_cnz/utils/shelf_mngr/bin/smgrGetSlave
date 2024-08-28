@@ -1,0 +1,53 @@
+#!/bin/bash
+
+## This script tries to find the SCB-RP IPMI Slave Board. 
+## The script has no parameters. 
+## It prints
+##	 Failed : (reason for failure) - if execution fails. 
+##   Both                          - if no SCB is configured as IPMI Master. 
+##   A                             - if the left SCB-RP is IPMI Slave. 
+##   B                             - if the right SCB-RP is IPMI Slave. 
+
+usage () {
+	echo "Prints the SCB-RP board that is IPMI Slave. "
+	echo "Usage: $0"
+	exit 1
+}	
+
+source `dirname $0`/constants    # include to set constants common for all smgr scripts
+
+if [ $# -ne 0 ]; then usage; fi;
+
+ipSCB=$(`dirname $0`/hwcwrap SCB A IP 169)
+slotSCB=$(`dirname $0`/hwcwrap SCB A SLOT)
+snmpres=$(snmpget -L o -M $mibspath -v 2c -c public $ipSCB .1.3.6.1.4.1.193.154.2.1.2.1.1.1.12.$slotSCB 2>/tmp/snmperror | grep $intGrep)
+
+if [[ $snmpres =~ $intRegExp ]]; 
+then
+	if [ ${BASH_REMATCH[1]} == '1' ]
+	then
+		echo "B"
+		exit 0
+	fi;
+else
+	echo "Failed : snmpget did not return a valid result. "
+	exit 1
+fi;
+
+ipSCB=$(`dirname $0`/hwcwrap SCB B IP 169)
+slotSCB=$(`dirname $0`/hwcwrap SCB B SLOT)
+snmpres=$(snmpget -L o -M $mibspath -v 2c -c public $ipSCB .1.3.6.1.4.1.193.154.2.1.2.1.1.1.12.$slotSCB 2>/tmp/snmperror | grep $intGrep)
+
+if [[ $snmpres =~ $intRegExp ]]; 
+then
+	if [ ${BASH_REMATCH[1]} == '1' ]
+	then
+		echo "A"
+		exit 0
+	else
+		echo "Both"
+	fi;
+else
+	echo "Failed : snmpget did not return a valid result. "
+	exit 1
+fi;

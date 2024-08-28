@@ -1,0 +1,265 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#	psls
+# Description:
+#	This script is to display all the configuration for 
+#	physical separation interface eth2(DEBUG)
+##
+# Usage: 
+#	psls
+##
+# Changelog:
+# - Mon 13 Jun 2016 - Luca De Simone (XLUDESI)
+#       Minor changes
+#  - Fri 11 Mar 2016 - Antonio Giusto (XANTGIU)
+#        Updated to inhibit psls command in SMX architecture
+# - Thu 27 Nov 2014 - Madhu Muthyala (XMADMUT)
+#	Updated to inhibit psls command in virtualized architecture
+#   PC4 1 May 2014 by Torgny Wilhelmsson (xtorwil)
+#       removal of ping towards RHOST
+#   PC3 29 Apr 2014 by Gianluigi Crispino (xgiacri)
+#	Support of "apos_common.sh" 
+#   PC2 29 Apr 2014 by Fabio Imperato (xfabimp)
+#	 Changed "exit_CableLessDefined_string" string
+# -  PC1 28 Apr 2014 - Torgny Wilhelmsson (xtorwil)
+#        Introduction of CheckCableLess
+# - Mon 03 Feb 2014 - Torgny Wilhelmsson (XTORWIL)
+#       Corrected ADDED ROUTES printout for  TR HS27442
+# - Thu Jul 04 2013 - Furquan Ullah (XFURULL)
+#	Fix provided for TR HR37476
+# - Tue Jun 18 2013 - Krishna Chaitanya (XCHAKRI)
+#	Addressed the TR HR41874 
+# - Thu Apr 18 2013 - Furquan Ullah (XFURULL)
+#	Minor Changes
+# - Tue Mar 04 2013 - Pratap Reddy (xpraupp)
+#	Removed Metric option
+# - Tue Dec 18 2011 - Satya Deepthi (XSATDEE)
+#	Second version.
+# - Fri sep 23 2011 - Madhu Aravabhumi (XMADARA)
+#	First version.
+##
+
+# LOAD APOS COMMON FUNCTION
+APOS_COMMON="${AP_HOME:-/opt/ap}/apos/conf/apos_common.sh"
+source $APOS_COMMON
+
+exit_fail=1
+exit_fail_msg="Error when executing (general fault)"
+
+exit_CableLessDefined=43
+exit_CableLessDefined_string="Illegal command in this system configuration"
+exit_virtual_arch=44
+
+CMD_LOGGER=/bin/logger
+LOG_TAG='psls'
+LOG_DIR=/tmp
+LOG_FILE=psdef.log
+
+# Functions
+
+function ps_imm_status(){
+imm_class_name=$(immfind -c NorthBound)
+if [ ! -z $imm_class_name ] ; then
+	ps_status=$(immlist $imm_class_name | grep physicalSeparationStatus | awk '{ print $3}')
+	if [ ! -z $ps_status ] ; then
+		if [ $ps_status -eq 0 ] ; then
+			echo "NOT CONFIGURED"
+		elif [ $ps_status -eq 1 ] ; then
+			echo "CONFIGURED"
+		else
+			echo "Error when executing (immlist unreasonable value)"
+			exit 1
+		fi
+	else
+		echo "Error when executing (immlist fault)"
+		exit 1
+	fi
+else
+	echo "Error when executing (immfind fault)"
+	exit 1
+fi
+}
+
+function help(){
+echo -e "\nUsage: psls\n"
+}
+
+
+##############################################################################################
+# function console_print($msg);                                                              #
+#                                                                                            #
+# Prints a message.                                                                          #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to print                                                                    #
+##############################################################################################
+function console_print() {
+    echo -e "$1"
+}
+
+##############################################################################################
+# function abort($msg);                                                                      #
+#                                                                                            #
+# Adds an error message to the log file and exits with                                       #
+# "Error when executing (general fault)"                                                     #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to add to the log                                                           #
+#                                                                                            #
+# Exits:                                                                                     #
+# - "Error when executing (general fault)"                                                   #
+##############################################################################################
+function abort() {
+    console_print "Error when executing (general fault)"
+    log_error "ABORTING: <"$1">"
+    exit $exit_fail
+}
+
+##############################################################################################
+# function console_abort($msg,$exit_code);                                                   #
+#                                                                                            #
+# Prints an error message and exits.                                                         #
+# Cancels any current operation on the cluster.conf file                                     #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to print                                                                    #
+# - $exit_code numeric exit code to use                                                      #
+##############################################################################################
+function console_abort() {
+    console_print "$1"
+    echo -e
+#    ${CMD_CLUSTER_CONF} $CLUS_MGMT_OPTS --abort &>/dev/null
+    exit $2
+}
+
+##############################################################################################
+# function log_error($msg);                                                                  #
+#                                                                                            #
+# Adds an error message to the log file.                                                     #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to add to the log                                                           #
+##############################################################################################
+function log_error() {
+    local PRIO='-p user.err'
+    local MESSAGE="${*:-error}"
+    ${CMD_LOGGER} $PRIO $LOG_TAG "$MESSAGE"
+    INFO "$MESSAGE"
+}
+
+##############
+# Main Program
+##############
+
+# Global Parameters
+clu_file=/opt/ap/apos/bin/clusterconf/clusterconf
+ps_file=/cluster/ap/apos/conf/ps/physep_status
+clu_config=/cluster/etc/cluster.conf
+IFCONFIG="/sbin/ifconfig"
+PING="/bin/ping"
+ROUTE="/sbin/route"
+PHYSEP1="physep"
+PHYSEP2="public2"
+NODEA="SC-2-1"
+NODEB="SC-2-2"
+#PHYSEP3="mvl2"
+cnt=$#
+
+## New function for virtualization
+if [ $(get_shelf_architecture_attr) -eq 3 ]; then
+	console_abort "$exit_CableLessDefined_string" $exit_virtual_arch
+fi
+
+## New function for cable less APG and check to inhibit execution in SMX architecture
+if [[ $(get_oam_access_attr) -eq 1 || $(get_shelf_architecture_attr) -eq 4 ]]; then
+	console_abort "$exit_CableLessDefined_string" $exit_CableLessDefined
+fi
+
+if [ $cnt -gt 0 ] ; then
+	echo -n "Incorrect usage"
+	help
+	exit 2
+fi
+
+# Checkig the status of other node
+peer_node_name=$(cat /etc/cluster/nodes/peer/hostname)
+this_node_name=$(cat /etc/cluster/nodes/this/hostname)
+#$PING $peer_node_name -c 1 &> /dev/null
+#if [ $? -ne 0 ] ; then
+#	echo -e "Error when executing (general fault)\n"
+#	exit 1
+#fi
+
+# Checking the status of Debug port Adapter
+#grep -r "^network debug " $clu_config &> /dev/null
+#state1=$?
+#grep -r "^network public0 " $clu_config &> /dev/null
+#state2=$?
+#if [ $state1 -ne 0 ] || [ $state2 -ne 0 ] ; then
+#echo -e "\nPHYSICAL SEPARATION STATE
+#NIC 		STATE 		NODE
+#NOT FOUND 	NOT CONFIGURED	$this_node_name
+#NOT FOUND 	NOT CONFIGURED	$peer_node_name"
+#	exit 0
+#fi
+
+#Renaming Node names to "A" and "B"
+if [[ "$this_node_name" == "$NODEA" ]] && [[ "$peer_node_name" == "$NODEB" ]] ; then
+	this_node_name="A"
+	peer_node_name="B"
+elif [[ "$this_node_name" == "$NODEB" ]] && [[ "$peer_node_name" == "$NODEA" ]] ; then
+	this_node_name="B"
+	peer_node_name="A"
+else
+	echo -e "Error when executing (general fault)\n"
+	exit 1
+fi
+
+
+# Checking the status of PS
+if [ "$(ps_imm_status)" == "NOT CONFIGURED" ] ; then
+echo -e "\nPHYSICAL SEPARATION STATE
+NIC		STATE		NODE
+eth2            NOT CONFIGURED  $this_node_name
+eth2            NOT CONFIGURED  $peer_node_name\n"
+	exit 0
+fi
+INTERFACE_THIS_NAME="/etc/cluster/nodes/this/networks/public2/primary/interface/name"
+INTERFACE_PEER_NAME="/etc/cluster/nodes/peer/networks/public2/primary/interface/name"
+if [ "$(ps_imm_status)" == "CONFIGURED" ] ; then
+	if [ -f $INTERFACE_THIS_NAME ] && [ -f $INTERFACE_PEER_NAME ] ; then
+		this_interface=$(cat $INTERFACE_THIS_NAME)
+		peer_interface=$(cat $INTERFACE_PEER_NAME)
+	else
+		echo -e "Error when executing (general fault)\n"
+		exit 1
+	fi
+
+	if [ -f /etc/cluster/nodes/this/networks/public2/primary/address ] && [ -f /etc/cluster/nodes/peer/networks/public2/primary/address ] && [ -f /etc/cluster/nodes/peer/mip/primary_ps/address ] ; then
+		this_ps_addr=$(cat /etc/cluster/nodes/this/networks/public2/primary/address)
+		peer_ps_addr=$(cat /etc/cluster/nodes/peer/networks/public2/primary/address)
+		clu_ps_addr=$(cat /etc/cluster/nodes/this/mip/primary_ps/address)
+	else
+		echo -e "Error when executing (general fault)\n"
+		exit 1
+	fi
+
+echo -e "\nPHYSICAL SEPARATION STATE
+NIC	STATE 		NODE
+$this_interface	CONFIGURED 	$this_node_name
+$peer_interface	CONFIGURED 	$peer_node_name
+
+Cluster IP address: $clu_ps_addr
+$this_node_name $this_interface IP address: $this_ps_addr
+$peer_node_name $this_interface IP address: $peer_ps_addr
+
+ADDED ROUTES
+Destination 	Netmask 	Gateway"
+$ROUTE | grep $this_interface | grep -v default | grep UG | awk '{print $1 "\t" $3 "\t" $2}'
+echo -e ""
+fi

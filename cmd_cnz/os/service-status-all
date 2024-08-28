@@ -1,0 +1,39 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2013 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       service-status-all
+# Description:
+#       A script to wrap the invocation of service with --status-all option by TS user.
+# Note:
+#       None.
+##
+# Usage:
+#       None.
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Thu Nov 08 2013  - Madhu Muthyala (xmadmut)
+#       First version.
+##
+
+function help()
+{
+   echo -e "\nUsage: service-status-all\n"
+}
+
+if [ $# -gt 0 ] ; then
+	echo -n "Incorrect usage"
+	help
+	exit 2
+else 
+	/usr/bin/sudo /sbin/service --status-all
+fi
+
+exit $?
+

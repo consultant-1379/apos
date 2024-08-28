@@ -1,0 +1,142 @@
+#!/bin/bash -u
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       apos_logrotd-config
+# Description:
+#       The script will (re)configure the /etc/logrot.d/default file according
+#	to the APG needs.
+# Note:
+#	This script is intended to be deployed to the
+#	/usr/lib/lde/config-management/ directory.
+#
+#	It relies on the /opt/ap/apos/conf/apos_common.sh library.
+##
+# Changelog:
+# - Wed Sep 16 2015 - Phaninder G (xphagat)
+#	TR HU18007 fix for agent and devmon logging
+# - Wed Jan 01 2012 - Francesco Rainone (efrarai)
+#	First version.
+##
+# LDE_deployment:
+# 	type:		config
+# 	priority:	520
+##
+
+##
+# libraries -------------------------------------------------------------- BEGIN
+if [ -r /opt/ap/apos/conf/apos_common.sh ]; then
+	. /opt/ap/apos/conf/apos_common.sh
+else
+	echo '/opt/ap/apos/conf/apos_common.sh not found or not readable!' >&2
+	exit 1
+fi
+# libraries ---------------------------------------------------------------- END
+##
+
+
+##
+# functions -------------------------------------------------------------- BEGIN
+function usage(){
+	cat << HEREDOC
+Usage: $0 <action> <phase> [<etc_root>]
+where:
+	<action> can be "start" or "stop" or "config"
+	<phase> can be "init" or "reload"
+	<etc_root> (optional) specifies the base folder where the configuration
+	           will be generated (/etc by default)
+HEREDOC
+}
+
+function do_start(){
+	# TO-DO: implement the start phase if needed.
+	return
+}
+
+function do_stop(){
+	# TO-DO: implement the stop phase if needed.
+	return
+}
+
+function do_config(){
+	if [ ! -d /etc/logrot.d ]; then
+		apos_abort 'Folder /etc/logrot.d not found'
+	fi
+	
+	(
+		echo "#"
+		echo "# /etc/logrot.d/default: default logrotate configuration"
+		echo "#"
+		echo "# <logfile> <limit> <rotations>"
+		echo ""
+		for NODE in $(ls -1 /etc/cluster/nodes/all); do
+			echo "/var/log/$(</etc/cluster/nodes/all/$NODE/hostname)/messages 102400 9"
+		done
+		for LOG in kernel auth; do
+			for NODE in $(ls -1 /etc/cluster/nodes/all); do
+				echo "/var/log/$(</etc/cluster/nodes/all/$NODE/hostname)/$LOG 102400 9"				
+			done
+		done
+		echo ""
+		echo "/var/log/acs/tra/logging/agentd.log 30720 3"
+		echo "/var/log/acs/tra/logging/devmond.log 30720 3"
+		echo ""
+		echo "/var/log/wtmp 512 1"
+		echo ""
+		echo "# End of file"
+	) > /etc/logrot.d/default
+}
+# functions ---------------------------------------------------------------- END
+##
+
+##
+# variables -------------------------------------------------------------- BEGIN
+
+# variables ---------------------------------------------------------------- END
+##
+
+##
+# main ------------------------------------------------------------------- BEGIN
+##
+# LDE config scripts called with the following:
+# param 1: action - start, stop or config
+# param 2: generate phase - init or reload
+# param 3: root path where config should be generated
+
+apos_intro $0
+
+if [ $# -lt 2 ]; then
+	usage
+	apos_abort 'missing parameter'
+fi
+
+if [ $(</etc/cluster/nodes/this/type) != 'control' ]; then
+	apos_abort 'this script must be run ONLY in control nodes'
+fi
+
+ACTION="$1"
+PHASE="$2"
+ETC_ROOT=${3:-"/etc"}
+
+case "$ACTION" in
+        start)
+                do_start
+                ;;
+        stop)
+                do_stop
+                ;;
+        config)
+                do_config
+                ;;
+        *)
+                usage
+                ;;
+esac
+
+apos_outro
+exit $TRUE
+# main --------------------------------------------------------------------- END
+##

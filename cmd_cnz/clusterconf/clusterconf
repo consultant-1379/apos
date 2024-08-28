@@ -1,0 +1,186 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       clusterconf
+#
+# Description:
+#     	This command is used to manage central cluster configuration file.  
+#      
+##
+# Usage:
+#       Call help
+##
+# Changelog:
+#
+# - Fri Aug 03 2012 - Malangsha Shaik(xmalsha)
+# 	- Added following:
+#   	1. Introducing muti update feature without reloading the cluster conf
+#      	2. added cluster manament tool
+# - Thu Jun 27 2011 - Pranshu (xpransi)
+#   	- Second version.
+# - Thu Mar 10 2011 - Madhu Aravabhumi (XMADARA)
+#	- First version.
+#
+
+# set -x
+
+. /opt/ap/apos/bin/clusterconf/clu_sc
+
+# script-wide variables
+exit_success=0
+exit_failure=1
+rCode=$exit_success
+
+clusterpath=/opt/ap/apos/bin/clusterconf
+CLUSTER_CONF=/cluster/etc/cluster.conf
+
+function usage(){
+	echo "Incorrect Usage"
+	echo -e "Usage: clusterconf <cluster-command> <option> <cluster-rule | rule number>"
+	echo -e "Please type $0 -h for detailed command usage"
+	exit $exit_failure
+}
+
+function help(){
+	echo -e "\E[1m\nUsage: clusterconf <cluster-command|--help>\E[0m"
+	
+	echo -e "\n\E[1mWhere Cluster Commands are:\E[0m"
+        echo -e "alarm                  To call cluster Alarm"
+        echo -e "bonding                To call cluster Bonding"
+        echo -e "boot                   To call cluster Boot"
+        echo -e "dns                    To call cluster DNS"
+        echo -e "ip                     To call cluster IP"
+        echo -e "ipmi                   To call cluster IPMI"
+        echo -e "interface              To call cluster Bonding"
+        echo -e "iptables               To call cluster Iptables"
+        echo -e "host                   To call cluster Host"
+        echo -e "mgmt                   To call cluster Management"
+        echo -e "netconsole             To call cluster Netconsole"
+        echo -e "network                To call cluster Network"
+        echo -e "nfs                    To call cluster NFS"
+        echo -e "node                   To call cluster Node"
+        echo -e "ntp                    To call cluster NTP"
+        echo -e "route                  To call cluster Route"
+        echo -e "loader                 To call cluster Loader"
+        echo -e "ssh                    To call cluster ssh"
+        echo -e "ssh.rootlogin          To call cluster ssh.rootlogin"
+        echo -e "syslog                 To call cluster syslog"
+        echo -e "tipc                   To call cluster tipc"
+        echo -e "timezone               To call cluster Timezone"
+        echo -e "watchdog               To call cluster Watchdog"
+	echo -e "coredump               To call cluster Coredump"
+	echo -e "default-output         To call cluster Default-output"
+	echo -e "disable-serial         To call cluster Disable-serial "
+	echo -e "ip6tables              To call cluster Ip6tables"
+	echo -e "keymap                 To call cluster Keymap"
+	echo -e "nodegroup              To call cluster Nodegroup"
+	echo -e "quick-reboot           To call cluster Quick-Reboot"
+	echo -e "shutdown-timeout       To call cluster Shutdown-Timeout"
+	echo -e "-h|--help              To display Help"
+
+	echo -e "\E[1m\nExamples:\E[0m"
+	echo -e "clusterconf iptables --add all -A INPUT -s 10.0.0.1 -j DROP\n"
+	exit $exit_success
+}
+
+
+# M A I N
+
+if [ -f $CLUSTER_CONF ];then
+        clu_Conf_path="/cluster/etc/"
+        clu_Conf_file="cluster.conf"
+else
+        echo -e "\n\E[1mWarning:\E[0m $CLUSTER_CONF file does not exist"
+        exit $exit_failure
+fi
+
+# export MULTIPLE UPDATES. this option is used
+# to update cluster.conf mutiple times, without
+# reloading the cluster configuration. Default
+# value is always "NO" 
+export MULTIPLE_UPDATES=NO
+
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+	help
+fi
+
+word=$1
+option=$2
+shift 2
+param=$*
+
+# Calling clu_filename
+if [ ! -f $clusterpath/clu_$word ] ; then 
+	usage
+fi
+
+case $option in
+        --add|-a)
+                        sc_$word $word $param
+			rCode=$?
+			[ $rCode -eq $exit_success ] &&
+                        $clusterpath/clu_$word $option $word $param
+                        ;;
+        --delete|-d|--display|-D)
+                        $clusterpath/clu_$word $option $param
+                        ;;
+        --modify|-m)
+                        sc_$word $param
+			rCode=$?
+			[ $rCode -eq $exit_success ] &&
+                       	$clusterpath/clu_$word $option $param
+                        ;;
+	--cluster|-c)
+			$clusterpath/clu_$word $param
+			rCode=$?
+			;;
+        --m_add|-a)
+			# this is special option, invoked to allow
+			# multiple updates to the cluster.conf without
+			# reloading.
+			export MULTIPLE_UPDATES=YES
+			# pass the right option
+			l_option=--add
+                        sc_$word $word $param
+			rCode=$?
+			[ $rCode -eq $exit_success ] &&
+                       	$clusterpath/clu_$word $l_option $word $param
+                        ;;
+        --m_modify|-m)
+                        # this is special option, invoked to allow
+                        # multiple updates to the cluster.conf without
+                        # reloading.
+                        export MULTIPLE_UPDATES=YES
+                        # pass the right option
+                        l_option=--modify
+                        sc_$word $param
+			rCode=$?
+			[ $rCode -eq $exit_success ] &&
+                       	$clusterpath/clu_$word $l_option $param
+                        ;;
+
+        --m_delete|-d|--m_display|-D)
+			# this is special option, invoked to allow
+			# multiple updates to the cluster.conf without
+			# reloading.
+			export MULTIPLE_UPDATES=YES
+			# pass the right option
+			[[ "$option" == "--m_delete"  || "$option" == "-d" ]] && l_option=--delete
+			[[ "$option" == "--m_display" || "$option" == "-D" ]] && l_option=--display
+			[[ "$option" == "--m_modify"  || "$option" == "-m" ]] && l_option=--modify
+                        $clusterpath/clu_$word $l_option $param
+			;;
+        --help|-h)
+                        $clusterpath/clu_$word $option
+                        ;;
+        *)
+			help
+                        $clusterpath/clu_$word --help
+                        ;;
+esac
+
+exit $rCode

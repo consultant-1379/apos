@@ -1,0 +1,662 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       001_oh_dnr_blade1 
+# Description:
+#      	This is the post-installation hook and is used in
+#      	DNR doble node recovery procedure. 
+# 	In high level, this hook perform the following tasks.
+# 		1.copy backup file to /boot or /cluster
+# 		2.change the boot order to system disk
+# 		3.reboot the node
+##
+# Usage:
+#       None.
+##
+# Output:
+#       None.
+##
+# Changelog:
+# - Tue Feb 11 2022 -Dharma Teja (XDHATEJ)
+#   - added fix for TR HZ60448 DNDR failing in GEP5 and GEP7 when raid structure is wrong.
+# - Tue Dec 24 2019 -Dharma Teja (XDHATEJ)
+#   Added fix for TR HX80852 DNDR failing after both APUB GEP5 boards changed 3.5.0
+# - Tue May 30 2019 - Omero Ingenuo (TEINGEN))
+#   Added upload function
+# - Tue May 21 2019 -Harika Bavana (XHARBAV)
+#   Updated for secure backup
+# - Tue October 04 2017  Raghavendra Koduri (XKODRAG)
+#   Impacts due GEP7 hardware
+# - Fri Jun 01 2016 - Dambrosio Franco (EFRADAM)
+#   Impacts due to SLES12 introduction
+# - Mon Mar 14 2016 - PratapReddy Uppada (xpraupp)
+#   SLES12 impacts(udev rules update)
+# - Fri May 23 2014 - PratapReddy Uppada (XPRAUPP)
+#   Updated to create LVM strucure based on hwtype
+# - Mon Nov 04 2013 - PratapReddy Uppada (XPRAUPP)
+#   Added support to GEP5 hardware
+# - Thu Nov 09 2012 - Malangsha Shaik (XMALSHA)
+#   Added support to download backup from PXE.
+# - Mon Sep 03 2012 - PratapReddy Uppada (XPRAUPP)
+#   First version.
+##
+
+# set -x
+
+# script-wide variables.
+exit_success=0
+exit_failure=1
+TRUE=$( true; echo $?)
+FALSE=$( false; echo $?)
+
+PERSISTENT_LOCATION='/cluster/home/dnr_bckp'
+TMP_RULES='/tmp/apos_disks.rules'
+# SLES12 start, dhclient used instead of dhcpcd
+DHCLIENT='/sbin/dhclient'
+LEASES_FILE='/var/lib/dhcp/dhclient.leases'
+DHCPSIADDR=''
+# SLES12 end
+BACKUP_FOUND=''
+BACKUP_MEDIA=''
+BACKUP_LOCATION=''
+BACKUP_FILE=''
+TMODE=''
+PRIO='66'
+
+#-------------------------------------------------------------------------------------------
+# function to abort
+function abort() {
+	echo "$1"
+	exit $exit_failure
+}
+
+#-------------------------------------------------------------------------------------------
+function console_print() {
+	echo "$1"
+}
+
+#-------------------------------------------------------------------------------------------
+function backup_from_dvd() {
+
+	# nothing for now.
+
+	return $exit_success
+}
+
+#-------------------------------------------------------------------------------------------
+function backup_from_ddisk() {
+	
+	# nothing for now.
+
+	return $exit_success
+}
+
+#-------------------------------------------------------------------------------------------
+function backup_from_network() {
+		
+	# nothing for now.
+
+	return $exit_success
+}
+
+#-------------------------------------------------------------------------------------------
+function initiate_copy() {
+
+	[ ! -d $PERSISTENT_LOCATION ] && mkdir -p $PERSISTENT_LOCATION
+
+	# if the back up is available on dvd, 
+	# Perform sanity-check to copy the backup from DVD
+	[ "$BACKUP_MEDIA" == 'DVD' ] && backup_from_dvd
+	
+	# if the back up available on disk, 
+	# Perform sanity-check to copy the backup from DISK
+	[ "$BACKUP_MEDIA" == 'DISK' ] && backup_from_ddisk
+
+	# if the back up is available on network, 
+	# Perform sanity-check to copy the backup from NETWORK
+	[ "$BACKUP_MEDIA" == 'NETWORK' ] && backup_from_network
+
+	# proceed with copying backup to the persistant location.	
+	console_print "-n copying backup file to $PERSISTENT_LOCATION/$BACKUP_FILE: "
+	[ ! -d $BACKUP_LOCATION ] &&  abort '-e \b ..failed'
+	[ ! -f $BACKUP_LOCATION/$BACKUP_FILE ] && abort '-e \b ..failed'
+	SYSTEM_BACKUP=$BACKUP_LOCATION/$BACKUP_FILE
+
+	# copy the backup file into perisestent area boot
+	/bin/cp -rf $SYSTEM_BACKUP $PERSISTENT_LOCATION/$BACKUP_FILE &>/dev/null
+	[ $? -ne 0 ] && abort '-e \b ..failed'
+	
+	console_print '-e \b ..success'
+	return $exit_success
+}
+
+#-------------------------------------------------------------------------------------------
+function change_boot() {
+
+	MIBS_PATH=/usr/share/snmp/mibs
+	SNMP_VALUE=".1.3.6.1.4.1.193.154.2.1.2.2.1.1.2.20.128"
+	
+	# check if SCA is available
+	IP_SC=192.168.169.60
+	/bin/ping -c 1 -W 1 $IP_SC
+	[ $? -ne 0 ] && {
+		# check if SCB is available
+		IP_SC=192.168.169.56
+		/bin/ping -c 1 -W 1 $IP_SC
+		[ $? -ne 0 ] && abort '-e \b ..failed'
+	}
+
+	SASDISK=07000000
+	console_print '-n changing boot order to systemdisk:'
+	/usr/bin/snmpset -L n -M $MIBS_PATH -v 2c -c public $IP_SC $SNMP_VALUE s "$SASDISK"
+	[ $rCode != 0 ] && abort '-e \b ..failed'
+	
+	return $exit_success
+}
+
+#----------------------------------------------------------------------------------------
+function get_boot_ip () {
+	grep -o ' ip=[^ ]*' /proc/cmdline | sed 's| ip=||g' | tr ':' ' '
+}
+
+#----------------------------------------------------------------------------------------
+function get_boot_mac () {
+	grep -o ' BOOTIF=01-[^ ]*' /proc/cmdline | sed 's| BOOTIF=01-||g' | tr '[:lower:]-' '[:upper:]:'
+}
+
+#----------------------------------------------------------------------------------------
+function get_interface_from_mac () {
+	local MAC="$1"
+	FILE=$(grep -il "^$MAC\$" /sys/class/net/eth*/address)
+	if [ -z "$FILE" ]; then
+		abort "$FILE not found"
+	fi
+	local IF=$(basename $(dirname $FILE))
+	if [ -z "$IF" ]; then
+		abort "Interface ($IF) not found"
+	fi
+	echo "$IF"
+}
+
+#-------------------------------------------------------------------------------------------
+function fetch_from_pxe(){
+
+	# Get boot interface
+	local BOOT_MAC=$(get_boot_mac)
+	local BOOT_IF=$(get_interface_from_mac $BOOT_MAC)
+	console_print "boot MAC: $BOOT_MAC"
+	console_print "boot if: $BOOT_IF"
+
+	# Get download path
+	local DOWNLOAD_PATH='/'
+	if [ -f /etc/cluster/options/download_path ]; then
+		DOWNLOAD_PATH=$(cat /etc/cluster/options/download_path)
+		# If missing add a trailing / to trimmed DOWNLOAD_PATH
+		DOWNLOAD_PATH=${DOWNLOAD_PATH%/}/
+	fi
+	console_print "download path: $DOWNLOAD_PATH"
+
+	# get boot if IP address from DHCP server
+	$DHCLIENT $BOOT_IF &>/dev/null
+	[ $? -ne 0 ] && abort "command dhclient failed"
+
+	# retrieve Server IP address from leases file
+	if [ -f $LEASES_FILE ]; then
+		DHCPSIADDR=$(grep -m 1 dhcp-server-identifier $LEASES_FILE | awk '{print $3}' | tr -d ";")
+		[ -z $DHCPSIADDR ] && abort "Unable to get DHCP Server IP address"
+		console_print "IP address assigned to eth0.... ${DHCPSIADDR}"
+	else
+		abort "Leases file $LEASES_FILE not found"
+	fi
+	
+	console_print "Transfering Backup ( APG_SYSTEM_BACKUP.tar ) from ${DHCPSIADDR}..."
+	download ${DOWNLOAD_PATH}backup/APG_SYSTEM_BACKUP.tar $PERSISTENT_LOCATION $DHCPSIADDR
+        
+        SECURE_BACKUP=$(tar -tvf $PERSISTENT_LOCATION/APG_SYSTEM_BACKUP.tar | awk '{print $NF}' | awk -F"/" '{print $2}' | grep config.tar.gz.enc  2>/dev/null)
+        if [ ! -z $SECURE_BACKUP ]; then
+          #Download password file(containing password for secured backup) from pxe
+	  console_print "Transfering password file for Backup ( APG_BACKUP_PWD.dat ) from ${DHCPSIADDR}..."
+	  download ${DOWNLOAD_PATH}backup/APG_BACKUP_PWD.dat $PERSISTENT_LOCATION $DHCPSIADDR
+          #Put empty password file into PXE
+	  [ ! -d $PERSISTENT_LOCATION/TEMP ] && mkdir -p  $PERSISTENT_LOCATION/TEMP 
+	  [ ! -f $PERSISTENT_LOCATION/TEMP/APG_BACKUP_PWD.dat ] && touch $PERSISTENT_LOCATION/TEMP/APG_BACKUP_PWD.dat
+#	  atftp  --option "tsize 1" --put --local-file $PERSISTENT_LOCATION/APG_BACKUP_PWD.dat --remote-file ${DOWNLOAD_PATH}backup/APG_BACKUP_PWD.dat $SERVER_IP &>/dev/null
+	  upload $PERSISTENT_LOCATION/TEMP/APG_BACKUP_PWD.dat $(DOWNLOAD_PATH)backup/APG_BACKUP_PWD.dat $DHCPSIADDR
+	  [ $? -ne 0 ] && abort "Overwriting of passowrd file on PXE is failed"
+	  if [ ! -d $PERSISTENT_LOCATION/TEMP ]; then
+	    rm -f $PERSISTENT_LOCATION/TEMP &>/dev/null
+	    [ $? -ne 0 ] && abort 'Failure in removing temperory folder'
+          fi
+        fi
+	console_print "success."
+	
+	# release IP address for boot if
+	$DHCLIENT -r $BOOT_IF &>/dev/null
+	rm -f $LEASES_FILE &>/dev/null
+			
+	return $exit_success
+
+}
+
+#----------------------------------------------------------------------------------------
+function download () {
+	local BOOT_IP=($(get_boot_ip))
+	local SERVER_IP=${BOOT_IP[1]}
+	if [ -n "$3" ]; then
+		SERVER_IP="$3"
+	fi
+
+	# check the location where the backup is to be copied exists already.
+	[ ! -d $2 ] && mkdir -p $2	
+
+	# initiate the transfer now.	
+	cd $2 &&
+	atftp --option "blksize 8192" --option "tsize 1" --get --remote-file $1 $SERVER_IP &>/dev/null
+	[ $? -ne 0 ] && abort "Transfer backup to $SERVER_IP Failed"
+
+#	atftp  --option "tsize 1" --get --remote-file $1 $SERVER_IP &>/dev/null
+#	[ $? -ne 0 ] && abort "Transfer backup to $SERVER_IP Failed"
+	return $exit_success
+}
+
+#----------------------------------------------------------------------------------------
+function upload () {
+	local BOOT_IP=($(get_boot_ip))
+	local SERVER_IP=${BOOT_IP[1]}
+	if [ -n "$3" ]; then
+		SERVER_IP="$3"
+	fi
+
+	# initiate the transfer now.	
+	atftp --option "tsize 1" --put --local-file $1 --remote-file $2 $SERVER_IP &>/dev/null
+	[ $? -ne 0 ] && abort "UPLOAD to $SERVER_IP Failed"
+
+	return $exit_success
+}
+
+#-------------------------------------------------------------------------------------------
+function transfer_mode() {
+	BACKUP_INFO_FILE='/tmp/backup_info'
+	TMODE='LOCAL'
+	[ ! -f $BACKUP_INFO_FILE ] && TMODE='PXE'
+}
+
+function fetch_backup(){
+	[ "$TMODE" == 'LOCAL' ] && fetch_from_local
+	[ "$TMODE" == 'PXE'   ] && fetch_from_pxe	
+
+	return $exit_success
+}
+
+#-------------------------------------------------------------------------------------------
+function fetch_from_local(){
+
+	# parse the configuration file
+	[ -f $BACKUP_INFO_FILE ] && {
+		# Retrieve backup information from the local file
+		while read line; do
+			[[ $line =~ ^BACKUP_MEDIA ]]    && BACKUP_MEDIA=$( echo $line | cut -d : -f2)
+			[[ $line =~ ^BACKUP_LOCATION ]] && BACKUP_LOCATION=$( echo $line | cut -d : -f2)
+			[[ $line =~ ^BACKUP_FILE ]]     && BACKUP_FILE=$( echo $line | cut -d : -f2)
+		done <$BACKUP_INFO_FILE
+	}	
+
+	initiate_copy
+	
+	return $exit_success
+}
+
+#-------------------------------------------------------------------------------------------
+function activate_vg() {
+  echo "--- activate_vg() begin"
+
+  LVM_CONF='/etc/lvm/lvm.conf'
+  echo -n "Activating volume group"
+  [ ! -f $LVM_CONF ] && abort "lvm.conf file not found"
+  if ! grep 'drbd0|sd.*' $LVM_CONF &>/dev/null; then
+    sed -i "s/drbd0/drbd0|sd.*/" $LVM_CONF
+    [ $? -ne $TRUE ] && abort "Falied to update lvm.conf file"
+    /sbin/vgscan &>/dev/null
+    [ $? -ne $TRUE ] && abort "Falied to update lvm.conf file"
+  fi
+  echo " ...done"
+
+  echo "--- activate_vg() end"
+}
+
+#-------------------------------------------------------------------------------------------
+function get_hooks_path() {
+        local FOLDER="${HOOKS_DIR}"
+        [ -z "${FOLDER}" ] && FOLDER="/tmp/hooks_execute_dir"
+        [ ! -d ${FOLDER} ] && abort "ERROR: The hook path is not configured by LOTC!"
+        echo "${FOLDER}"
+}
+
+#-------------------------------------------------------------------------------------------
+
+function udev_rules_GEP5(){
+
+    # Create udev rules for diskA
+    append_header
+
+    cat << HEREDOC >> $TMP_RULES
+# -- RIGHT GED-SASF
+
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{device}=="0x2323", SYMLINK+="eri_flash"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{sas_address}=="0x4433221100000000", SYMLINK+="eri_disk"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{sas_address}=="0x4433221101000000", SYMLINK+="eri_diskC"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{sas_address}=="0x443322110[23]000000", SYMLINK+="eri_diskD"
+ENV{DEVTYPE}=="partition", ATTRS{sas_address}=="0x4433221100000000", ATTR{partition}=="6", SYMLINK+="eri-meta-part"
+
+HEREDOC
+
+    # Now copy created rule file to destination folder
+    copy_udev_rules
+}
+
+#-------------------------------------------------------------------------------------------
+
+function udev_rules_GEP7(){
+
+    # Create udev rules for diskA
+    append_header
+
+    cat << HEREDOC >> $TMP_RULES
+# -- RIGHT GED-SASF
+
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{device}=="0x23a3", SYMLINK+="eri_flash"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{sas_address}=="0x4433221100000000", SYMLINK+="eri_disk"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", ATTRS{sas_address}=="0x4433221101000000", SYMLINK+="eri_diskC"
+ENV{DEVTYPE}=="partition", ATTRS{sas_address}=="0x4433221100000000", ATTR{partition}=="6", SYMLINK+="eri-meta-part"
+
+HEREDOC
+
+    # Now copy created rule file to destination folder
+    copy_udev_rules
+}
+
+#-------------------------------------------------------------------------------------------
+function append_header() {
+
+    # Appened header for data disk rules for APG
+    cat << HEREDOC > $TMP_RULES
+# This file contains the rules for the physical-to-logical disk mapping for APG.
+
+# DO NOT WRAP THIS LINE
+#
+# old udev does not understand some of it,
+# and would end up skipping only some lines, not the full rule.
+# which can cause all sort of trouble with strange-named device nodes
+# for completely unrelated devices,
+# resulting in unusable network lookback, etc.
+#
+# in case this is "accidentally" installed on a system with old udev,
+# having it as one single line avoids those problems.
+#
+# DO NOT WRAP THIS LINE
+
+HEREDOC
+
+}
+
+#-------------------------------------------------------------------------------------------
+function copy_udev_rules() {
+
+	# copy TEMP_RULES to source file UDEV_RULES
+	if [ -r $TMP_RULES ]; then
+		install -m 644 $TMP_RULES /etc/udev/rules.d/$UDEV_RULES
+		[ $? -ne 0 ] && apos_abort 'copy failed'
+    /sbin/udevadm control --reload-rules
+		/sbin/udevadm trigger --subsystem-match="block"
+	else
+		abort "file $TMP_RULES not found or not readable"
+	fi
+
+	# cleanup the source file
+	/bin/rm -f $TMP_RULES
+
+}
+
+#-------------------------------------------------------------------------------------------
+function udev_rules() {
+	echo "--- udev_rules() begin"
+
+	[ -f $TMP_RULES ] && /bin/rm $TMP_RULES
+	UDEV_RULES="${PRIO}-apos_disks.rules"
+	
+	# generate udev rules for VM
+	if [[ $HW_TYPE =~ "GEP5" ]]; then
+		udev_rules_GEP5
+  fi
+
+	if [[ $HW_TYPE =~ "GEP7" ]]; then
+                udev_rules_GEP7
+	fi
+
+
+	echo "--- udev_rules() end"
+}
+
+#-------------------------------------------------------------------------------------------
+function GetNwBw() {
+
+	local NTWK_FILE='drbd_network_capacity'
+	local TEMP_LOCATION='/tmp/dnr_bkcp'
+	local DEF_NETWK_CAPCTY='1G'
+	if [ ! -f $HOOK_PATH/raid/drbd_network_capacity ]; then
+		pushd $TEMP_LOCATION &>/dev/null
+		/usr/bin/find $TEMP_LOCATION -type f -name "$NTWK_FILE" -exec cp -rvf {} $HOOK_PATH/raid/ \; &>/dev/null
+		popd &>/dev/null
+	fi
+	NETWORK_BW=$( cat $HOOK_PATH/raid/drbd_network_capacity 2>/dev/null)
+	[ -z "$NETWORK_BW" ] && NETWORK_BW=$DEF_NETWK_CAPCTY
+
+	# clean up temp folder
+	rm -rf $TEMP_LOCATION
+
+	echo $NETWORK_BW
+}
+
+#-------------------------------------------------------------------------------------------
+function gep_detect() {
+	local GEP_PREFIX='GEP'
+	local ROJ=""
+	local HW=""
+  ROJ=$( dmidecode -s baseboard-product-name | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]' )
+  if [ -z "$ROJ" ]; then
+    ROJ=$( eri-ipmitool gp | grep ROJ | tr '[:upper:]' '[:lower:]' | awk '{print $3,$4,$5}' |sed -e "s/ //g" )
+  fi
+  if [ -z "$ROJ" ]; then
+   	abort "unable to retrieve the ROJ code"
+  else
+    GEP_TYPE=$(echo "$ROJ" | sed 's@.*/@@g')
+	  HW="$GEP_PREFIX${GEP_TYPE:0:1}"
+    echo "$HW"
+  fi
+}
+
+#-------------------------------------------------------------------------------------------
+function GetHwType() {
+  local HW_TYPE=''
+  local HW_FILE='installation_hw'
+  local PERSISTENT_LOCATION='/cluster/home/dnr_bckp'
+  local CONFG_FILE='config.tar.gz'
+  local CONFG_FILE_ENC='config.tar.gz.enc'
+  local TEMP_LOCATION='/tmp/dnr_bkcp'
+  [ ! -d $TEMP_LOCATION ] && mkdir -p $TEMP_LOCATION
+
+  if [ ! -f $HOOK_PATH/raid/installation_hw ]; then
+    # check for Backup file existence, if not fail
+    BACKUP_FILE=$(ls -1 $PERSISTENT_LOCATION/*.tar  2>/dev/null)
+    [ -z $BACKUP_FILE ] && abort "APG_BACKUP file not found"
+    pushd $TEMP_LOCATION &>/dev/null
+    # extract the backup file to get the required files
+    /bin/tar -m -C $TEMP_LOCATION -xf $BACKUP_FILE
+
+    DIRNAME=$(/usr/bin/find $TEMP_LOCATION -name "config.tar.gz*" -exec dirname {} \;)
+    #Check if encrypted config file, then decrypt using password filei
+    if [  -f $DIRNAME/config.tar.gz.enc ]; then
+      #Fetch password from password file
+      PASSWORD=$( cat $PERSISTENT_LOCATION/APG_BACKUP_PWD.dat 2>/dev/null)
+        [ -z "$PASSWORD" ] && abort "Password not found in file"
+      openssl enc -d -aes-256-cbc -md sha256 -salt -in $DIRNAME/$CONFG_FILE_ENC -out $DIRNAME/$CONFG_FILE -pass pass:$PASSWORD  &>/dev/null
+      [ $? -ne 0 ] && abort "Decryption of encrypted config file is failed"
+      /bin/rm -rf $DIRNAME/$CONFG_FILE_ENC
+    fi
+
+    # Extract the config file to get hardware file
+    /usr/bin/find $TEMP_LOCATION -name $CONFG_FILE -exec tar -xzvf {} \; &>/dev/null
+    # copy installation_hw file to hook path
+    /usr/bin/find $TEMP_LOCATION -type f -name "$HW_FILE" -exec cp -rvf {} $HOOK_PATH/raid/ \; &>/dev/null
+    popd &>/dev/null
+  fi
+  HW_TYPE=$( cat $HOOK_PATH/raid/installation_hw 2>/dev/null)
+	[ -z "$HW_TYPE" ] && abort "Hardware type not found"
+
+  echo $HW_TYPE
+}
+
+#-------------------------------------------------------------------------------------------
+function configure_drbd() {
+	echo "--- configure_drbd() begin"
+
+  local HOOK_PATH=$(get_hooks_path)
+	pushd $HOOK_PATH >/dev/null 2>&1
+	[ ! -x ./raid/raidmgr_dnr ] && abort "Unable to execute raidmgr_dnr"
+
+	OPTS='--lvm --configure --activate --force'
+	./raid/raidmgr_dnr "$OPTS"
+	[ $? -ne 0 ] && abort "Failure while activating drbd1 on node"
+
+	OPTS='--format --force'
+	./raid/raidmgr_dnr "$OPTS"
+	[ $? -ne 0 ] && abort "Failure while configuring drbd1 on node"
+
+	popd >/dev/null 2>&1
+	echo  " ...done"
+	
+	return $exit_success
+	echo "--- configure_drbd() end"
+}
+
+#-------------------------------------------------------------------------------------------
+function fetch_params() {
+  echo "--- fetch_params() begin"
+  local GEP="$(gep_detect)"
+  [[ ! $GEP =~ "GEP4"  && ! $GEP =~ "GEP5" ]] &&  [[ ! $GEP =~ "GEP7" ]] && {
+    # this hooks is only meant for GEP4/5/7,  so return true on GEP1/2.
+    echo 'nothing to be done on GEP1/2'
+    exit 0
+  }
+
+  local HOOK_PATH=$(get_hooks_path)
+  pushd $HOOK_PATH >/dev/null 2>&1
+  [ ! -r ./non_exec-raidmgr.tgz ] && abort "Unable to read raidmgr.tgz file"
+
+  tar -xzf ./non_exec-raidmgr.tgz
+
+  HW_TYPE=$(GetHwType)
+  NETWORK_BW=$(GetNwBw)
+  # make HW_TYPE and NETWORK_BW available in raidmgr_dnr
+  export HW_TYPE=$HW_TYPE; export NETWORK_BW=$NETWORK_BW
+
+  popd >/dev/null 2>&1
+  echo "--- fetch_params() end"
+}
+
+#-------------------------------------------------------------------------------------------
+function is_board_replaced() {
+
+	local rCode=$FALSE
+	# following condition is applicable only in case of board replacement
+	board_type=$( cat /tmp/installation_repo/board_type 2>/dev/null)
+	[ -z "$board_type" ] && board_type='old'
+	if [ $board_type == 'new' ]; then
+  	/bin/cp /tmp/installation_repo/board_type /cluster/home/board_type
+	rCode=$TRUE
+	fi
+
+	return $rCode
+}
+
+#-------------------------------------------------------------------------------------------
+function cleanup() {
+  local lvm='/dev/eri-data-vg/eri-data-lv'
+  local vg='/dev/eri-data-vg'
+
+  if /sbin/lvs | grep -q 'eri-data-lv' &>/dev/null; then		
+   dmsetup remove $lvm --force &>/dev/null 
+   /sbin/lvremove --force $lvm &>/dev/null || abort "Failure while removing lvm(eri-data-lv)"
+  fi
+
+  if /sbin/vgs "eri-data-vg" &>/dev/null; then
+    /sbin/vgremove --force $vg &>/dev/null || abort "Failure while removing vg(eri-data-vg)"
+	fi
+
+  for PV in $(/sbin/pvs | grep 'eri-data-vg' | awk '{print $1}'); do
+    if /sbin/pvs $PV &>/dev/null; then
+      pvremove -f $PV &>/dev/null || abort "Failure while removing pv($pv)"
+		fi
+  done
+}
+
+#-------------------------------------------------------------------------------------------
+function create_vg() {
+	echo "--- create_vg() begin"
+
+	local vg='eri-data-vg'
+
+	[[ ! $HW_TYPE =~ "GEP4"  && ! $HW_TYPE =~ "GEP5" ]] && [[ ! $HW_TYPE =~ "GEP7" ]] && {
+		# this hooks is only meant for GEP4/5/7,  so return true on GEP1/2.
+       		echo 'nothing to be done on GEP1/2'
+        	return $TRUE
+	}
+
+	# Activate available volume groups.
+	activate_vg
+
+	# In case of board replacement, cleanup the
+  # existing lvm structure
+  is_board_replaced && cleanup
+
+	# check if LVM structure is present on Node, if 
+	# not present assume that new board is replaced.
+	if ! /sbin/vgs | grep -q $vg &>/dev/null; then
+                #Defining falg for new board installation
+                if [ ! -f /cluster/home/board_type ];then
+                        touch /cluster/home/board_type
+                        echo "new" > /cluster/home/board_type
+                fi
+		# define udev rules
+		udev_rules
+
+		# create LVM structure
+		configure_drbd
+  fi
+
+	return $exit_success
+
+	echo "--- create_vg() end"
+}
+
+# M A I N
+
+console_print 'DNR: post-installation hook:'
+
+# check the type of transfer
+transfer_mode
+
+# initiate copy
+fetch_backup
+
+fetch_params
+
+# verify the volume groups
+create_vg
+
+exit $exit_success
+# END

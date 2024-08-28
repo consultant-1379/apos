@@ -1,0 +1,71 @@
+#!/bin/bash
+# 
+# Header Information
+#
+#
+#
+#
+#Author(s): Malangsha Shaik
+
+exit_success=0
+exit_failure=1
+
+TEMPLATE_DIR="/vobs/cm4ap/apos/ha_cnz/ha_appdemo/tools/template"
+TEMPLATE_FILE=$TEMPLATE_DIR/"apos_ha_clcTemplate"
+APP_CFG_FILE="./applicationConfiguration.cfg"
+
+
+die() {
+	echo "ERROR: $*" >&2
+	exit $exit_failure
+}
+
+info () {
+	echo "$1" >&2
+	#         ^^^ to stderr
+}
+
+if [ ! -f $TEMPLATE_FILE ]; then
+	die "$TEMPLATE_FILE File Not Found!"
+fi
+
+# Source application configuration file
+if [ ! -f $APP_CFG_FILE ]; then
+        die "$APP_CFG_FILE Not Found!"
+fi
+
+. $APP_CFG_FILE      #sourcing the config file
+
+#validation part begin
+if [ -z $DAEMON_NAME -o $"DAEMON_NAME" = "none" ]; then
+	die "DAEMON NAME not provided in Config File [applicationConfiguration.cfg]"
+fi
+
+if [ -z $SUBSYS_NAME -o "$SUBSYS_NAME" = "none" ]; then
+        die "SUBSYS NAME not provided in Config File [applicationConfiguration.cfg]"
+fi
+
+if [ -z $BLOCK_NAME -o "$BLOCK_NAME" = "none" ]; then
+        die "BLOCK_NAME not provided in Config File [applicationConfiguration.cfg]"
+fi
+if [ -z $LOG_FILE -o "$LOG_FILE" = "none" ]; then
+	die " LOG_FILE not provided in config File [applicationConfiguration.cfg]"
+fi
+if [ -z $LOG_PATH -o "$LOG_PATH" = "none" ]; then
+        die " LOG_PATH not provided in config File [applicationConfiguration.cfg]"
+fi
+if [ -z $BIN_Name -o "$BIN_Name" = "none" ]; then
+        die " BIN_NAME not provided in config File [applicationConfiguration.cfg]"
+fi
+
+
+#generate clc name
+if [ ! -z $APPL_FUNCTIONTY  -a "$APPL_FUNCTIONTY" != "none" ]; then
+        clc_name=./"$SUBSYS_NAME"_"$BLOCK_NAME"_"$APPL_FUNCTIONTY"_clc
+else
+        clc_name=./"$SUBSYS_NAME"_"$BLOCK_NAME"_clc
+fi
+
+cat $TEMPLATE_FILE | sed 's/#progname#/'"$DAEMON_NAME"'/g' | sed 's/#subsys#/'"$SUBSYS_NAME"'/g' | sed 's/#block#/'"$BLOCK_NAME"'/g' | sed 's/#clc_args#/'"$CLC_ARGS"'/g' | sed 's/#LOG_FILE_NAME#/'"$LOG_FILE"'/g' | sed 's%#log_path#%'"$LOG_PATH"'%g'| sed 's/#BIN_NAME#/'"$BIN_Name"'/g'>"$clc_name"
+
+info "$clc_name is generated"

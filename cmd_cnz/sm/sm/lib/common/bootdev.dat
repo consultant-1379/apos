@@ -1,0 +1,17 @@
+eth0;0:v1=05000000
+eth1;1:v1=06000000
+eth3;3:v1=01000000
+eth4;4:v1=02000000
+systemdisk;sd:v1=07000000
+flashdisk;fd:v1=0a000000
+usbmedia;um:v1=08000000
+dvd;od:v1=09000000
+bios;io:v1=00000000
+sequence1;s1:v1=0b000000
+sequence2;s2:v1=0c000000
+eth0;0:v5=02000000
+eth1;1:v5=03000000
+eth3;3:v5=00000000
+eth4;4:v5=01000000
+systemdisk;sd:v5=10000000
+usbmedia;um:v5=22000000

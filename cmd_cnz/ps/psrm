@@ -1,0 +1,596 @@
+#!/bin/bash
+##
+# ------------------------------------------------------------------------
+#     Copyright (C) 2012 Ericsson AB. All rights reserved.
+# ------------------------------------------------------------------------
+##
+# Name:
+#       psrm
+# Description:
+#       This script is to remove all the configuration for physical separation interface eth2(DEBUG)
+##
+# Usage: 
+#	psrm [-f]
+##
+# Changelog:
+# - Mon 13 Jun 2016 - Luca De Simone (XLUDESI)
+#       Minor changes
+# - Fri 11 Mar 2016 - Antonio Giusto (XANTGIU)
+#        Updated to inhibit psrm command in SMX architecture
+# - Fri Mar 11 2016 - Furquan Ullah (XFURULL)
+#       Fix provided for TR HT99472
+# - Fri Feb 26 2016 - Swapnika Baradi (XSWAPBA)
+#       Fix provided for TR HU13069
+# - Thu 27 Nov 2014 - Madhu Muthyala (XMADMUT)
+#	  Updated to inhibit psrm command in virtualized architecture
+#   PC4 27 Jun 2014 by Fabrizio Paglia (xfabpag)
+#       Added procedure to remove IPSec policies related to PS
+#       The procedure is skipped if ACS_ASECBIN is not installed
+#   PC3 29 Apr 2014 by Gianluigi Crispino (xgiacri)
+#	Support of "apos_common.sh"
+#   PC2 29 Apr 2014 by Fabio Imperato (xfabimp)
+#	 Changed "exit_CableLessDefined_string" string 
+# -  PC1 28 Apr 2014 - Torgny Wilhelmsson (xtorwil)
+#        Introduction of CheckCableLess
+# - Thu Jul 04 2013 - Furquan Ullah (XFURULL)
+#       1. Fix provided for TR HR37476
+# - Thu Apr 18 2013 - Furquan Ullah (XFURULL)
+#       Minor Changes
+# - Tue Dec 18 2011 - Satya Deepthi (XSATDEE)
+#       Second version.
+# - Fri Sep 23 2011 - Madhu Aravabhumi (XMADARA)
+#       First version.
+##
+
+
+# LOAD APOS COMMON FUNCTION
+APOS_COMMON="${AP_HOME:-/opt/ap}/apos/conf/apos_common.sh"
+source $APOS_COMMON
+
+exit_fail=1
+exit_fail_msg="Error when executing (general fault)"
+
+exit_CableLessDefined=43
+exit_CableLessDefined_string="Illegal command in this system configuration"
+exit_virtual_arch=44
+
+
+CMD_LOGGER=/bin/logger
+CMD_CLUSTERCONF="/opt/ap/apos/bin/clusterconf/clusterconf"
+LOG_TAG='psrm'
+LOG_DIR=/tmp
+LOG_FILE=psdef.log
+IPSEC_CONF_DIR="/etc/racoon"
+IPSEC_SETKEY_FILE="setkey.conf"
+IPSEC_RACOON_FILE="racoon.conf"
+IPSEC_PSK_FILE="psk.txt"
+
+# Functions
+
+function ps_imm_set() {
+ imm_num=$1
+ imm_class_name=$(immfind -c NorthBound)
+ if [ ! -z $imm_class_name ] ; then
+        immcfg -a physicalSeparationStatus=$imm_num $imm_class_name
+ else
+        echo -e "Error when executing (immfind fault)\n"
+        exit 1
+ fi
+}
+
+
+function help() {
+echo -e "\nUsage: psrm [-f]\n"
+}
+
+##############################################################################################
+# function console_print($msg);                                                              #
+#                                                                                            #
+# Prints a message.                                                                          #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to print                                                                    #
+##############################################################################################
+function console_print() {
+    echo -e "$1"
+}
+
+##############################################################################################
+# function abort($msg);                                                                      #
+#                                                                                            #
+# Adds an error message to the log file and exits with                                       #
+# "Error when executing (general fault)"                                                     #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to add to the log                                                           #
+#                                                                                            #
+# Exits:                                                                                     #
+# - "Error when executing (general fault)"                                                   #
+##############################################################################################
+function abort() {
+    console_print "Error when executing (general fault)"
+    log_error "ABORTING: <"$1">"
+    exit $exit_fail
+}
+
+##############################################################################################
+# function console_abort($msg,$exit_code);                                                   #
+#                                                                                            #
+# Prints an error message and exits.                                                         #
+# Cancels any current operation on the cluster.conf file                                     #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to print                                                                    #
+# - $exit_code numeric exit code to use                                                      #
+##############################################################################################
+function console_abort() {
+    console_print "$1"
+    echo -e
+#    ${CMD_CLUSTER_CONF} $CLUS_MGMT_OPTS --abort &>/dev/null
+    exit $2
+}
+
+##############################################################################################
+# function log_error($msg);                                                                  #
+#                                                                                            #
+# Adds an error message to the log file.                                                     #
+#                                                                                            #
+# Arguments:                                                                                 #
+# - $msg message to add to the log                                                           #
+##############################################################################################
+function log_error() {
+    local PRIO='-p user.err'
+    local MESSAGE="${*:-error}"
+    ${CMD_LOGGER} $PRIO $LOG_TAG "$MESSAGE"
+    INFO "$MESSAGE"
+}
+
+############################################################################################################################
+# function remove_ipsec_policies($old_nodeA_IP,$old_nodeB_IP,$old_cluster_IP);                                             #
+#                                                                                                                          #
+# Update the IPSec configuration files, removing the IPSec policies related to the PS IP addresses.                        #
+# If the IPSec features provided by ACS_ASECBIN are not installed, this function does nothing.                             #
+# The check is done on the existence of ipsecls script                                                                     #
+#                                                                                                                          #
+# Arguments:                                                                                                               #
+# - $old_nodeA_IP old APG Node A IP address                                                                                #
+# - $old_nodeB_IP old APG Node B IP address                                                                                #
+# - $old_cluster_IP old APG Cluster IP address                                                                             #
+#                                                                                                                          #
+# Exits:                                                                                                                   #
+# - "Error when executing (general fault)"                                                                                 #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function remove_ipsec_policies() {
+	local rCode=$exit_fail
+	
+	if which ipsecls &> /dev/null ; then
+		local old_nodeA_IP="$1"
+		local old_nodeB_IP="$2"
+		local old_cluster_IP="$3"
+		
+		if [ "$old_nodeA_IP" != "" ] && [ "$old_nodeB_IP" != "" ] && [ "$old_cluster_IP" != "" ] ; then
+			[[ -e $IPSEC_CONF_DIR"/"$IPSEC_SETKEY_FILE ]] || console_abort "Error when executing (general fault)" $exit_fail
+			[[ -e $IPSEC_CONF_DIR"/"$IPSEC_RACOON_FILE ]] || console_abort "Error when executing (general fault)" $exit_fail
+			[[ -e $IPSEC_CONF_DIR"/"$IPSEC_PSK_FILE ]] || console_abort "Error when executing (general fault)" $exit_fail
+			
+			ipsec_remove_tmp_files
+			ipsec_backup
+			
+			cp -f "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE" "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE.tmp" &> /dev/null || console_abort "Error when executing (general fault)" $exit_fail
+			cp -f "$IPSEC_CONF_DIR/$IPSEC_RACOON_FILE" "$IPSEC_CONF_DIR/$IPSEC_RACOON_FILE.tmp" &> /dev/null || console_abort "Error when executing (general fault)" $exit_fail
+			cp -f "$IPSEC_CONF_DIR/$IPSEC_PSK_FILE" "$IPSEC_CONF_DIR/$IPSEC_PSK_FILE.tmp" &> /dev/null || console_abort "Error when executing (general fault)" $exit_fail
+			
+			local policies_to_remove=($(grep "spdadd ${old_cluster_IP}\[any\]" -B1 "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE" | grep '^#POLICY_NAME=' | awk -F'=' '{ print $2 }' | tr '\n' ' '))
+			local policy
+			for policy in "${policies_to_remove[@]}" ; do
+				remove_ipsec_policy "$policy"
+			done
+			
+			trap "ipsec_restore;ipsec_remove_backup;ipsec_remove_tmp_files;console_abort \"Error when executing (general fault)\" $exit_fail" SIGHUP SIGINT SIGQUIT SIGILL SIGABRT SIGBUS SIGSEGV SIGPIPE SIGTERM SIGCHLD SIGTSTP SIGXCPU SIGPWR SIGSYS
+			mv "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE.tmp" "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE" &> /dev/null || {
+				ipsec_restore
+				ipsec_remove_backup
+				ipsec_remove_tmp_files
+				console_abort "Error when executing (general fault)" $exit_fail
+			}
+			mv "$IPSEC_CONF_DIR/$IPSEC_RACOON_FILE.tmp" "$IPSEC_CONF_DIR/$IPSEC_RACOON_FILE" &> /dev/null || {
+				ipsec_restore
+				ipsec_remove_backup
+				ipsec_remove_tmp_files
+				console_abort "Error when executing (general fault)" $exit_fail
+			}
+			mv "$IPSEC_CONF_DIR/$IPSEC_PSK_FILE.tmp" "$IPSEC_CONF_DIR/$IPSEC_PSK_FILE" &> /dev/null || {
+				ipsec_restore
+				ipsec_remove_backup
+				ipsec_remove_tmp_files
+				console_abort "Error when executing (general fault)" $exit_fail
+			}
+			
+			local ip_address
+			#for ip_address in $ipaddresses_array ; do
+			#	rm -f "$IPSEC_CONF_DIR/$ip_address.racoon.conf" &> /dev/null || {
+			#		ipsec_restore
+			#		ipsec_remove_backup
+			#		ipsec_remove_tmp_files
+			#		console_abort "Error when executing (general fault)" $exit_fail
+			#	}
+			#done
+     	trap - SIGHUP SIGINT SIGQUIT SIGILL SIGABRT SIGBUS SIGSEGV SIGPIPE SIGTERM SIGCHLD SIGTSTP SIGXCPU SIGPWR SIGSYS
+			
+      apos_servicemgmt stop racoon.service &> /dev/null
+			pkill racoon &> /dev/null
+			setkey -DP -F &> /dev/null
+			apos_servicemgmt start racoon.service &> /dev/null
+			if [ $? -ne 0 ] ; then
+				ipsec_restore
+				ipsec_remove_backup
+				apos_servicemgmt stop racoon.service &> /dev/null
+				pkill racoon &> /dev/null
+				setkey -DP -F &> /dev/null
+				apos_servicemgmt start racoon.service &> /dev/null
+				console_abort "Error when executing (general fault)" $exit_fail
+			else
+				ipsec_remove_backup
+			fi
+
+			rCode=$exit_sucs
+		fi
+	fi
+	
+	return $rCode
+}
+
+############################################################################################################################
+# function remove_ipsec_policy($policy_name);                                                                              #
+#                                                                                                                          #
+# Remove an IPSec policy                                                                                                   #
+#                                                                                                                          #
+# Arguments:                                                                                                               #
+# - $policy_name name of the IPSec policy as reported in /etc/racoon/setkey.conf                                           #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function remove_ipsec_policy() {
+	local rCode=$exit_fail
+	
+	local policy_name="$1"
+	
+	local rh_ipaddress=$(ipsec_remove_policy "$policy_name" "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE.tmp")
+	local gw_ipaddress=$(ipsec_remove_gateway_policy "$policy_name" "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE.tmp")
+	#ipaddresses_array=("${ipaddresses_array[@]} $rh_ipaddress")
+ 	if [ -z "$gw_ipaddress" ] ; then
+		gw_count=1
+		remote_true=1
+    	else 
+		gw_count=$(grep -w "$gw_ipaddress" "$IPSEC_CONF_DIR/"*."$IPSEC_RACOON_FILE" | grep -c "remote")
+		remote_true=0
+    	fi
+    	rh_count=$(grep -w "$rh_ipaddress" "$IPSEC_CONF_DIR/"*."$IPSEC_RACOON_FILE" | grep -c "remote")      
+    	if [ "$rh_count" == 0 ] ||  [ "$rh_count" == 1 ] ; then
+		if  [ "$gw_count" == 1 ]; then
+           		if [ "$remote_true" == 1 ]; then
+               			local psk_line=$(grep -nE "^$rh_ipaddress\s" "$IPSEC_CONF_DIR/$IPSEC_PSK_FILE.tmp") &> /dev/null
+           		else
+               			local psk_line=$(grep -nE "^$gw_ipaddress\s" "$IPSEC_CONF_DIR/$IPSEC_PSK_FILE.tmp") &> /dev/null
+           		fi
+           		local psk_line_components=(${psk_line//":"/ })
+           		local psk_line_number=${psk_line_components[0]}
+			sed -i $psk_line_number"d" "$IPSEC_CONF_DIR/$IPSEC_PSK_FILE.tmp" &> /dev/null
+        	fi
+    	fi
+	ipsec_remove_in_out_policy "$policy_name" "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE.tmp"
+	local include_line=$(grep -n 'include "'$IPSEC_CONF_DIR/$rh_ipaddress.racoon.conf'";' "$IPSEC_CONF_DIR/$IPSEC_RACOON_FILE.tmp")
+	local include_line_components=(${include_line//":"/ })
+	local include_line_number=${include_line_components[0]}
+	file_to_remove=$(head -$include_line_number  "$IPSEC_CONF_DIR/$IPSEC_RACOON_FILE.tmp" | tail -1 | cut -d "/" -f4)
+	file_to_remove=$(echo ${file_to_remove::${#file_to_remove}-2})
+        rm "$IPSEC_CONF_DIR/$file_to_remove"
+	sed -i $include_line_number"d" "$IPSEC_CONF_DIR/$IPSEC_RACOON_FILE.tmp" &> /dev/null
+	
+	rCode=$exit_sucs
+	return $rCode
+}
+
+# START functions "stolen" by ipsec_commons
+############################################################################################################################
+# function ipsec_remove_tmp_files();                                                                                       #
+#                                                                                                                          #
+# Remove all *.tmp files under /etc/racoon                                                                                 #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function ipsec_remove_tmp_files() {
+	local rCode=$exit_fail
+	rm -f "$IPSEC_CONF_DIR/*.tmp" &> /dev/null && rCode=$exit_sucs
+	return $rCode
+}
+
+############################################################################################################################
+# function ipsec_backup();                                                                                                 #
+#                                                                                                                          #
+# Create a tar.gz archive ipsec_backup.tar.gz containing all *racoon.conf, psk.txt and setkey.conf files under /etc/racoon #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function ipsec_backup() {
+	local rCode=$exit_sucs
+	
+	rm -f "$IPSEC_CONF_DIR/ipsec_backup.tar.gz" &> /dev/null || rCode=$exit_fail
+	tar -czf "$IPSEC_CONF_DIR/ipsec_backup.tar.gz" $IPSEC_CONF_DIR/*racoon.conf "$IPSEC_CONF_DIR/$IPSEC_PSK_FILE" "$IPSEC_CONF_DIR/$IPSEC_SETKEY_FILE" &> /dev/null || rCode=$exit_fail
+	
+	return $rCode
+}
+
+############################################################################################################################
+# function ipsec_restore();                                                                                                #
+#                                                                                                                          #
+# Check for the tar.gz archive ipsec_backup.tar.gz in /etc/racoon and extract it to restore previously saved IPSec         #
+# configuration files                                                                                                      #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function ipsec_restore() {
+	local rCode=$exit_fail
+	
+	if [ -f "$IPSEC_CONF_DIR/ipsec_backup.tar.gz" ] ; then
+		tar -xzf "$IPSEC_CONF_DIR/ipsec_backup.tar.gz" -C / &> /dev/null && rCode=$exit_sucs
+	fi
+	
+	return $rCode
+}
+
+############################################################################################################################
+# function ipsec_remove_backup();                                                                                          #
+#                                                                                                                          #
+# Remove the tar.gz archive ipsec_backup.tar.gz from /etc/racoon                                                           #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function ipsec_remove_backup() {
+	local rCode=$exit_fail
+	rm -f "$IPSEC_CONF_DIR/ipsec_backup.tar.gz" &> /dev/null && rCode=$exit_sucs
+	return $rCode
+}
+
+############################################################################################################################
+# function ipsec_remove_policy($policyname,$cfg_file);                                                                     #
+#                                                                                                                          #
+# Remove an IPSec policy from the temporary copy of setkey.conf passed as $cfg_file                                        #
+#                                                                                                                          #
+# Arguments:                                                                                                               #
+# - $policyname name of the IPSec policy to remove                                                                         #
+# - $cfg_file absolute path and filename of a temporary copy of setkey.conf                                                #
+#                                                                                                                          #
+# Return value:                                                                                                            #
+# IP address of the remote host for which the IPSec policy is defined                                                      #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function ipsec_remove_policy() {
+	local rCode=$exit_fail
+	
+	local policyname="$1"
+	local cfg_file="$2"
+	
+	local rh_ipaddress=$(grep -E -A 1 "^\#POLICY_NAME=$policyname$" "$cfg_file" | grep "spdadd" | sed "s|.*\s\(\([0-9]\{1,3\}\.\)\{3\}[0-9]\{1,3\}\).*|\1|" )
+	#ipsec_remove_in_out_policy "$policyname" "$cfg_file"
+	echo $rh_ipaddress
+	
+	rCode=$exit_sucs
+	return $rCode
+}
+
+############################################################################################################################
+# function ipsec_remove_gateway_policy($policyname,$cfg_file);                                                             #
+#                                                                                                                          #
+# Remove an IPSec policy from the temporary copy of setkey.conf passed as $cfg_file                                        #
+#                                                                                                                          #
+# Arguments:                                                                                                               #
+# - $policyname name of the IPSec policy to remove                                                                         #
+# - $cfg_file absolute path and filename of a temporary copy of setkey.conf                                                #
+#                                                                                                                          #
+# Return value:                                                                                                            #
+# gateway IP address of the remote host for which the IPSec policy is defined                                              #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function ipsec_remove_gateway_policy() {
+	local rCode=$exit_fail
+	local policyname=$1
+	local cfg_file=$2
+	local gw_ipaddress=$(grep -E -A 2 "^\#POLICY_NAME=$policyname$"  "$cfg_file" | grep "tunnel" | cut -d "-" -f2 | cut -d "/" -f1 )
+	echo $gw_ipaddress
+
+	rCode=$exit_sucs
+  return $rCode
+
+}
+
+############################################################################################################################
+# function ipsec_remove_in_out_policy($policyname,$cfg_file);                                                              #
+#                                                                                                                          #
+# Remove an IPSec policy from the temporary copy of setkey.conf passed as $cfg_file (helper function)                      #
+#                                                                                                                          #
+# Arguments:                                                                                                               #
+# - $policyname name of the IPSec policy to remove                                                                         #
+# - $cfg_file absolute path and filename of a temporary copy of setkey.conf                                                #
+#                                                                                                                          #
+# Return codes:                                                                                                            #
+# - SUCCESS (0)                                                                                                            #
+# - FAILURE (0)                                                                                                            #
+############################################################################################################################
+function ipsec_remove_in_out_policy() {
+	local rCode=$exit_fail
+	
+	local policyname="$1"
+	local cfg_file="$2"
+	local policyname_line=$(grep -nE "^\#POLICY_NAME=$policyname$" "$cfg_file")
+	local policyname_line_components=(${policyname_line//":"/ })
+	local policyname_line_number=${policyname_line_components[0]}
+
+	local cfg_file_lines=$(wc -l "$cfg_file" | awk '{ print $1 }')
+	local lastline_has_newline=$(cat "$cfg_file" | tail -n -1 | wc -l)
+	if [ $lastline_has_newline -eq 0 ] ; then
+		(( cfg_file_lines = $cfg_file_lines + 1 ))
+	fi
+	local lines_to_read
+	(( lines_to_read = $cfg_file_lines - $policyname_line_number ))
+	local colon_line=$(tail -n "-$lines_to_read" "$cfg_file" | grep -n ";" | head -6 | tail -n -1)
+	local colon_line_components=(${colon_line//":"/ })
+	local colon_line_number
+	(( colon_line_number = ${colon_line_components[0]} + $policyname_line_number ))
+
+	sed -i $policyname_line_number","$colon_line_number"d" "$cfg_file"
+	sed -i '/./!d' "$cfg_file"
+	
+	rCode=$exit_sucs
+	return $rCode
+}
+# END functions "stolen" by ipsec_commons
+
+##############
+# Main Program
+##############
+
+# Global Parameters
+clu_file=/opt/ap/apos/bin/clusterconf/clusterconf
+ps_file=/cluster/ap/apos/conf/ps/physep_status
+clu_config=/cluster/etc/cluster.conf
+IFCONFIG="/sbin/ifconfig"
+PING="/bin/ping"
+CP="/bin/cp"
+PHYSEP1="physep"
+PHYSEP2="public2"
+#PHYSEP3="mvl2"
+FORCE=0
+cnt=$#
+
+## New function for virtualization
+if [ $(get_shelf_architecture_attr) -eq 3 ]; then
+	console_abort "$exit_CableLessDefined_string" $exit_virtual_arch
+fi
+
+## New function for cable less APG and check to inhibit execution in SMX architecture
+if [[ $(get_oam_access_attr) -eq 1 || $(get_shelf_architecture_attr) -eq 4 ]]; then
+	console_abort "$exit_CableLessDefined_string" $exit_CableLessDefined
+fi
+
+if [ $cnt -gt 1 ] ; then
+	echo -n "Incorrect usage"
+	help
+	exit 2
+fi
+
+if [ $cnt -eq 1 ] ; then
+  if [ $1 == "-f" ]; then
+	FORCE=1
+  else
+        echo -n "Incorrect usage"
+        help
+        exit 2
+  fi
+fi
+
+if [ $FORCE -eq 0 ] ; then
+        echo -en "Are you sure you want to do these changes (y/n)\003:"
+        read ch
+        if [ "$ch" != "y" ] ; then
+                echo -e "Command aborted by user\n"
+                exit 2 
+        else
+                :
+        fi
+fi
+
+# Checking the status of Debug port Adapter
+# Assuming eth2 is the Debug port
+grep -r "interface 1 eth2 ethernet" $clu_config &> /dev/null
+if [ ! $? == 0 ] ; then
+        echo -e "Invalid Adapter State\n"
+        exit 3
+fi
+grep -r "interface 2 eth2 ethernet" $clu_config &> /dev/null
+if [ ! $? == 0 ] ; then
+        echo -e "Invalid Adapter State\n"
+        exit 3
+fi
+if [ ! -d /etc/cluster/nodes/control/1/interfaces/eth2 ] || [ ! -d /etc/cluster/nodes/control/2/interfaces/eth2 ] ; then
+        echo -e "Invalid Adapter State\n"
+        exit 3
+fi
+
+# Checking for PS IP in listen.conf
+old_cluster_IP="$($CMD_CLUSTERCONF mip -D | grep -w "primary_ps" | awk '{ print $7 }')"
+apos_pso=$(apos_check_and_cat $STORAGE_CONFIG_PATH)
+HTTP_FILE="$apos_pso/apos/http_files/listen.conf"
+
+if [[ ! -z "$old_cluster_IP" && -f "$HTTP_FILE" ]]; then
+	grep -w "$old_cluster_IP" "$HTTP_FILE" &> /dev/null
+        if [ $? == 0 ]; then
+           	echo -e "Apache configuration conflict\n"
+               	exit 4
+	fi
+fi
+
+# Checking the cluster configuration before PS configuration
+cluster config -v &> /dev/null
+if [ $? == 0 ] ; then
+#echo -e "\nEstablishing Cluster connection
+#Cluster connection established
+
+echo -e "\nEstablishing connection with other node"
+peer_name=$(cat /etc/cluster/nodes/peer/hostname)
+$PING $peer_name -c 2 &> /dev/null
+if [ $? == 0 ] ; then
+	echo "Connection to other node established"
+else
+	echo -e "Error when executing (general fault)\n"
+	exit 1
+fi
+
+echo -e "\nSetting PS function state to NOT CONFIGURED"
+else
+	echo -e "Error when executing (general fault)\n"
+	exit 1
+fi
+ps_imm_set 0
+echo -e "PS function state successfully set to NOT CONFIGURED\n"
+
+echo "Starting eth2 configuration on both node"
+
+#Save currently defined IP address
+old_nodeA_IP="$($CMD_CLUSTERCONF ip -D | grep -w "public2" | grep -w "ip 1" | awk '{ print $6 }')"
+old_nodeB_IP="$($CMD_CLUSTERCONF ip -D | grep -w "public2" | grep -w "ip 2" | awk '{ print $6 }')"
+old_cluster_IP="$($CMD_CLUSTERCONF mip -D | grep -w "primary_ps" | awk '{ print $7 }')"
+
+#grep -v -i -e "$PHYSEP1" -e "$PHYSEP2" -e "$PHYSEP3" /cluster/etc/cluster.conf > /tmp/cluster.conf.tmp
+grep -v -i -e "$PHYSEP1" -e "$PHYSEP2" /cluster/etc/cluster.conf > /tmp/cluster.conf.tmp
+$CP -rf /tmp/cluster.conf.tmp /cluster/etc/cluster.conf
+cluster config -v &> /dev/null
+if [ $? == 0 ] ; then
+	cluster config -r -a &> /dev/null
+	
+	remove_ipsec_policies "$old_nodeA_IP" "$old_nodeB_IP" "$old_cluster_IP"
+	echo -e "eth2 successfully configured on both Nodes\n"
+fi
+
+echo -e "psrm command successfully executed\n"
+exit 0
